@@ -1,0 +1,235 @@
+version: '3.9'
+
+services:
+  # ─── Database ────────────────────────────────────────────────────────────────
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: petcare-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-petcare}
+      POSTGRES_USER: ${POSTGRES_USER:-petcare}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-petcare123}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infrastructure/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-petcare}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─── Cache ───────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: petcare-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─── Message Broker ──────────────────────────────────────────────────────────
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: petcare-rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-petcare}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-petcare123}
+    ports:
+      - "5672:5672"
+      - "15672:15672"   # Management UI
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+
+  # ─── Backend ─────────────────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: petcare-backend
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-petcare}
+      POSTGRES_USER: ${POSTGRES_USER:-petcare}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-petcare123}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: ${RABBITMQ_USER:-petcare}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-petcare123}
+      JWT_SECRET: ${JWT_SECRET:-your-256-bit-secret-key-change-in-production}
+      JWT_EXPIRATION: ${JWT_EXPIRATION:-86400000}
+      AI_AGENT_URL: http://ai-agent:8001
+      AI_RAG_URL: http://ai-rag:8002
+      AI_VISION_URL: http://ai-vision:8003
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # ─── Web Frontend ─────────────────────────────────────────────────────────────
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    container_name: petcare-web
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    environment:
+      VITE_API_URL: http://localhost:8080/api/v1
+
+  # ─── AI Services ──────────────────────────────────────────────────────────────
+  ai-agent:
+    build:
+      context: ./ai/agent
+      dockerfile: Dockerfile
+    container_name: petcare-ai-agent
+    restart: unless-stopped
+    ports:
+      - "8001:8001"
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-petcare}:${POSTGRES_PASSWORD:-petcare123}@postgres:5432/${POSTGRES_DB:-petcare}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-sk-stub}
+      BACKEND_URL: http://backend:8080/api/v1
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  ai-rag:
+    build:
+      context: ./ai/rag
+      dockerfile: Dockerfile
+    container_name: petcare-ai-rag
+    restart: unless-stopped
+    ports:
+      - "8002:8002"
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-petcare}:${POSTGRES_PASSWORD:-petcare123}@postgres:5432/${POSTGRES_DB:-petcare}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-sk-stub}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  ai-vision:
+    build:
+      context: ./ai/vision
+      dockerfile: Dockerfile
+    container_name: petcare-ai-vision
+    restart: unless-stopped
+    ports:
+      - "8003:8003"
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-sk-stub}
+
+  ai-recommendation:
+    build:
+      context: ./ai/recommendation
+      dockerfile: Dockerfile
+    container_name: petcare-ai-recommendation
+    restart: unless-stopped
+    ports:
+      - "8004:8004"
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-petcare}:${POSTGRES_PASSWORD:-petcare123}@postgres:5432/${POSTGRES_DB:-petcare}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  ai-forecasting:
+    build:
+      context: ./ai/forecasting
+      dockerfile: Dockerfile
+    container_name: petcare-ai-forecasting
+    restart: unless-stopped
+    ports:
+      - "8005:8005"
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-petcare}:${POSTGRES_PASSWORD:-petcare123}@postgres:5432/${POSTGRES_DB:-petcare}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  ai-optimization:
+    build:
+      context: ./ai/optimization
+      dockerfile: Dockerfile
+    container_name: petcare-ai-optimization
+    restart: unless-stopped
+    ports:
+      - "8006:8006"
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-petcare}:${POSTGRES_PASSWORD:-petcare123}@postgres:5432/${POSTGRES_DB:-petcare}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # ─── Observability ────────────────────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: petcare-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./infrastructure/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.retention.time=15d'
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: petcare-grafana
+    restart: unless-stopped
+    ports:
+      - "3001:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin123}
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./infrastructure/grafana/provisioning:/etc/grafana/provisioning
+    depends_on:
+      - prometheus
+
+volumes:
+  postgres_data:
+  redis_data:
+  rabbitmq_data:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  default:
+    name: petcare-network

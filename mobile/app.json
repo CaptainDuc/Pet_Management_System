@@ -1,0 +1,51 @@
+{
+  "expo": {
+    "name": "PetCare",
+    "slug": "petcare-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#6C63FF"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.petcare.mobile"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#6C63FF"
+      },
+      "package": "com.petcare.mobile"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font",
+      [
+        "expo-camera",
+        { "cameraPermission": "PetCare needs camera access to upload pet photos." }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#6C63FF"
+        }
+      ]
+    ],
+    "scheme": "petcare",
+    "extra": {
+      "API_URL": "http://localhost:8080/api/v1",
+      "eas": { "projectId": "petcare-mobile" }
+    }
+  }
+}

@@ -1,0 +1,105 @@
+{
+  "__inputs": [],
+  "__requires": [
+    { "type": "grafana", "id": "grafana", "name": "Grafana", "version": "10.0.0" },
+    { "type": "datasource", "id": "prometheus", "name": "Prometheus", "version": "1.0.0" }
+  ],
+  "annotations": { "list": [] },
+  "description": "PetCare Platform — System Overview",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "id": 100,
+      "title": "🏥 Backend Health",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "red", "value": null },
+            { "color": "green", "value": 1 }
+          ]}
+        }
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 1 },
+      "id": 1,
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto", "textMode": "auto", "colorMode": "background" },
+      "title": "Backend Up",
+      "type": "stat",
+      "targets": [{ "datasource": { "type": "prometheus" }, "expr": "up{job=\"petcare-backend\"}", "legendFormat": "Backend" }]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "reqps" } },
+      "gridPos": { "h": 8, "w": 12, "x": 4, "y": 1 },
+      "id": 2,
+      "title": "HTTP Request Rate",
+      "type": "timeseries",
+      "targets": [{ "datasource": { "type": "prometheus" }, "expr": "rate(http_server_requests_seconds_count{job=\"petcare-backend\"}[1m])", "legendFormat": "{{uri}} {{method}}" }]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s" } },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 1 },
+      "id": 3,
+      "title": "HTTP P99 Latency",
+      "type": "timeseries",
+      "targets": [{ "datasource": { "type": "prometheus" }, "expr": "histogram_quantile(0.99, rate(http_server_requests_seconds_bucket{job=\"petcare-backend\"}[5m]))", "legendFormat": "P99 Latency" }]
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 9 },
+      "id": 101,
+      "title": "🤖 AI Services Health",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] } } },
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 10 },
+      "id": 10,
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "title": "AI Agent",
+      "type": "stat",
+      "targets": [{ "datasource": { "type": "prometheus" }, "expr": "up{job=\"ai-agent\"}", "legendFormat": "Agent" }]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] } } },
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 10 },
+      "id": 11,
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "title": "AI RAG",
+      "type": "stat",
+      "targets": [{ "datasource": { "type": "prometheus" }, "expr": "up{job=\"ai-rag\"}", "legendFormat": "RAG" }]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] } } },
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 10 },
+      "id": 12,
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "title": "AI Recommendation",
+      "type": "stat",
+      "targets": [{ "datasource": { "type": "prometheus" }, "expr": "up{job=\"ai-recommendation\"}", "legendFormat": "Recommendation" }]
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 38,
+  "tags": ["petcare", "overview"],
+  "time": { "from": "now-1h", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "PetCare Platform Overview",
+  "uid": "petcare-overview",
+  "version": 1
+}
