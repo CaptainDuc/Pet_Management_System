@@ -207,8 +207,8 @@ Controller: `auth/controller/AuthController.java`. Cả 4 endpoint **Đã có co
 |---|---|---|---|
 | POST | `/auth/register` | `Implemented` | Public |
 | POST | `/auth/login` | `Implemented` | Public |
-| POST | `/auth/refresh` | `Implemented` · **⚠ Schema gap** | Public |
-| POST | `/auth/logout` | `Implemented` · **⚠ Schema gap** | Public (xem cảnh báo) |
+| POST | `/auth/refresh` | `Implemented` | Public |
+| POST | `/auth/logout` | `Implemented` | Logged in khuyến nghị (xem A.5) |
 
 ### A.1 `POST /api/v1/auth/register`
 
@@ -363,9 +363,9 @@ Controller: `auth/controller/AuthController.java`. Cả 4 endpoint **Đã có co
 
 | | |
 |---|---|
-| Trạng thái | `Implemented` · **⚠ Schema gap: bảng `refresh_tokens` không tồn tại** |
+| Trạng thái | `Implemented` (migration `V3__add_refresh_tokens.sql`) |
 | Auth | Public |
-| CSDL | `refresh_tokens` (entity `auth/domain/RefreshToken.java`) |
+| CSDL | `refresh_tokens` |
 
 **Request — `RefreshTokenRequest`**
 
@@ -387,12 +387,10 @@ Controller: `auth/controller/AuthController.java`. Cả 4 endpoint **Đã có co
 - Rotation: revoke token hiện tại (`revoked_at`, `revoke_reason = 'Rotated'`) rồi cấp token mới **cùng `token_family_id`**, trong cùng transaction.
 - Phát hiện reuse: nếu token đã `revoked` hoặc hết hạn → `revokeFamily(token_family_id)` (set `revoked_at` cho mọi token chưa revoke trong family) rồi trả lỗi → client buộc đăng nhập lại.
 - Kiểm tra `users.status == 'ACTIVE'` trước khi cấp token mới.
-- Claim `familyId` được nhúng vào refresh JWT nhưng **không** được dùng để tra cứu; nguồn quyết định là `refresh_tokens.token_family_id`.
-- ⚠ `replacedByToken` và `lastUsedAt` có field nhưng **chưa** được code ghi → cột `replaced_by_token_id` và `last_used_at` sẽ luôn NULL.
-- ⚠ `familyId` cho session mới tạo là `UUID.randomUUID()` sinh mỗi lần login/refresh-chain-start.
-
-**⚠ Schema gap.** Entity `RefreshToken` map tới bảng `refresh_tokens`, bảng này **không được tạo trong V1 hay V2**. Với `spring.jpa.hibernate.ddl-auto: validate`, endpoint này **không thể chạy được** cho tới khi có migration `P-1`. Migration `P-1` phải tạo đúng các cột entity dùng:
-`user_id`, `token_hash`, `token_family_id`, `replaced_by_token_id`, `issued_at`, `expires_at`, `last_used_at`, `revoked_at`, `revoke_reason`, `device_id`, `created_at`, `updated_at`, `version`.
+- Claim `familyId` được nhúng vào refresh JWT; nguồn quyết định khi tra cứu vẫn là hash trong `refresh_tokens.token_hash`. Claim `jti` (UUID ngẫu nhiên) đảm bảo mỗi token là duy nhất — thiếu nó thì hai lần login trong cùng giây sinh token giống hệt và vi phạm `UNIQUE(token_hash)`.
+- **Replay detection phải commit trước khi ném lỗi.** Revoke family chạy trong transaction `REQUIRES_NEW` (`RefreshTokenRevocationService`); nếu để chung transaction với `throw` thì toàn bộ bị rollback và family vẫn dùng được.
+- ⚠ `replacedByToken` và `lastUsedAt` có field nhưng **chưa** được code ghi → cột `replaced_by_token_id` và `last_used_at` luôn NULL.
+- `familyId` cho session mới tạo là `UUID.randomUUID()` sinh mỗi lần login; chuỗi refresh giữ nguyên family. Đã kiểm chứng: reuse token cũ → `422`, và token mới cùng family cũng `422`.
 
 **Errors**
 
@@ -402,14 +400,13 @@ Controller: `auth/controller/AuthController.java`. Cả 4 endpoint **Đã có co
 | `422` | `Invalid refresh token` | Không tìm thấy hash trong DB |
 | `422` | `Refresh token is expired or revoked. Please login again.` | Đã revoke/hết hạn (family đã bị revoke) |
 | `422` | `User account is inactive` | `users.status != 'ACTIVE'` |
-| `500` | `Internal server error` | Bảng `refresh_tokens` chưa tồn tại |
 
 ### A.5 `POST /api/v1/auth/logout`
 
 | | |
 |---|---|
-| Trạng thái | `Implemented` · **⚠ Schema gap giống A.4** |
-| Auth | Public theo `SecurityConfig` (`/api/v1/auth/**` permitAll) |
+| Trạng thái | `Implemented` (migration `V3__add_refresh_tokens.sql`) |
+| Auth | `/api/v1/auth/**` là `permitAll`; nên gửi kèm access token hợp lệ |
 | CSDL | `refresh_tokens` |
 
 **Request — `LogoutRequest`** (body là **optional**; thiếu thì mặc định `refreshToken = null`, `logoutAll = false`)
@@ -445,9 +442,14 @@ Controller: `auth/controller/AuthController.java`. Cả 4 endpoint **Đã có co
 - `logoutAll = false` và có `refreshToken` → revoke đúng token có hash khớp.
 - Không trường hợp nào khác → trả `200` (idempotent, không báo lỗi).
 
-⚠ **Hai điểm cần xác nhận trước khi coi là production-ready:**
+Business rules:
 
-1. Endpoint nằm trong vùng `permitAll`, nên `principal` có thể là `null`. Khi đó `logoutAll = true` sẽ gọi `revokeAllForUser(null, …)` và không làm gì; còn `logoutAll = false` + `refreshToken` sẽ **revoke token theo hash mà không kiểm tra chủ sở hữu**. Chỉ chứa token thôi là đủ để vô hiệu hóa session của người khác.
+- Revoke dùng **bulk update** (`UPDATE … WHERE id = :id AND revoked_at IS NULL`) trong transaction `REQUIRES_NEW`. Load entity rồi `save()` từ transaction khác sẽ flush với `version` cũ và gây `StaleStateException`.
+- Idempotent: logout token đã revoke vẫn trả `200`.
+
+⚠ **Hai hạn chế còn lại:**
+
+1. Endpoint nằm trong vùng `permitAll` nên `principal` có thể là `null`. Khi đó `logoutAll = true` không làm gì, còn `logoutAll = false` + `refreshToken` **revoke token theo hash mà không kiểm tra chủ sở hữu** — chỉ cần biết token là vô hiệu hóa được session người khác.
 2. Không có cơ chế thu hồi access token. Access token vẫn hợp lệ tới hết TTL (24 giờ mặc định) sau khi logout; chỉ refresh token bị chặn.
 
 **Errors**
@@ -455,7 +457,6 @@ Controller: `auth/controller/AuthController.java`. Cả 4 endpoint **Đã có co
 | HTTP | `message` | Khi nào |
 |---|---|---|
 | `200` | `Success` | Luôn (kể cả khi body rỗng) |
-| `500` | `Internal server error` | Bảng `refresh_tokens` chưa tồn tại |
 
 ---
 
@@ -470,7 +471,7 @@ Controller: `user/controller/UserController.java`. Service `UserService`, DTO `U
 | GET | `/users` | `Implemented` | `ADMIN` hoặc `OWNER` |
 | GET | `/users/{id}` | `Implemented` | `ADMIN` hoặc `OWNER` |
 | PATCH | `/users/{id}/status` | `Implemented` | `ADMIN` |
-| POST | `/users/{id}/roles` | `Implemented` | `ADMIN` · **⚠ Schema gap** (`user_roles` chưa tồn tại) |
+| POST | `/users/{id}/roles` | `Implemented` (V4) | `ADMIN` |
 
 > Endpoint `DELETE /users/{id}/roles/{roleId}` **không tồn tại** trong source. Tài liệu cũ mô tả nó là `Implemented` — đã gỡ khỏi contract. Xem `P-2` nếu cần bổ sung.
 
@@ -635,8 +636,9 @@ Controller: `user/controller/UserController.java`. Service `UserService`, DTO `U
 
 **Business rules**
 
-- Bộ lọc nằm trong một JPQL query duy nhất; bỏ trống param = không lọc chiều đó.
-- `search` chỉ so khớp `full_name` và `email`, **không** phải `phone` hay `id`.
+- Bộ lọc được dựng bằng JPA `Specification`: chỉ thêm predicate cho tham số thực sự có giá trị. Cách cũ dùng `(:p IS NULL OR col = :p)` **gây lỗi `could not determine data type of parameter`** trên PostgreSQL khi tham số null — endpoint trả `500`.
+- `search` chỉ so khớp `full_name` và `email` (không phân biệt hoa thường), **không** phải `phone` hay `id`.
+- `role`/`status` so khớp không phân biệt hoa thường; `users.role` được `toUpperCase()` khi gán.
 - Không có endpoint xuất CSV hay export.
 
 **Errors**
@@ -694,7 +696,7 @@ Controller: `user/controller/UserController.java`. Service `UserService`, DTO `U
 
 | | |
 |---|---|
-| Trạng thái | `Implemented` · **⚠ Schema gap: `roles`, `user_roles` chưa tồn tại** |
+| Trạng thái | `Implemented` (migration `V4__add_rbac_tables.sql`) |
 | Auth | `ADMIN` |
 | CSDL | `users`, `roles`, `user_roles` |
 
@@ -715,7 +717,7 @@ Controller: `user/controller/UserController.java`. Service `UserService`, DTO `U
 - `POST` này **thay thế toàn bộ** tập role (`user.setRoles(roles)`), không phải thêm một role.
 - `userRepository.findByIdIn(roleIds)` có thể trả về tập rỗng nếu ID không tồn tại → `422 No valid roles found for provided IDs`.
 - ⚠ **Cập nhật `users.role` không xác định:** `roles.stream().findFirst().ifPresent(...)` lấy phần tử đầu tiên của `HashSet`, thứ tự **không đảm bảo**. `users.role` là cột mà `CustomUserDetailsService` dùng để cấp `ROLE_*`, nên sau lệnh này role chính có thể là bất kỳ role nào trong tập. Nếu cần xác định, phải sửa service hoặc thêm field `primaryRoleId` vào request — **không** coi hành vi hiện tại là contract ổn định.
-- Bảng `user_roles` chưa được tạo trong migration → xem `P-2`.
+- Bảng `user_roles` được tạo bởi `V4__add_rbac_tables.sql`.
 
 **Errors**
 
@@ -2160,7 +2162,7 @@ invoice_items(
 | Thiếu map `invoiceNumber`, `issuedAt` | Không đọc được |
 | Không có entity cho `invoice_items` | Không truy cập được chi tiết hóa đơn |
 
-⇒ **Toàn bộ module Invoice là `Schema-supported`, chưa phải `Implemented`.** Cần sửa entity `Invoice` cho khớp CSDL (không cần migration cho phần map này).
+⇒ **Đã sửa entity `Invoice`** cho khớp CSDL (`bookingId`, `invoiceNumber`, `totalAmount`, `issuedAt`) và thêm entity `InvoiceItem` cho `invoice_items` — không cần migration. Module vẫn là `Schema-supported` vì **chưa có controller/service**, và `invoices` vẫn chưa có cột `status` (migration `P-24`).
 
 ### I.1 Cardinality: một booking có một invoice
 
@@ -2343,17 +2345,17 @@ Nếu vẫn cần endpoint admin để huỷ: giới hạn payload `{"status": "
 
 | Method | Path | Trạng thái |
 |---|---|---|
-| GET | `/loyalty/customer/{customerId}` | `Implemented` · **⚠ entity sai bảng** |
-| POST | `/loyalty` | `Implemented` · **⚠ rủi ro bảo mật, entity sai bảng** |
-| GET | `/loyalty/me` | `Schema-supported` |
+| GET | `/loyalty/me` | `Implemented` |
+| GET | `/loyalty/customer/{customerId}` | `Implemented` |
+| ~~POST~~ | ~~`/loyalty`~~ | **Đã bỏ** — xem J.3 |
 | GET | `/loyalty/me/transactions` | `Schema-supported` |
 | GET | `/loyalty/transactions` | `Schema-supported` |
 | POST | `/loyalty/earn` | `Schema-supported` |
 | POST | `/loyalty/redeem` | `Schema-supported` |
 
-### J.1 ⚠ Endpoint hiện tại **không dùng được**
+### J.1 Entity
 
-`loyalty/domain/Loyalty.java` map `@Table(name = "loyalty")` với `customerId`, `points`. Migration **không có** bảng `loyalty` — có `loyalty_accounts` và `loyalty_transactions` (V1:262–280):
+Entity cũ `loyalty/domain/Loyalty.java` map `@Table(name = "loyalty")` — bảng này không tồn tại, nên `ddl-auto: validate` làm app **không khởi động được**. Đã thay bằng `LoyaltyAccount` (`loyalty_accounts`) và `LoyaltyTransaction` (`loyalty_transactions`), khớp đúng CSDL:
 
 ```sql
 loyalty_accounts(
@@ -2373,22 +2375,17 @@ loyalty_transactions(
 )
 ```
 
-⇒ Với `ddl-auto: validate`, endpoint `/loyalty/**` **không khởi động được**. Cần sửa entity (`P-12`, phần sửa mapping) — không cần migration cho phần này.
+⇒ Đã sửa entity, **không cần migration**. Hai hạn chế CSDL vẫn còn và chưa được xử lý: `points` chưa có `CHECK (points >= 0)` (`P-27`) và `tier` là text trần chưa có bảng `loyalty_tiers` (`P-26`).
 
-### J.2 `GET /api/v1/loyalty/customer/{customerId}` *(Implemented)*
+### J.2 `GET /api/v1/loyalty/me` *(Implemented)*
 
 | | |
 |---|---|
-| Trạng thái | `Implemented` — **không dùng được do entity sai bảng** |
-| Auth | `anyRequest().authenticated()` — **không có `@PreAuthorize`** |
+| Trạng thái | `Implemented` |
+| Auth | Logged in |
+| CSDL | `loyalty_accounts` |
 
-⚠ **Ba vấn đề nghiêm trọng:**
-
-1. Trả **entity `Loyalty` trực tiếp**, không bọc `ApiResponse`.
-2. **Không kiểm tra quyền:** bất kỳ user đăng nhập nào cũng đọc được điểm của user khác bằng `customerId` ⇒ **IDOR**.
-3. **Trả `200` với body `null`** nếu không tìm thấy (`orElse(null)`) thay vì `404`.
-
-Contract chuẩn hoá đề xuất (sau khi sửa entity) — `ApiResponse<LoyaltyAccountResponse>`:
+**Response `200`** — `ApiResponse<LoyaltyAccount>`:
 
 ```json
 {
@@ -2398,7 +2395,7 @@ Contract chuẩn hoá đề xuất (sau khi sửa entity) — `ApiResponse<Loyal
   "data": {
     "id": "e3f4a5b6-c7d8-4e9f-8a0b-1c2d3e4f5a6b",
     "userId": "0f9a1c2e-3d4b-5a6f-7e8c-9b0a1b2c3d4e",
-    "points": 1250,
+    "points": 0,
     "tier": "BRONZE",
     "createdAt": "2026-10-01T10:00:00Z",
     "updatedAt": "2026-10-01T10:00:00Z"
@@ -2407,63 +2404,43 @@ Contract chuẩn hoá đề xuất (sau khi sửa entity) — `ApiResponse<Loyal
 }
 ```
 
-| Endpoint | Quyền |
-|---|---|
-| `GET /loyalty/customer/{customerId}` | Chỉ chính chủ (`customerId == principal.id`) hoặc `ADMIN` |
-| `GET /loyalty/me` | `CUSTOMER` — tương laơng nên thay thế endpoint trên |
+**Business rules**
 
-### J.3 `POST /api/v1/loyalty` *(Implemented)*
+- Không có path parameter ⇒ không có bề mặt IDOR.
+- Tài khoản được tạo **lazy** nếu chưa có (`points = 0`, `tier = 'BRONZE'`), nên lần đầu đọc luôn trả `200` thay vì `404`.
+- Response là entity nên có `version` và `updatedAt`; khi có DTAO riêng nên bọc lại.
+
+### J.3 `GET /api/v1/loyalty/customer/{customerId}` *(Implemented)*
 
 | | |
 |---|---|
-| Trạng thái | `Implemented` — **⚠ phải loại bỏ** |
+| Trạng thái | `Implemented` |
+| Auth | Chỉ chính chủ (`customerId == principal.id`) hoặc `ADMIN`; còn lại `403` |
 
-⚠ **Endpoint này là một lỗ hổng nghiêm trọng và không được giữ lại dưới dạng contract:**
+**Response `200`** — `ApiResponse<LoyaltyAccount>`, giống J.2.
+
+**Business rules**
+
+- Kiểm `customerId == SecurityUtils.requireCurrentUserId()` **hoặc** `SecurityUtils.hasRole("ADMIN")`; không thỏa thì `403 Access denied`.
+- Trước đây endpoint trả entity thô, **không** kiểm quyền (bất kỳ user đăng nhập nào đọc được điểm của người khác ⇒ IDOR) và trả `200` với body `null` khi không tìm thấy. Cả hai đã sửa.
+
+**Errors**
+
+| HTTP | `message` | Khi nào |
+|---|---|---|
+| `403` | `Access denied` | Không phải chủ, không phải `ADMIN` |
+| `404` | `Loyalty account for user not found with id: <uuid>` | User chưa có tài khoản loyalty |
+
+### J.4 `POST /api/v1/loyalty` — **đã bỏ**
+
+⚠ Endpoint này là một lỗ hổng nghiêm trọng và **đã bị xoá khỏi controller**:
 
 - Nhận **entity `Loyalty` trực tiếp** làm `@RequestBody` — client tự quyết định `id`, `customerId`, `points`.
 - **Không có `@PreAuthorize`** — bất kỳ user đăng nhập nào cũng gọi được.
 - **Không kiểm tra số dư, không ghi `loyalty_transactions`, không transaction.**
 - Cho phép **set số dư âm** và **đặt điểm cho user bất kỳ**.
 
-⇒ Khuyến nghị **xoá** và thay bằng `POST /loyalty/earn` (J.5) + `POST /loyalty/redeem` (J.6) + `POST /loyalty/adjust` (`ADMIN`).
-
-### J.4 `GET /api/v1/loyalty/me` và `GET /api/v1/loyalty/me/transactions`
-
-**`GET /loyalty/me`** — `200`, `ApiResponse<LoyaltyAccountResponse>` (tự tạo `loyalty_accounts` nếu chưa có — xem J.5.1).
-
-**`GET /loyalty/me/transactions`** — query `page`, `size`, `type`, `dateFrom`, `dateTo`, `sortBy` mặc định `createdAt`, `direction` mặc định `desc`.
-
-```json
-{
-  "status": 200,
-  "success": true,
-  "message": "Success",
-  "data": {
-    "content": [
-      {
-        "id": "f4a5b6c7-d8e9-4f0a-9b1c-2d3e4f5a6b7c",
-        "accountId": "e3f4a5b6-c7d8-4e9f-8a0b-1c2d3e4f5a6b",
-        "bookingId": "d4c3b2a1-9f8e-7d6c-5b4a-3f2e1d0c9b8a",
-        "type": "EARN",
-        "points": 500,
-        "description": "Thanh toán hóa đơn INV-2026-000001",
-        "createdAt": "2026-10-01T10:30:05Z"
-      }
-    ],
-    "page": 0,
-    "size": 20,
-    "totalElements": 1,
-    "totalPages": 1,
-    "last": true,
-    "first": true
-  },
-  "timestamp": "2026-10-01T10:30:05Z"
-}
-```
-
-`loyalty_transactions` là **append-only**: không có API sửa/xoá, không có `updated_at`, không có `version`.
-
-**Types:** `EARN` | `REDEEM` | `ADJUST` | `EXPIRE` (⚠ DB không có CHECK ⇒ service phải tự chặn).
+⇒ Thay bằng `POST /loyalty/earn` (J.5) + `POST /loyalty/redeem` (J.6) + `POST /loyalty/adjust` (`ADMIN`) — tất cả đều chưa có.
 
 ### J.5 `POST /api/v1/loyalty/earn` *(Schema-supported)*
 
@@ -3544,8 +3521,8 @@ resources(
 
 | Method | Path | Trạng thái | Auth |
 |---|---|---|---|
-| GET | `/audit` | `Implemented` ⚠ | Logged in (thiếu `@PreAuthorize`) |
-| GET | `/audit/{id}` | `Schema-supported` | `ADMIN`/`OWNER` |
+| GET | `/audit` | `Implemented` | `ADMIN`/`OWNER` |
+| GET | `/audit/{id}` | `Proposed` | `ADMIN`/`OWNER` |
 
 **CSDL (V1:333–343)**
 
@@ -3572,33 +3549,13 @@ CREATE INDEX idx_audit_entity ON audit_logs(entity_type, entity_id);
 | `timestamp` | — | ⚠ **không có cột `timestamp`** (dùng `created_at`) |
 | — | `user_id`, `entity_type`, `entity_id`, `old_value`, `new_value`, `ip_address` | ⚠ **thiếu** trong entity |
 
-⇒ Cần sửa mapping entity (`P-12`, phần sửa mapping — **không** cần migration).
+⇒ **Đã sửa mapping entity** — không cần migration.
 
 **`GET /audit` *(Implemented)* — response thực tế**
 
-⚠ `AuditLogController.list()` trả `List<AuditLog>` **thẳng**, không bọc `ApiResponse`, không phân trang, và **không có** `@PreAuthorize`:
+Trả `ApiResponse<PageResponse<AuditLog>>` (đã bọc envelope + phân trang), và **đã thêm** `@PreAuthorize("hasRole('ADMIN') or hasRole('OWNER')")` ở cấp class. Trước đây endpoint trả toàn bộ bảng không phân trang và **không có** kiểm tra quyền, nên bất kỳ user đăng nhập nào cũng đọc được mọi thay đổi được ghi lại, gồm `oldValue`/`newValue`.
 
-```json
-[
-  {
-    "id": "5d6e7f8a-9b0c-4d1e-8f2a-3b4c5d6e7f8a",
-    "action": "BOOKING_STATUS_CHANGE",
-    "username": null,
-    "details": null,
-    "timestamp": null
-  }
-]
-```
-
-**⚠ Ba vấn đề bắt buộc phải gia cố:**
-
-1. **Thiếu phân trang** — `findAll()` trả toàn bộ bảng. `audit_logs` là bảng tăng dần liên tục; sau vài tháng sẽ làm chậm và nặng response.
-2. **Thiếu `@PreAuthorize("hasRole('ADMIN') or hasRole('OWNER')")`** — hiện **bất kỳ user đăng nhập nào** cũng đọc được toàn bộ log thao tác, bao gồm `old_value`/`new_value` có thể chứa dữ liệu nhạy cảm (hồ sơ y tế, giá, điểm thưởng).
-3. **Thiếu bộ lọc** — không lọc được theo `entityType`, `action`, `userId`, khoảng thời gian.
-
-**`GET /audit` — contract chuẩn hoá đề xuất**
-
-Query: `page`, `size`, `entityType`, `entityId`, `action`, `actorUserId`, `dateFrom`, `dateTo`, `sortBy` mặc định `createdAt`, `direction` mặc định `desc`.
+Query: `entityType`, `entityId`, `action`, `userId`, `dateFrom`, `dateTo`, `page` (mặc định `0`), `size` (mặc định `20`, tối đa `200`). Luôn sắp xếp `createdAt DESC`.
 
 ```json
 {
@@ -3635,6 +3592,8 @@ Query: `page`, `size`, `entityType`, `entityId`, `action`, `actorUserId`, `dateF
 **Business rules**
 
 - **Append-only:** không có `PUT`/`DELETE` cho `audit_logs`.
+- Bộ lọc dựng bằng JPA `Specification`. Cách `(:param IS NULL OR col = :param)` đã bị bỏ vì PostgreSQL không infer được kiểu của tham số null và trả `could not determine data type of parameter`.
+- `AuditLogService.log(...)` chạy `REQUIRES_NEW` để dòng audit vẫn được ghi khi transaction gọi chung bị rollback.
 - `old_value`/`new_value` là **JSONB tự do** ⇒ không có schema cố định. Client phải parse phòng thủ.
 - ⚠ Không có `actor_type` (`USER`/`SYSTEM`/`CRON`) như `docs/erd.md` mô tả. Muốn phân biệt thao tác của người với hệ thống thì dùng `user_id IS NULL` ⇒ `Proposed` (`P-42`: thêm `actor_type VARCHAR(20)`).
 - ⚠ `ip_address VARCHAR(50)` không chứa được IPv6 dạng đầy đủ (tối đa 45 ký tự + scope) ⇒ có thể bị cắt. `Proposed` (`P-42`: đổi sang `INET` hoặc `VARCHAR(64)`).
@@ -4794,8 +4753,8 @@ Các migration dưới đây **chưa tồn tại**. Chỉ tạo khi nghiệp v�
 
 | ID | Mục đích | Bảng/cột | Ưu tiên |
 |---|---|---|---|
-| `P-1` | Refresh token persistence | tạo `refresh_tokens` | **Blocker** |
-| `P-2` | RBAC persistence | tạo `roles`, `permissions`, `role_permissions`, `user_roles` | **Blocker** |
+| `P-1` | Refresh token persistence | tạo `refresh_tokens` | ✅ **Đã áp dụng** (`V3__add_refresh_tokens.sql`) |
+| `P-2` | RBAC persistence | tạo `roles`, `permissions`, `role_permissions`, `user_roles` | ✅ **Đã áp dụng** (`V4__add_rbac_tables.sql`) |
 | `P-3` | Unique phone | `uq_users_phone` | Thấp |
 | `P-4` | Integrity staff/skills | `uq_staff_user`, `uq_staff_skills` | Trung bình |
 | `P-5` | Split shift + chống overlap lịch | `schedules` | Cao |
@@ -4839,7 +4798,9 @@ Các migration dưới đây **chưa tồn tại**. Chỉ tạo khi nghiệp v�
 
 ## Nội dung chi tiết các migration Blocker
 
-### `P-1` — `refresh_tokens` (Bắt buộc trước khi dùng `/auth/refresh`, `/auth/logout`)
+### `P-1` — `refresh_tokens` — ✅ **Đã áp dụng**
+
+File đã tạo: `services/backend/src/main/resources/db/migration/V3__add_refresh_tokens.sql`. DDL bên dưới giữ lại để tham chiếu.
 
 ```sql
 CREATE TABLE refresh_tokens (
@@ -4864,7 +4825,9 @@ CREATE INDEX idx_refresh_tokens_family  ON refresh_tokens(token_family_id);
 CREATE INDEX idx_refresh_tokens_active  ON refresh_tokens(token_hash) WHERE revoked_at IS NULL;
 ```
 
-### `P-2` — RBAC (Bắt buộc trước khi dùng `/rbac/**`, `/users/{id}/roles`)
+### `P-2` — RBAC — ✅ **Đã áp dụng**
+
+File đã tạo: `services/backend/src/main/resources/db/migration/V4__add_rbac_tables.sql`. DDL bên dưới giữ lại để tham chiếu.
 
 ```sql
 CREATE TABLE roles (
@@ -5155,15 +5118,16 @@ Xem **O.4**. Chỉ chặn trùng mốc thời gian chính xác; chặn overlap t
 | Medical | `GET /medical/vaccinations/pet/{petId}` | `Implemented` ⚠ | Như trên |
 | Medical | `POST /medical/records`, `GET/PUT /medical/records/{id}` | `Schema-supported` | |
 | Medical | `POST /medical/vaccinations`, `PUT /medical/vaccinations/{id}` | `Schema-supported` | |
-| Loyalty | `GET /loyalty/customer/{customerId}` | `Implemented` ⚠ | Entity sai bảng; IDOR; trả `null` |
-| Loyalty | `POST /loyalty` | `Implemented` ⚠ | **Cần loại bỏ** — không có auth/validation |
-| Loyalty | `/loyalty/me`, `/transactions`, `/earn`, `/redeem` | `Schema-supported` | |
+| Loyalty | `GET /loyalty/me` | `Implemented` | Tự tạo account lazy |
+| Loyalty | `GET /loyalty/customer/{customerId}` | `Implemented` | Đã giới hạn chủ hoặc `ADMIN` |
+| Loyalty | ~~`POST /loyalty`~~ | **Đã bỏ** | Không auth, cho phép số dư âm |
+| Loyalty | `/loyalty/me/transactions`, `/earn`, `/redeem` | `Schema-supported` | |
 | AI | `POST /ai/tips` | `Implemented` (stub) | Không gọi AI service; NPE nếu thiếu `question` |
 | AI | conversations / messages / documents / chat | `Schema-supported` | |
 | AI | `POST /ai/vision/analyze` | `Proposed` | Cần `P-36` |
 | Analytics | `GET /analytics/dashboard` | `Implemented` (stub) | Trả số 0 cố định |
-| Audit | `GET /audit` | `Implemented` ⚠ | Entity sai cột; thiếu `@PreAuthorize`; không phân trang — xem O.5 |
-| Audit | `GET /audit/{id}` | `Schema-supported` | O.5 |
+| Audit | `GET /audit` | `Implemented` | Đã sửa entity + thêm phân trang + `@PreAuthorize` — xem O.5 |
+| Audit | `GET /audit/{id}` | `Proposed` | O.5 |
 | Pets / Breeds | CRUD | `Schema-supported` | Chỉ có DTO |
 | Species | CRUD | `Proposed` | Không có bảng `pet_species` |
 | Staff | CRUD + skills | `Schema-supported` | |

@@ -38,6 +38,7 @@ public class AuthService {
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
     private final RefreshTokenRepository refreshTokenRepository;
+    private final RefreshTokenRevocationService revocationService;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final AuthenticationManager authenticationManager;
@@ -100,10 +101,9 @@ public class AuthService {
                 .orElseThrow(() -> new BusinessException("Invalid refresh token"));
 
         if (refreshToken.isRevoked() || refreshToken.isExpired()) {
-            // Replay detection: revoke entire token family
-            if (refreshToken.getTokenFamilyId() != null) {
-                refreshTokenRepository.revokeFamily(refreshToken.getTokenFamilyId(), Instant.now(), "Revoked due to token replay/reuse");
-            }
+            // Replay detection. Must commit even though this method then throws and
+            // rolls back, otherwise the family stays usable.
+            revocationService.revokeFamily(refreshToken.getTokenFamilyId(), "Revoked due to token replay/reuse");
             throw new BusinessException("Refresh token is expired or revoked. Please login again.");
         }
 
@@ -123,14 +123,11 @@ public class AuthService {
     @Transactional
     public void logout(UUID currentUserId, LogoutRequest request) {
         if (request.logoutAll()) {
-            refreshTokenRepository.revokeAllForUser(currentUserId, Instant.now(), "User requested logout all devices");
+            revocationService.revokeAllForUser(currentUserId, "User requested logout all devices");
         } else if (request.refreshToken() != null && !request.refreshToken().isBlank()) {
             String tokenHash = hashToken(request.refreshToken());
-            refreshTokenRepository.findByTokenHash(tokenHash).ifPresent(token -> {
-                token.setRevokedAt(Instant.now());
-                token.setRevokeReason("User logout");
-                refreshTokenRepository.save(token);
-            });
+            refreshTokenRepository.findByTokenHash(tokenHash)
+                    .ifPresent(token -> revocationService.revoke(token.getId(), "User logout"));
         }
     }
 
@@ -150,11 +147,10 @@ public class AuthService {
 
         String accessToken = jwtService.generateToken(extraClaims, principal);
 
-        Map<String, Object> refreshClaims = Map.of(
-                "typ", "refresh",
-                "familyId", familyId.toString()
-        );
-        String rawRefreshToken = jwtService.generateRefreshToken(principal);
+        // familyId ties every token in a rotation chain together so that reuse of an
+        // already-rotated token can revoke the whole family.
+        Map<String, Object> refreshClaims = Map.of("familyId", familyId.toString());
+        String rawRefreshToken = jwtService.generateRefreshToken(principal, refreshClaims);
 
         // Save hashed refresh token
         RefreshToken refreshTokenEntity = RefreshToken.builder()

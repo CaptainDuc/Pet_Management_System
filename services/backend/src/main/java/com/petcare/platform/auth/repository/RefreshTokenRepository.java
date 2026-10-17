@@ -16,11 +16,23 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshToken, UUID
 
     Optional<RefreshToken> findByTokenHash(String tokenHash);
 
-    @Modifying
-    @Query("UPDATE RefreshToken r SET r.revokedAt = :now, r.revokeReason = :reason WHERE r.tokenFamilyId = :familyId AND r.revokedAt IS NULL")
-    void revokeFamily(@Param("familyId") UUID familyId, @Param("now") Instant now, @Param("reason") String reason);
+    /**
+     * Bulk revocations.
+     *
+     * <p>They run with {@code flushAutomatically}/{@code clearAutomatically} because
+     * they are often issued from a separate transaction while the caller's
+     * persistence context still holds the row; without clearing it, a later flush
+     * would try to update an already-revoked row with a stale {@code version}.
+     */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("UPDATE RefreshToken r SET r.revokedAt = :now, r.revokeReason = :reason WHERE r.id = :id AND r.revokedAt IS NULL")
+    int revokeById(@Param("id") UUID id, @Param("now") Instant now, @Param("reason") String reason);
 
-    @Modifying
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("UPDATE RefreshToken r SET r.revokedAt = :now, r.revokeReason = :reason WHERE r.tokenFamilyId = :familyId AND r.revokedAt IS NULL")
+    int revokeFamily(@Param("familyId") UUID familyId, @Param("now") Instant now, @Param("reason") String reason);
+
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query("UPDATE RefreshToken r SET r.revokedAt = :now, r.revokeReason = :reason WHERE r.user.id = :userId AND r.revokedAt IS NULL")
-    void revokeAllForUser(@Param("userId") UUID userId, @Param("now") Instant now, @Param("reason") String reason);
+    int revokeAllForUser(@Param("userId") UUID userId, @Param("now") Instant now, @Param("reason") String reason);
 }

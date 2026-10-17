@@ -14,6 +14,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 import java.util.function.Function;
 
 @Slf4j
@@ -44,12 +45,22 @@ public class JwtService {
     public String generateToken(Map<String, Object> extraClaims, UserDetails userDetails) {
         Map<String, Object> claims = new HashMap<>(extraClaims);
         claims.putIfAbsent("typ", "access");
+        claims.putIfAbsent("jti", UUID.randomUUID().toString());
         return buildToken(claims, userDetails, jwtExpiration);
     }
 
-    public String generateRefreshToken(UserDetails userDetails) {
-        Map<String, Object> claims = new HashMap<>();
+    /**
+     * Refresh tokens carry a random {@code jti} and the caller's extra claims.
+     *
+     * <p>Without {@code jti} the JWT payload only depends on subject plus the
+     * second-granularity {@code iat}/{@code exp}, so two logins within the same
+     * second produced byte-identical tokens. That collides on the UNIQUE
+     * {@code refresh_tokens.token_hash} column.
+     */
+    public String generateRefreshToken(UserDetails userDetails, Map<String, Object> extraClaims) {
+        Map<String, Object> claims = new HashMap<>(extraClaims == null ? Map.of() : extraClaims);
         claims.put("typ", "refresh");
+        claims.put("jti", UUID.randomUUID().toString());
         return buildToken(claims, userDetails, refreshExpiration);
     }
 
