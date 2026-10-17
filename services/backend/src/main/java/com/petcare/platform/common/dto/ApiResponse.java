@@ -45,4 +45,19 @@ public record ApiResponse<T>(
                 .timestamp(Instant.now())
                 .build();
     }
+
+    /**
+     * Error envelope carrying a structured payload, e.g. a field -&gt; message map
+     * for bean-validation failures. Always sets {@code timestamp} so success and
+     * failure responses share the exact same shape.
+     */
+    public static <T> ApiResponse<T> error(int status, String message, T data) {
+        return ApiResponse.<T>builder()
+                .status(status)
+                .success(false)
+                .message(message)
+                .data(data)
+                .timestamp(Instant.now())
+                .build();
+    }
 }

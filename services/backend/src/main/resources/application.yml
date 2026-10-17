@@ -98,6 +98,12 @@ app:
     secret: ${JWT_SECRET:your-256-bit-secret-key-change-this-in-production-must-be-at-least-256-bits}
     expiration: ${JWT_EXPIRATION:86400000}
     refresh-expiration: ${JWT_REFRESH_EXPIRATION:604800000}
+    clock-skew-seconds: ${JWT_CLOCK_SKEW_SECONDS:30}
+  security:
+    cors:
+      # Explicit origins. "*" is tolerated for local development but logs a warning.
+      allowed-origin-patterns: ${CORS_ALLOWED_ORIGIN_PATTERNS:http://localhost:*,http://127.0.0.1:*}
+      allow-credentials: ${CORS_ALLOW_CREDENTIALS:true}
   ai:
     agent-url: ${AI_AGENT_URL:http://localhost:8001}
     rag-url: ${AI_RAG_URL:http://localhost:8002}
