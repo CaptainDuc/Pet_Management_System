@@ -1,0 +1,33 @@
+spring:
+  application:
+    name: payment-service
+  datasource:
+    url: jdbc:postgresql://${PAYMENT_DB_HOST:localhost}:${PAYMENT_DB_PORT:5433}/${PAYMENT_DB_NAME:petcare_payment}
+    username: ${PAYMENT_DB_USER:petcare_payment}
+    password: ${PAYMENT_DB_PASSWORD:petcare_payment123}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    validate-on-migrate: true
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USER:petcare}
+    password: ${RABBITMQ_PASSWORD:petcare123}
+
+server:
+  port: ${PAYMENT_SERVICE_PORT:8082}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true

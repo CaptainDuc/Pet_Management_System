@@ -1,205 +1,195 @@
-# Pet Care Platform — Sequence Diagrams
+# Pet Care Platform - Sequence Diagrams
 
-## 1. Authentication — Login Flow
+> Các flow dưới đây mô tả kiến trúc đích của MVP. Chúng chưa đồng nghĩa với việc controller/service tương ứng đã được triển khai trong `services/backend`.
+
+## 1. Login And Refresh Rotation
 
 ```mermaid
 sequenceDiagram
-    actor C as Client (Web/Mobile)
+    actor C as Web/Mobile Client
     participant A as AuthController
     participant AS as AuthService
-    participant US as UserService
     participant JWT as JwtService
-    participant R as Redis
+    participant DB as PostgreSQL
 
-    C->>A: POST /api/v1/auth/login {email, password}
+    C->>A: POST /api/v1/auth/login
     A->>AS: authenticate(email, password)
-    AS->>US: findByEmail(email)
-    US-->>AS: User entity
-    AS->>AS: verify BCrypt password
-    AS->>JWT: generateAccessToken(user)
-    AS->>JWT: generateRefreshToken(user)
-    JWT-->>AS: accessToken, refreshToken
-    AS->>R: store refreshToken (key=userId, TTL=7d)
-    AS-->>A: AuthResponse {accessToken, refreshToken, user}
-    A-->>C: 200 OK AuthResponse
+    AS->>JWT: generate access typ=access
+    AS->>JWT: generate refresh typ=refresh, jti, familyId
+    AS->>DB: store refresh token hash and expiry
+    DB-->>AS: session created
+    AS-->>C: accessToken and refreshToken
+
+    C->>A: POST /api/v1/auth/refresh
+    A->>AS: rotate(refreshToken)
+    AS->>JWT: validate typ=refresh
+    AS->>DB: lock active token by hash
+    alt token is active
+        AS->>DB: revoke old token and insert replacement atomically
+        AS-->>C: rotated token pair
+    else token was already used or revoked
+        AS->>DB: revoke token family
+        AS-->>C: 401 Unauthorized
+    end
 ```
 
----
+The raw refresh token is never stored. Normal Bearer authentication accepts only `typ=access`; logout sets `revoked_at` for the selected session or token family.
 
-## 2. Create Booking Flow
+## 2. Veterinarian Schedule
+
+```mermaid
+sequenceDiagram
+    actor M as Manager
+    participant SC as ScheduleController
+    participant SS as ScheduleService
+    participant DB as PostgreSQL
+
+    M->>SC: POST /veterinarians/{id}/schedules
+    SC->>SS: createSchedule(vetId, date, start, end)
+    SS->>SS: validate start < end and veterinarian active
+    SS->>DB: INSERT veterinarian_schedule
+    alt no overlap
+        DB-->>SS: schedule created
+        SS-->>M: 201 Created
+    else exclusion constraint violation
+        DB-->>SS: overlapping range rejected
+        SS-->>M: 409 Conflict
+    end
+```
+
+The database uses a half-open range `[start, end)`, so adjacent shifts are allowed. A single `UNIQUE(veterinarian_id, work_date)` must not be used because it prevents valid split shifts.
+
+## 3. Create Appointment Without Double Booking
 
 ```mermaid
 sequenceDiagram
     actor C as Customer
-    participant BC as BookingController
-    participant BS as BookingService
-    participant SS as SchedulingService
-    participant PS as PromotionService
-    participant MQ as RabbitMQ
-    participant NS as NotificationService
-    participant LS as LoyaltyService
+    participant AC as AppointmentController
+    participant AS as AppointmentService
+    participant DB as PostgreSQL
+    participant O as NotificationOutbox
 
-    C->>BC: POST /api/v1/bookings {branchId, items[], scheduledAt, promoCode?}
-    BC->>BS: createBooking(request, customerId)
-    BS->>SS: checkAvailability(branchId, staffId, scheduledAt)
-    SS-->>BS: TimeSlot available
-    opt promoCode provided
-        BS->>PS: applyPromotion(promoCode, subtotal)
-        PS-->>BS: discountAmount
+    C->>AC: POST /api/v1/appointments
+    AC->>AS: createAppointment(request, ownerId)
+    AS->>DB: verify pet ownership and covering work schedule
+    AS->>DB: INSERT appointment in transaction
+    alt veterinarian is available
+        DB-->>AS: appointment created
+        AS->>O: enqueue appointment.created in same transaction
+        AS-->>C: 201 Created
+    else active appointment overlaps
+        DB-->>AS: exclusion constraint violation
+        AS-->>C: 409 Veterinarian is not available
     end
-    BS->>BS: persist Booking + BookingItems
-    BS->>SS: reserveTimeSlot(slotId, bookingId)
-    BS->>MQ: publish BookingCreatedEvent {bookingId, customerId, scheduledAt}
-    BS-->>BC: BookingResponse {bookingId, status=PENDING, total}
-    BC-->>C: 201 Created BookingResponse
-
-    MQ-->>NS: BookingCreatedEvent consumed
-    NS->>NS: send confirmation email/push
-
-    MQ-->>LS: BookingCreatedEvent consumed
-    LS->>LS: mark points as pending (awarded on completion)
 ```
 
----
+Availability checks improve the response but are not sufficient by themselves. The PostgreSQL exclusion constraint is the final concurrency-safe protection for `PENDING`, `CONFIRMED`, and `IN_PROGRESS` appointments.
 
-## 3. Payment Flow
+## 4. Payment And Gateway Transactions
 
 ```mermaid
 sequenceDiagram
     actor C as Customer
     participant PC as PaymentController
     participant PS as PaymentService
-    participant BS as BookingService
+    participant DB as PostgreSQL
+    participant G as VNPay/MoMo/Stripe
+
+    C->>PC: POST /api/v1/payments with Idempotency-Key
+    PC->>PS: initiate(invoiceId, provider, key)
+    PS->>DB: lock invoice and find/create Payment
+    PS->>DB: INSERT payment_transaction PENDING
+    PS->>G: create payment request
+    G-->>PS: provider transaction and checkout URL
+    PS->>DB: UPDATE transaction response/status
+    PS-->>C: payment status and checkout URL
+
+    G->>PC: signed webhook event
+    PC->>PS: processWebhook(event)
+    PS->>PS: verify signature and amount
+    PS->>DB: INSERT transaction by unique provider event id
+    alt event is new
+        PS->>DB: update Payment aggregate atomically
+        PS-->>G: 200 Accepted
+    else duplicate callback
+        DB-->>PS: event already processed
+        PS-->>G: 200 Accepted
+    end
+```
+
+Refunds append `REFUND` transactions. Successful cumulative refunds must never exceed successful captures; gateway payload history is not overwritten on the parent payment row.
+
+## 5. Coupon Redemption
+
+```mermaid
+sequenceDiagram
+    actor C as Customer
     participant IS as InvoiceService
-    participant MQ as RabbitMQ
-    participant LS as LoyaltyService
+    participant CS as CouponService
+    participant DB as PostgreSQL
 
-    C->>PC: POST /api/v1/payments {bookingId, method, amount}
-    PC->>PS: initiatePayment(bookingId, method, amount)
-    PS->>BS: getBooking(bookingId) -- validate CONFIRMED status
-    BS-->>PS: Booking entity
-    PS->>PS: persist Payment {status=PENDING}
-    note over PS: For CASH: immediate completion<br/>For CARD: gateway call (stub)
-    PS->>PS: update Payment {status=COMPLETED}
-    PS->>MQ: publish PaymentCompletedEvent {bookingId, paymentId, amount}
-    PS-->>PC: PaymentResponse {paymentId, status, amount}
-    PC-->>C: 200 OK PaymentResponse
-
-    MQ-->>IS: PaymentCompletedEvent consumed
-    IS->>IS: generate Invoice + InvoiceItems
-    IS->>IS: assign invoice_number
-
-    MQ-->>BS: PaymentCompletedEvent consumed
-    BS->>BS: update Booking {status=CONFIRMED}
-
-    MQ-->>LS: PaymentCompletedEvent consumed
-    LS->>LS: award loyalty points to customer
+    C->>IS: Apply coupon and confirm invoice
+    IS->>CS: redeem(code, userId, invoiceId)
+    CS->>DB: lock coupon row
+    CS->>DB: count active usage for coupon and user
+    CS->>CS: verify dates, global limit, per_user_limit and invoice total
+    CS->>DB: INSERT coupon_usage and update used_count atomically
+    DB-->>CS: redemption created
+    CS-->>IS: discount snapshot
 ```
 
----
+`POST /coupons/validate` is advisory and does not consume a use. `UNIQUE(invoice_id)` prevents duplicate invoice redemption, while `per_user_limit` is enforced transactionally rather than by `UNIQUE(coupon_id, user_id)`.
 
-## 4. Booking Completion & Review Flow
+## 6. Vision Analysis History
 
-```mermaid
-sequenceDiagram
-    actor S as Staff
-    participant BC as BookingController
-    participant BS as BookingService
-    participant MQ as RabbitMQ
-    actor C as Customer
-    participant RC as ReviewController
-    participant RS as ReviewService
-
-    S->>BC: PATCH /api/v1/bookings/{id}/complete
-    BC->>BS: completeBooking(bookingId, staffId)
-    BS->>BS: update Booking {status=COMPLETED}
-    BS->>MQ: publish BookingCompletedEvent
-    BS-->>BC: BookingResponse {status=COMPLETED}
-    BC-->>S: 200 OK
-
-    MQ-->>C: Push notification "Service completed! Leave a review"
-
-    C->>RC: POST /api/v1/reviews {bookingId, rating, comment}
-    RC->>RS: createReview(request, customerId)
-    RS->>RS: validate booking belongs to customer & COMPLETED
-    RS->>RS: persist Review
-    RS-->>RC: ReviewResponse
-    RC-->>C: 201 Created
-```
-
----
-
-## 5. AI Chat (RAG) Flow
+> ⚠ **Chưa được triển khai.** `AiController` hiện chỉ có `POST /api/v1/ai/tips` (stub, không gọi `ai-vision`), và Core DB **chưa có** bảng `vision_analyses` (xem migration đề xuất `P-36` trong `docs/api-contracts.md`).
+> Endpoint chuẩn được chọn trong API contract là **`POST /api/v1/ai/vision/analyze`** (không phải `/api/v1/ai/vision-analyses` như trước đây). Khi triển khai phải cập nhật lại sơ đồ này cho khớp.
 
 ```mermaid
 sequenceDiagram
     actor C as Customer
-    participant AC as AIController (Backend)
-    participant AS as AIService (Backend)
-    participant AG as ai-agent (FastAPI :8001)
-    participant RAG as ai-rag (FastAPI :8002)
-    participant PG as PostgreSQL (pgvector)
-    participant LLM as LLM API (OpenAI stub)
+    participant AC as AIController (Spring Boot)
+    participant OS as Object Storage
+    participant DB as PostgreSQL
+    participant V as ai-vision (FastAPI)
 
-    C->>AC: POST /api/v1/ai/chat {conversationId, message}
-    AC->>AS: chat(conversationId, message, userId)
-    AS->>AS: persist AIMessage {role=USER}
-    AS->>AG: POST /chat {history, message}
-    AG->>RAG: POST /retrieve {query}
-    RAG->>PG: SELECT embedding similarity (pgvector)
-    PG-->>RAG: relevant document chunks
-    RAG-->>AG: context documents
-    AG->>LLM: prompt = system + context + history + message
-    LLM-->>AG: assistant response
-    AG-->>AS: {response, sources}
-    AS->>AS: persist AIMessage {role=ASSISTANT}
-    AS-->>AC: AIMessageResponse
-    AC-->>C: 200 OK {message, sources}
+    C->>AC: POST /api/v1/ai/vision-analyses image and petId
+    AC->>AC: validate ownership, MIME type and size
+    AC->>OS: store image
+    OS-->>AC: storage key and checksum
+    AC->>DB: INSERT vision_analysis PENDING
+    AC->>V: POST /analyze image
+    alt analysis succeeds
+        V-->>AC: model/version and result
+        AC->>DB: UPDATE SUCCESS and result JSON
+        AC-->>C: 201 analysis result
+    else analysis fails
+        AC->>DB: UPDATE FAILED and error
+        AC-->>C: 502 analysis failed
+    end
 ```
 
----
+PostgreSQL stores only image metadata, ownership, model information and results. Image bytes remain in protected object storage and follow an explicit retention policy.
 
-## 6. Inventory Low Stock Alert Flow
+## 7. Appointment Completion And Review
 
 ```mermaid
 sequenceDiagram
-    participant IS as InventoryService
-    participant MQ as RabbitMQ
-    participant NS as NotificationService
-    participant ES as EmailService
-    actor A as Admin
+    actor V as Veterinarian
+    participant AC as AppointmentController
+    participant AS as AppointmentService
+    participant DB as PostgreSQL
+    participant O as NotificationOutbox
+    actor C as Customer
 
-    note over IS: Stock consumption triggers check
-    IS->>IS: updateStock(itemId, -quantity)
-    IS->>IS: check quantity_on_hand <= reorder_threshold
-    IS->>MQ: publish InventoryLowStockEvent {itemId, branchId, currentQty, threshold}
-    
-    MQ-->>NS: InventoryLowStockEvent consumed
-    NS->>NS: find branch admins
-    NS->>ES: send low stock email to admins
-    NS->>NS: persist Notification for each admin
-    ES-->>A: Email "Low stock alert: {item} at {branch}"
-```
-
----
-
-## 7. Staff Schedule & Slot Management
-
-```mermaid
-sequenceDiagram
-    actor A as Admin
-    participant SC as SchedulingController
-    participant SS as SchedulingService
-    participant StaffS as StaffService
-
-    A->>SC: POST /api/v1/schedules {staffId, branchId, workDate, startTime, endTime}
-    SC->>SS: createSchedule(request)
-    SS->>StaffS: validateStaffExists(staffId)
-    SS->>SS: check no overlapping schedule
-    SS->>SS: persist Schedule
-    SS->>SS: generate TimeSlots (30-min intervals)
-    SS-->>SC: ScheduleResponse {scheduleId, slots[]}
-    SC-->>A: 201 Created
-
-    note over SS: Slots auto-available = true on creation<br/>BookingService sets available = false on reservation
+    V->>AC: PATCH /appointments/{id}/status COMPLETED
+    AC->>AS: completeAppointment(id, veterinarianId)
+    AS->>DB: persist status and status history
+    AS->>O: enqueue appointment.completed atomically
+    AS-->>V: 200 Completed
+    O-->>C: Push notification requesting review
+    C->>AC: POST /reviews with appointmentId
+    AC->>DB: verify ownership and completed status
+    AC->>DB: INSERT one review per appointment
+    AC-->>C: 201 Created
 ```

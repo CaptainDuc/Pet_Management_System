@@ -1,26 +1,33 @@
 # Pet Care Platform — Architecture Documentation
 
+> Mỗi Spring Boot service sở hữu code, Flyway migration và PostgreSQL database riêng. Không service nào được đọc trực tiếp database của service khác.
+
 ## 1. System Context (C4 Level 1)
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │                        PetCare Platform                              │
 │                                                                      │
-│  Customer ──► Web/Mobile App ──► Backend API ──► PostgreSQL          │
-│                                      │         ──► Redis             │
-│                                      │         ──► RabbitMQ          │
-│                                      └──► AI Services (Python)       │
-│                                               ──► pgvector (RAG)     │
+│  Customer / Staff ──► Web (React) / Mobile (Expo)                    │
+│                           │                                          │
+│                           ▼ REST API / JWT                           │
+│             Spring Boot Services (Core, Payment, Notification)       │
+│                  │              │              │                     │
+│                  ▼              ▼              ▼                     │
+│             Core DB        Payment DB    Notification DB             │
+│                  └──────── RabbitMQ / versioned events ───────┘       │
+│                         Redis + Python AI Services                    │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-### External Actors
-| Actor | Description |
-|---|---|
-| **Customer** | Pet owner using Web or Mobile app |
-| **Staff** | Groomer, Vet, Receptionist using Staff Dashboard |
-| **Admin** | Branch/System admin with full management access |
-| **Super Admin** | Platform owner, cross-branch visibility |
+### External Actors & RBAC Roles
+| Role Code | Description | Key Permissions Scope |
+|---|---|---|
+| **OWNER** | Clinic owner / Manager | Full management, revenue reports, staff, promotions, audit logs |
+| **VETERINARIAN** | Veterinary doctor | Medical records, prescriptions, diagnosis, appointment status |
+| **STAFF** | Receptionist / Customer service | Appointments, invoices, payments, client onboarding |
+| **ADMIN** | System administrator | System config, RAG knowledge documents, RBAC management |
+| **CUSTOMER** | Pet owner | Own profile, pets, appointment booking, payments, reviews, AI chat |
 
 ---
 
@@ -29,62 +36,62 @@
 ```
 ┌────────── PetCare Platform ─────────────────────────────────────────┐
 │                                                                      │
-│  ┌──────────────┐   ┌──────────────┐   ┌────────────────────────┐  │
-│  │  Web (React) │   │Mobile (Expo) │   │  Backend (Spring Boot) │  │
-│  │  Port: 80    │   │  Port: n/a   │   │  Port: 8080            │  │
-│  │  Vite + TW   │   │  RN 0.74     │   │  Java 21 + JPA         │  │
-│  └──────┬───────┘   └──────┬───────┘   └────────────┬───────────┘  │
-│         │                  │                         │              │
-│         └──────────────────┴──── REST /api/v1/ ──────┘              │
-│                                                      │              │
-│   ┌──────────────────────────────────────────────────┼──────────┐   │
-│   │  Infrastructure                                  │          │   │
-│   │  ┌──────────┐  ┌───────┐  ┌──────────┐  ┌──────▼──────┐   │   │
-│   │  │ PostgreSQL│  │ Redis │  │ RabbitMQ │  │  Prometheus │   │   │
-│   │  │ Port:5432 │  │ 6379  │  │5672/15672│  │  Port:9090  │   │   │
-│   │  │ pgvector  │  │       │  │          │  └──────┬──────┘   │   │
-│   │  └──────────┘  └───────┘  └──────────┘         │          │   │
-│   │                                          ┌──────▼──────┐   │   │
-│   │                                          │   Grafana   │   │   │
-│   │                                          │  Port:3001  │   │   │
-│   └──────────────────────────────────────────┴─────────────┘   │   │
-│                                                                  │   │
-│   ┌──── AI Microservices (Python FastAPI) ───────────────────┐  │   │
-│   │  agent:8001  rag:8002  vision:8003                       │  │   │
-│   │  recommendation:8004  forecasting:8005  optimization:8006│  │   │
-│   └──────────────────────────────────────────────────────────┘  │   │
+│  ┌──────────────────────┐  ┌─────────────────────┐                   │
+│  │   Web (React+Vite)   │  │ Mobile (React Native│                   │
+│  │   Port: 80           │  │ Expo SDK 51)        │                   │
+│  └──────────┬───────────┘  └──────────┬──────────┘                   │
+│             │                         │                              │
+│             └─────────── REST /api/v1 ┴────────┐                     │
+│                                                ▼                     │
+│      ┌─────────────────┬──────────────────┬────────────────────┐     │
+│      ▼                 ▼                  ▼                    │     │
+│ Core Backend       Payment Service   Notification Service      │     │
+│ :8080              :8082             :8083                     │     │
+│      │                 │                  │                    │     │
+│      ▼                 ▼                  ▼                    │     │
+│ Core PostgreSQL    Payment PostgreSQL Notification PostgreSQL  │     │
+│ :5432              :5433             :5434                     │     │
+│      └──────────────── RabbitMQ :5672 ─────────────────────────┘     │
+│                                                                      │
+│   ┌──── AI Microservices (FastAPI Python) ──────────────────────┐    │
+│   │  agent:8001  rag:8002  vision:8003                          │    │
+│   │  recommendation:8004                                      │    │
+│   └─────────────────────────────────────────────────────────────┘    │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 3. Backend — Module Map (C4 Level 3)
+## 3. Service Boundaries
 
-Backend là **Modular Monolith**. Mỗi module có đầy đủ `controller / service / domain / repository / dto / mapper / event`.
+Core backend vẫn tổ chức theo modular-monolith, nhưng Payment và Notification là hai Spring Boot service độc lập.
 
-| Module | Responsibility | Key Domain Objects |
+| Package Module | Responsibility | Key Domain Entities |
 |---|---|---|
-| `auth` | JWT issue/validate, login/register | — |
-| `user` | Người dùng, phân quyền (CUSTOMER/STAFF/ADMIN/SUPER_ADMIN) | User, Role |
-| `pet` | Quản lý thú cưng, giống loài | Pet, Breed, Species |
-| `medical` | Hồ sơ y tế, lịch tiêm phòng, đơn thuốc | MedicalRecord, Vaccination, Prescription |
-| `servicecatalog` | Danh mục dịch vụ, bảng giá | PetService, ServiceCategory, PriceList |
-| `booking` | Lịch đặt dịch vụ, quản lý trạng thái | Booking, BookingItem |
-| `scheduling` | Lịch làm việc nhân viên, slot thời gian | Schedule, TimeSlot, Appointment |
-| `staff` | Nhân viên, kỹ năng, lịch rảnh | Staff, StaffSkill |
-| `branch` | Chi nhánh, giờ hoạt động | Branch, BranchHours |
-| `resource` | Tài nguyên vật lý (phòng, bàn, dụng cụ) | Resource, ResourceType |
-| `payment` | Thanh toán, phương thức thanh toán | Payment, PaymentMethod |
-| `invoice` | Hóa đơn, chi tiết hóa đơn | Invoice, InvoiceItem |
-| `promotion` | Khuyến mãi, quy tắc giảm giá | Promotion, DiscountRule |
-| `loyalty` | Điểm tích lũy, đổi thưởng | LoyaltyAccount, LoyaltyTransaction |
-| `inventory` | Tồn kho, nhập xuất | InventoryItem, StockMovement |
-| `notification` | Thông báo push/email/SMS | Notification, NotificationTemplate |
-| `review` | Đánh giá, xếp hạng | Review, Rating |
+| `auth` | JWT issuance, validation, refresh rotation/revocation | RefreshToken, JwtService |
+| `rbac` | RBAC Management (Roles & Permissions) | Role, Permission, UserRole, RolePermission |
+| `user` | Quản lý tài khoản người dùng | User |
+| `pet` | Thú cưng, loài, giống, dị ứng, thuốc đang dùng | Pet, PetSpecies, PetBreed, PetAllergy, PetMedication |
+| `veterinary` | Bác sĩ, ca trực, hồ sơ bệnh án, đơn thuốc, danh mục thuốc | Veterinarian, VeterinarianSchedule, MedicalRecord, Medicine, Prescription, PrescriptionItem |
+| `servicecatalog` | Dịch vụ & bảng giá | PetService |
+| `appointment` | Vòng đời lịch hẹn, dịch vụ đính kèm, lịch sử trạng thái | Appointment, AppointmentService, AppointmentStatusHistory |
+| `invoice` | Hóa đơn, chi tiết hóa đơn (dịch vụ & thuốc) | Invoice, InvoiceItem |
+| `promotion` | Mã giảm giá, coupon, lượt sử dụng | Promotion, Coupon, CouponUsage |
+| `loyalty` | Hạng thành viên, tích/đổi/điều chỉnh điểm | MembershipTier, UserMembership, MembershipTransaction |
+| `review` | Đánh giá lịch hẹn hoàn thành | Review |
 | `search` | Full-text search (PostgreSQL pg_trgm) | — |
-| `analytics` | Aggregation, dashboard metrics | — |
-| `audit` | Lịch sử thay đổi hệ thống | AuditLog |
-| `ai` | Chat AI, lịch sử hội thoại | AIConversation, AIMessage |
+| `analytics` | Báo cáo doanh thu & dashboard metrics | — |
+| `audit` | Lịch sử tác động dữ liệu | AuditLog |
+| `ai` | Tích hợp AI microservices, RAG và lịch sử phân tích ảnh | Document, DocumentChunk, Conversation, Message, AIRequest, AIToolCall, VisionAnalysis |
+
+Inventory không thuộc phạm vi MVP. Các bảng `inventory_items`, `stock_movements` và các UI/event còn sót lại trong baseline cũ sẽ được loại bỏ bằng migration riêng sau khi xác nhận không có dữ liệu cần giữ.
+
+| Independent Service | Port | Database ownership | Main entities |
+|---|---:|---|---|
+| `payment-service` | 8082 | `petcare_payment` on PostgreSQL 5433 | Payment, PaymentTransaction, InboxEvent, OutboxEvent |
+| `notification-service` | 8083 | `petcare_notification` on PostgreSQL 5434 | Notification, NotificationDelivery, NotificationTemplate, InboxEvent, OutboxEvent |
+
+Core backend owns invoices. Payment stores `invoice_id`, `owner_id`, and `appointment_id` as external UUID references without cross-database foreign keys. Notification applies the same rule to user, appointment, invoice, and payment IDs.
 
 ---
 
@@ -95,57 +102,38 @@ Backend là **Modular Monolith**. Mỗi module có đầy đủ `controller / se
 | Backend | Spring Boot | 3.3.x |
 | Language | Java | 21 (LTS) |
 | ORM | Spring Data JPA + Hibernate | 6.x |
+| Database | 3 PostgreSQL instances; pgvector only on Core DB | 16 |
 | DB Migration | Flyway | Latest |
-| Database | PostgreSQL + pgvector | 16 |
 | Cache | Redis | 7 |
 | Message Broker | RabbitMQ | 3.13 |
 | API Docs | SpringDoc OpenAPI | 2.x |
-| Security | Spring Security 6 + JWT | — |
-| AI Backend | Python + FastAPI | 3.12 / latest |
-| AI Framework | LangChain + sentence-transformers | latest |
-| Web Frontend | React + Vite + TailwindCSS | 18 / 5 / 3 |
-| Mobile | React Native + Expo | 0.74 / SDK 51 |
-| Observability | Prometheus + Grafana + OpenTelemetry | latest |
-| Infrastructure | Docker Compose | — |
+| Security | Spring Security 6 + JWT | HS256, Stateless |
+| AI Microservices | Python 3.11 + FastAPI | 4 service stub: agent, RAG, vision, recommendation |
+| Web Frontend | React 18 + Vite 5 + TailwindCSS 3 | Port 80 |
+| Mobile | React Native 0.74 + Expo SDK 51 | Expo Router |
+| Observability | Prometheus + Grafana | 9090 / 3001 |
 
 ---
 
-## 5. API Conventions
+## 5. Security & RBAC Model
 
-- **Base URL**: `/api/v1/{module}`
-- **Auth**: `Authorization: Bearer <JWT>` header
-- **Response envelope**: `ApiResponse<T>` `{ status, success, message, data, timestamp }`
-- **Pagination**: `PageResponse<T>` `{ content, page, size, totalElements, totalPages }`
-- **Swagger UI**: `http://localhost:8080/swagger-ui.html`
+```
+User ──► UserRole ──► Role ──► RolePermission ──► Permission ──► Method Security (@PreAuthorize)
+```
+
+- Authentication: Bearer JWT (`JwtAuthenticationFilter`).
+- Authorization: Spring Security 6 với `@PreAuthorize("hasAuthority('medical:create')")`.
+- Access token và refresh token có claim `typ` khác nhau; security filter chỉ chấp nhận `typ=access`.
+- Refresh token được rotate khi làm mới và chỉ lưu hash trong PostgreSQL. Logout/reuse sẽ revoke token hoặc cả token family.
 
 ---
 
-## 6. Security Model
+## 6. Event Flow & Transactional Outbox (RabbitMQ)
 
 ```
-Role          │ Permissions
-──────────────┼─────────────────────────────────────────
-CUSTOMER      │ Own pets, bookings, payments, reviews
-STAFF         │ Appointments, medical records, schedule
-ADMIN         │ Branch management, staff, promotions, inventory
-SUPER_ADMIN   │ All branches, analytics, audit logs, system config
+Core DB ──outbox──► invoice.issued.v1 ──► Payment inbox/DB
+Payment DB ──outbox──► payment.completed.v1 ──► Core inbox + Notification inbox
+Notification DB ──delivery──► Email/SMS/Push provider
 ```
 
-JWT signed with HS256, default expiry 24h. Refresh token stored in Redis.
-
----
-
-## 7. Event Flow (RabbitMQ)
-
-```
-BookingService ──publish──► booking.created  ──► NotificationListener (email/push)
-                                              ──► SchedulingListener (reserve slot)
-                                              ──► LoyaltyListener (points pending)
-
-PaymentService ──publish──► payment.completed ──► InvoiceListener (generate invoice)
-                                               ──► LoyaltyListener (award points)
-                                               ──► BookingListener (confirm booking)
-
-BookingService ──publish──► booking.cancelled ──► SchedulingListener (release slot)
-                                               ──► PaymentListener (refund trigger)
-```
+Mỗi producer ghi outbox trong transaction local của chính nó. Mỗi consumer ghi `event_id` vào inbox local để xử lý idempotent. RabbitMQ là at-least-once; không dùng distributed transaction và không join xuyên database.

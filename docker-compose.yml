@@ -1,22 +1,56 @@
-version: '3.9'
-
 services:
-  # ─── Database ────────────────────────────────────────────────────────────────
-  postgres:
+  # ─── Service-owned Databases ─────────────────────────────────────────────────
+  backend-postgres:
     image: pgvector/pgvector:pg16
-    container_name: petcare-postgres
+    container_name: petcare-backend-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-petcare}
-      POSTGRES_USER: ${POSTGRES_USER:-petcare}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-petcare123}
+      POSTGRES_DB: ${BACKEND_DB_NAME:-petcare}
+      POSTGRES_USER: ${BACKEND_DB_USER:-petcare}
+      POSTGRES_PASSWORD: ${BACKEND_DB_PASSWORD:-petcare123}
     ports:
       - "5432:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - backend_postgres_data:/var/lib/postgresql/data
       - ./infrastructure/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-petcare}"]
+      test: ["CMD-SHELL", "pg_isready -U ${BACKEND_DB_USER:-petcare} -d ${BACKEND_DB_NAME:-petcare}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  payment-postgres:
+    image: postgres:16-alpine
+    container_name: petcare-payment-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${PAYMENT_DB_NAME:-petcare_payment}
+      POSTGRES_USER: ${PAYMENT_DB_USER:-petcare_payment}
+      POSTGRES_PASSWORD: ${PAYMENT_DB_PASSWORD:-petcare_payment123}
+    ports:
+      - "5433:5432"
+    volumes:
+      - payment_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PAYMENT_DB_USER:-petcare_payment} -d ${PAYMENT_DB_NAME:-petcare_payment}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  notification-postgres:
+    image: postgres:16-alpine
+    container_name: petcare-notification-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${NOTIFICATION_DB_NAME:-petcare_notification}
+      POSTGRES_USER: ${NOTIFICATION_DB_USER:-petcare_notification}
+      POSTGRES_PASSWORD: ${NOTIFICATION_DB_PASSWORD:-petcare_notification123}
+    ports:
+      - "5434:5432"
+    volumes:
+      - notification_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${NOTIFICATION_DB_USER:-petcare_notification} -d ${NOTIFICATION_DB_NAME:-petcare_notification}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -58,17 +92,17 @@ services:
   # ─── Backend ─────────────────────────────────────────────────────────────────
   backend:
     build:
-      context: ./backend
+      context: ./services/backend
       dockerfile: Dockerfile
     container_name: petcare-backend
     restart: unless-stopped
     environment:
       SPRING_PROFILES_ACTIVE: docker
-      POSTGRES_HOST: postgres
+      POSTGRES_HOST: backend-postgres
       POSTGRES_PORT: 5432
-      POSTGRES_DB: ${POSTGRES_DB:-petcare}
-      POSTGRES_USER: ${POSTGRES_USER:-petcare}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-petcare123}
+      POSTGRES_DB: ${BACKEND_DB_NAME:-petcare}
+      POSTGRES_USER: ${BACKEND_DB_USER:-petcare}
+      POSTGRES_PASSWORD: ${BACKEND_DB_PASSWORD:-petcare123}
       REDIS_HOST: redis
       REDIS_PORT: 6379
       RABBITMQ_HOST: rabbitmq
@@ -83,14 +117,76 @@ services:
     ports:
       - "8080:8080"
     depends_on:
-      postgres:
+      backend-postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  payment-service:
+    build:
+      context: ./services/payment-service
+      dockerfile: Dockerfile
+    container_name: petcare-payment-service
+    restart: unless-stopped
+    environment:
+      PAYMENT_DB_HOST: payment-postgres
+      PAYMENT_DB_PORT: 5432
+      PAYMENT_DB_NAME: ${PAYMENT_DB_NAME:-petcare_payment}
+      PAYMENT_DB_USER: ${PAYMENT_DB_USER:-petcare_payment}
+      PAYMENT_DB_PASSWORD: ${PAYMENT_DB_PASSWORD:-petcare_payment123}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: ${RABBITMQ_USER:-petcare}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-petcare123}
+    ports:
+      - "8082:8082"
+    depends_on:
+      payment-postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8082/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  notification-service:
+    build:
+      context: ./services/notification-service
+      dockerfile: Dockerfile
+    container_name: petcare-notification-service
+    restart: unless-stopped
+    environment:
+      NOTIFICATION_DB_HOST: notification-postgres
+      NOTIFICATION_DB_PORT: 5432
+      NOTIFICATION_DB_NAME: ${NOTIFICATION_DB_NAME:-petcare_notification}
+      NOTIFICATION_DB_USER: ${NOTIFICATION_DB_USER:-petcare_notification}
+      NOTIFICATION_DB_PASSWORD: ${NOTIFICATION_DB_PASSWORD:-petcare_notification123}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: ${RABBITMQ_USER:-petcare}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-petcare123}
+      MAIL_HOST: ${MAIL_HOST:-localhost}
+      MAIL_PORT: ${MAIL_PORT:-1025}
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+    ports:
+      - "8083:8083"
+    depends_on:
+      notification-postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8083/actuator/health"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -119,11 +215,11 @@ services:
     ports:
       - "8001:8001"
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-petcare}:${POSTGRES_PASSWORD:-petcare123}@postgres:5432/${POSTGRES_DB:-petcare}
+      DATABASE_URL: postgresql://${BACKEND_DB_USER:-petcare}:${BACKEND_DB_PASSWORD:-petcare123}@backend-postgres:5432/${BACKEND_DB_NAME:-petcare}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-sk-stub}
       BACKEND_URL: http://backend:8080/api/v1
     depends_on:
-      postgres:
+      backend-postgres:
         condition: service_healthy
 
   ai-rag:
@@ -135,10 +231,10 @@ services:
     ports:
       - "8002:8002"
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-petcare}:${POSTGRES_PASSWORD:-petcare123}@postgres:5432/${POSTGRES_DB:-petcare}
+      DATABASE_URL: postgresql://${BACKEND_DB_USER:-petcare}:${BACKEND_DB_PASSWORD:-petcare123}@backend-postgres:5432/${BACKEND_DB_NAME:-petcare}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-sk-stub}
     depends_on:
-      postgres:
+      backend-postgres:
         condition: service_healthy
 
   ai-vision:
@@ -161,37 +257,9 @@ services:
     ports:
       - "8004:8004"
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-petcare}:${POSTGRES_PASSWORD:-petcare123}@postgres:5432/${POSTGRES_DB:-petcare}
+      DATABASE_URL: postgresql://${BACKEND_DB_USER:-petcare}:${BACKEND_DB_PASSWORD:-petcare123}@backend-postgres:5432/${BACKEND_DB_NAME:-petcare}
     depends_on:
-      postgres:
-        condition: service_healthy
-
-  ai-forecasting:
-    build:
-      context: ./ai/forecasting
-      dockerfile: Dockerfile
-    container_name: petcare-ai-forecasting
-    restart: unless-stopped
-    ports:
-      - "8005:8005"
-    environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-petcare}:${POSTGRES_PASSWORD:-petcare123}@postgres:5432/${POSTGRES_DB:-petcare}
-    depends_on:
-      postgres:
-        condition: service_healthy
-
-  ai-optimization:
-    build:
-      context: ./ai/optimization
-      dockerfile: Dockerfile
-    container_name: petcare-ai-optimization
-    restart: unless-stopped
-    ports:
-      - "8006:8006"
-    environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-petcare}:${POSTGRES_PASSWORD:-petcare123}@postgres:5432/${POSTGRES_DB:-petcare}
-    depends_on:
-      postgres:
+      backend-postgres:
         condition: service_healthy
 
   # ─── Observability ────────────────────────────────────────────────────────────
@@ -224,7 +292,9 @@ services:
       - prometheus
 
 volumes:
-  postgres_data:
+  backend_postgres_data:
+  payment_postgres_data:
+  notification_postgres_data:
   redis_data:
   rabbitmq_data:
   prometheus_data:

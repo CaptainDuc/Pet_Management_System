@@ -1,0 +1,15 @@
+spring:
+  jpa:
+    show-sql: false
+  datasource:
+    url: jdbc:postgresql://backend-postgres:5432/${POSTGRES_DB:petcare}
+  rabbitmq:
+    host: rabbitmq
+  data:
+    redis:
+      host: redis
+
+logging:
+  level:
+    com.petcare.platform: INFO
+    root: WARN
