@@ -2,6 +2,7 @@ package com.petcare.platform.user.service;
 
 import com.petcare.platform.common.dto.PageResponse;
 import com.petcare.platform.common.exception.BusinessException;
+import com.petcare.platform.auth.service.RefreshTokenRevocationService;
 import com.petcare.platform.common.exception.ResourceNotFoundException;
 import com.petcare.platform.common.repository.SpecificationUtils;
 import com.petcare.platform.rbac.domain.Role;
@@ -19,6 +20,7 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -27,8 +29,29 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class UserService {
 
+    /**
+     * Highest privilege first. Only used to pick a deterministic primary role when the
+     * previous one is no longer granted.
+     */
+    private static final Comparator<String> RBAC_ROLE_PRIORITY =
+            Comparator.comparingInt(UserService::roleRank).thenComparing(Comparator.naturalOrder());
+
+    // List.of preserves order; Set.of does not.
+    private static final List<String> PRIMARY_ROLE_ORDER =
+            List.of("ADMIN", "OWNER", "VETERINARIAN", "STAFF", "CUSTOMER");
+
+    private static int roleRank(String role) {
+        for (int index = 0; index < PRIMARY_ROLE_ORDER.size(); index++) {
+            if (PRIMARY_ROLE_ORDER.get(index).equalsIgnoreCase(role)) {
+                return index;
+            }
+        }
+        return PRIMARY_ROLE_ORDER.size();
+    }
+
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
+    private final RefreshTokenRevocationService revocationService;
 
     @Transactional(readOnly = true)
     public UserResponse getUserProfile(UUID userId) {
@@ -80,16 +103,37 @@ public class UserService {
         return UserResponse.from(user);
     }
 
+    /**
+     * Changes the account status.
+     *
+     * <p>Deactivating or locking also revokes every refresh token of that user.
+     * Otherwise the tokens stay in the table and would start working again if the
+     * account is later reactivated.
+     */
     @Transactional
     public UserResponse updateUserStatus(UUID id, UserStatusUpdateRequest request) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("User", id));
 
-        user.setStatus(request.status().toUpperCase());
+        String status = request.status().trim().toUpperCase();
+        user.setStatus(status);
         User updated = userRepository.save(user);
+
+        if (!"ACTIVE".equals(status)) {
+            revocationService.revokeAllForUser(updated.getId(), "Revoked because account status became " + status);
+        }
         return UserResponse.from(updated);
     }
 
+    /**
+     * Replaces the user's role set and keeps {@code users.role} in sync.
+     *
+     * <p>{@code users.role} is the primary role that
+     * {@code CustomUserDetailsService} turns into {@code ROLE_<name>}, so it must
+     * name one of the assigned roles. It used to be taken from
+     * {@code HashSet.findFirst()}, whose order is undefined, so the primary role
+     * could silently change between requests.
+     */
     @Transactional
     public UserResponse assignRolesToUser(UUID userId, AssignRolesRequest request) {
         User user = userRepository.findById(userId)
@@ -100,11 +144,21 @@ public class UserService {
             throw new BusinessException("No valid roles found for provided IDs");
         }
 
-        user.setRoles(roles);
-        // Optionally sync primary role string if single role assigned
-        roles.stream().findFirst().ifPresent(role -> user.setRole(role.getName()));
+        // Keep the current primary role when it is still granted, otherwise fall back
+        // to the highest-privilege role by a stable name ordering.
+        String primaryRole = roles.stream()
+                .map(Role::getName)
+                .filter(current -> current.equalsIgnoreCase(user.getRole()))
+                .findFirst()
+                .orElseGet(() -> roles.stream()
+                        .map(Role::getName)
+                        .sorted(RBAC_ROLE_PRIORITY)
+                        .findFirst()
+                        .orElseThrow(() -> new BusinessException("No valid roles found for provided IDs")));
 
-        User updated = userRepository.save(user);
-        return UserResponse.from(updated);
+        user.setRoles(roles);
+        user.setRole(primaryRole);
+
+        return UserResponse.from(userRepository.save(user));
     }
 }

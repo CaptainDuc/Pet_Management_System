@@ -67,6 +67,12 @@ public class RbacController {
         return ResponseEntity.ok(ApiResponse.ok(rbacService.getAllPermissions()));
     }
 
+    @GetMapping("/permissions/{id}")
+    @Operation(summary = "Get a permission by ID")
+    public ResponseEntity<ApiResponse<PermissionResponse>> getPermissionById(@PathVariable UUID id) {
+        return ResponseEntity.ok(ApiResponse.ok(rbacService.getPermissionById(id)));
+    }
+
     @PostMapping("/permissions")
     @Operation(summary = "Create a new permission")
     public ResponseEntity<ApiResponse<PermissionResponse>> createPermission(@Valid @RequestBody CreatePermissionRequest request) {

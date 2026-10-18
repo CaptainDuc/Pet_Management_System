@@ -112,9 +112,12 @@ public class AuthService {
             throw new BusinessException("User account is inactive");
         }
 
-        // Revoke current token and create replacement in same family
+        // Revoke current token and create replacement in same family.
+        // last_used_at records that this token really was redeemed, which is what
+        // distinguishes a legitimate rotation from a replay.
         refreshToken.setRevokedAt(Instant.now());
         refreshToken.setRevokeReason("Rotated");
+        refreshToken.setLastUsedAt(Instant.now());
         refreshTokenRepository.save(refreshToken);
 
         return createAuthSession(user, refreshToken.getTokenFamilyId());

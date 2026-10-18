@@ -269,7 +269,8 @@ Controller: `auth/controller/AuthController.java`. Cả 4 endpoint **Đã có co
 **Business rules**
 
 - Role mặc định: `users.role = 'CUSTOMER'`, `users.status = 'ACTIVE'` (khớp default của migration).
-- Nếu `roles` có bản ghi tên `CUSTOMER` thì gán thêm vào `user_roles`. Bảng `roles` **chưa tồn tại trong migration** → xem migration `P-1`.
+- Gán thêm role `CUSTOMER` vào `user_roles` nếu bản ghi đó tồn tại (seed bởi `V4__add_rbac_tables.sql`). Role `CUSTOMER` mang 11 permission — xem RBAC.1.
+- Response `roles` là tên các role trong `user_roles`; `role` là role chính trong `users.role`.
 - Email trùng → `422` (`BusinessException`). Kiểm tra ở tầng service (`existsByEmail`), không dựa vào constraint.
 - Phone trùng → `422`, nhưng **chỉ** khi `phone` khác null/rỗng. Vì `users.phone` không có UNIQUE nên race condition hai request đăng ký cùng phone vẫn tồn tại.
 - Không có bước xác thực email; user đăng ký là dùng được ngay.
@@ -319,7 +320,7 @@ Controller: `auth/controller/AuthController.java`. Cả 4 endpoint **Đã có co
 **Business rules**
 
 - Xác thực qua Spring `AuthenticationManager` + `DaoAuthenticationProvider` (BCrypt). Sai email **hoặc** sai mật khẩu → cùng một thông báo `Invalid credentials` (không tiết lộ email tồn tại).
-- Sau khi xác thực, `AuthService` nạp lại `User` và kiểm tra `status == 'ACTIVE'`; nếu không → `422 Account is inactive or locked`.
+- Tài khoản `INACTIVE`/`LOCKED` bị chặn ngay ở `UserDetails.isEnabled()`/`isAccountNonLocked()` ⇒ `AuthenticationException` ⇒ **`401`**, không phải `422`. Hành vi này cố ý: trả `422` sẽ tiết lộ rằng email tồn tại nhưng bị khoá. Nhánh kiểm tra `status` trong `AuthService.login` không còn tới được với tài khoản bị khoá nhưng vẫn giữ làm lưới an toàn.
 - `JwtAuthenticationFilter` chỉ nhận token `typ=access`.
 
 **Errors**
@@ -328,7 +329,7 @@ Controller: `auth/controller/AuthController.java`. Cả 4 endpoint **Đã có co
 |---|---|---|
 | `400` | `Validation failed` | Field rỗng/sai định dạng |
 | `401` | `Invalid credentials` | Sai email hoặc sai mật khẩu |
-| `422` | `Account is inactive or locked` | `users.status != 'ACTIVE'` |
+| `401` | `Authentication required` | Tài khoản `INACTIVE`/`LOCKED` |
 | `422` | `User not found` | User bị xóa giữa lúc xác thực |
 | `500` | `Internal server error` | Lỗi DB/ghi session |
 
@@ -459,6 +460,206 @@ Business rules:
 | `200` | `Success` | Luôn (kể cả khi body rỗng) |
 
 ---
+
+## B. RBAC — `/api/v1/rbac`
+
+Phần này mô tả **bước cuối của chuỗi `Register → Login → JWT → Authorization`**: cách authority được sinh ra và cách role/permission được quản trị.
+
+### RBAC.0 Mô hình authority
+
+`CustomUserDetailsService` chạy **mỗi request** và gộp 3 nguồn thành `GrantedAuthority`:
+
+| Nguồn | Authority sinh ra | Cột |
+|---|---|---|
+| Role chính | `ROLE_<UPPERCASE>` | `users.role` |
+| Mọi role được gán | `ROLE_<UPPERCASE>` | `roles.name` qua `user_roles` |
+| Mọi permission của các role đó | `<permissions.code>` (vd `medical:create`) | `permissions.code` qua `role_permissions` |
+
+Hệ quả quan trọng:
+
+- Claim `role` trong JWT **không** dùng để authorize; nó chỉ mang tính thông tin. Authority luôn đọc từ DB ⇒ đổi RBAC có hiệu lực ở request kế tiếp, không phải chờ hết hạn access token.
+- `users.role` và `user_roles` là hai nguồn **độc lập** cùng sinh `ROLE_*`. `UserService.assignRolesToUser` luôn đồng bộ `users.role` với một role trong `user_roles` để hai nguồn không mâu thuẫn.
+- ⚠ **Hiện chưa endpoint nào dùng `hasAuthority('module:action')`** — tất cả controller đang dùng `hasRole(...)`. Catalogue permission đã có và được nạp vào authorities, nhưng việc **enforce theo permission là `Proposed`**. Xem `P-43`.
+
+### RBAC.1 Permission catalogue
+
+Seed bởi `V5__seed_rbac_permissions.sql`. Quy ước code: `module:action`, lowercase, phân biệt hoa thường (`roleRepository`/`permissionRepository` lưu `code`/`name` sau khi `toUpperCase()` **chỉ với role**; `permissions.code` giữ nguyên chữ thường).
+
+| Module | Codes |
+|---|---|
+| `user` | `user:read`, `user:update`, `user:set-status`, `user:set-roles` |
+| `rbac` | `rbac:read`, `rbac:write` |
+| `pet` | `pet:read`, `pet:write` |
+| `staff` | `staff:read`, `staff:write` |
+| `branch` | `branch:read`, `branch:write` |
+| `service` | `service:read`, `service:write` |
+| `schedule` | `schedule:read`, `schedule:write` |
+| `booking` | `booking:read`, `booking:create`, `booking:update`, `booking:cancel` |
+| `invoice` | `invoice:read`, `invoice:write` |
+| `promotion` | `promotion:read`, `promotion:write` |
+| `medical` | `medical:read`, `medical:create`, `medical:update` |
+| `loyalty` | `loyalty:read`, `loyalty:adjust` |
+| `review` | `review:create`, `review:read`, `review:moderate` |
+| `ai` | `ai:chat`, `ai:manage-docs` |
+| `audit` | `audit:read` |
+
+**35 permission**, phân bổ mặc định:
+
+| Role | Số permission | Phạm vi |
+|---|---|---|
+| `ADMIN` | 35 | Toàn bộ, gồm quản trị RBAC |
+| `OWNER` | 31 | Nghiệp vụ phòng khám + đọc audit; **không** có `rbac:write` |
+| `VETERINARIAN` | 12 | Hồ sơ bệnh án, lịch hẹn của mình |
+| `STAFF` | 15 | Lễ tân: booking, invoice, tiếp nhận khách |
+| `CUSTOMER` | 11 | Pet của mình, đặt/huỷ lịch, đánh giá, AI |
+
+⚠ **Các permission trên mô tả endpoint chưa tồn tại.** Nhiều module trong contract vẫn là `Schema-supported`/`Proposed`. Permission chỉ là catalogue; nó không tự tạo API.
+
+### RBAC.2 `GET /api/v1/rbac/roles`
+
+| | |
+|---|---|
+| Trạng thái | `Implemented` |
+| Auth | `ADMIN` (`@PreAuthorize("hasRole('ADMIN')")` ở cấp class) |
+| CSDL | `roles`, `role_permissions`, `permissions` |
+
+**Response `200`** — danh sách role, sắp xếp `name ASC`, mỗi role kèm permission đã gán:
+
+```json
+{
+  "status": 200,
+  "success": true,
+  "message": "Success",
+  "data": [
+    {
+      "id": "3a2b1c0d-9e8f-4a7b-8c6d-5e4f3a2b1c0d",
+      "name": "ADMIN",
+      "description": "Quản trị hệ thống — cấu hình, RBAC, tài liệu tri thức RAG",
+      "permissions": [
+        { "id": "9f8e7d6c-5b4a-4392-8170-6f5e4d3c2b1a", "code": "ai:chat", "name": "Dùng trợ lý AI", "module": "ai", "description": "Gửi tin nhắn tới AI và RAG", "createdAt": "2026-10-01T10:00:00Z" }
+      ],
+      "createdAt": "2026-10-01T10:00:00Z"
+    }
+  ],
+  "timestamp": "2026-10-01T10:00:00Z"
+}
+```
+
+**Business rules**
+
+- Không phân trang. `Role.permissions` là `@ManyToMany(fetch = EAGER)` nên mỗi lần gọi sẽ nạp toàn bộ permission của mọi role; khi catalogue lớn lên nên chuyển sang `LAZY` + phân trang.
+- `permissions` là mảng object đầy đủ, không phải danh sách code.
+
+**Errors:** `401` (chưa đăng nhập), `403 Access denied` (không phải `ADMIN`).
+
+### RBAC.3 `POST /api/v1/rbac/roles`
+
+**Request — `CreateRoleRequest`**
+
+```json
+{ "name": "SENIOR_VET", "description": "Bác sĩ thú y cấp cao" }
+```
+
+| Field | Validation |
+|---|---|
+| `name` | `@NotBlank`; **tự `trim().toUpperCase()`** trước khi lưu và khi tra cứu ⇒ `senior_vet` và `SENIOR_VET` là cùng một role |
+| `description` | ≤ 500 |
+
+**Response `201`** — `RoleResponse` như B.2 với `permissions: []`.
+
+**Errors**
+
+| HTTP | `message` | Khi nào |
+|---|---|---|
+| `400` | `Validation failed` | `name` rỗng |
+| `403` | `Access denied` | Không phải `ADMIN` |
+| `422` | `Role with name 'X' already exists` | Trùng `roles.name` (UNIQUE) |
+
+### RBAC.4 `GET /api/v1/rbac/roles/{id}` · `PUT /api/v1/rbac/roles/{id}`
+
+**`GET`** — `200` `ApiResponse<RoleResponse>`; `404 Role not found with id: <id>`.
+
+**`PUT`** — nhận `CreateRoleRequest`, sửa `name` + `description`.
+
+**Business rules**
+
+- ⚠ **5 role hệ thống không được đổi tên:** `ADMIN`, `OWNER`, `STAFF`, `VETERINARIAN`, `CUSTOMER`. Chúng được `@PreAuthorize` và `SecurityConfig` tham chiếu trực tiếp; đổi tên sẽ làm authorization hỏng trong production ⇒ `422`.
+- Đổi `description` của role hệ thống vẫn được phép.
+- Trùng tên với role khác → `422`.
+
+### RBAC.5 `DELETE /api/v1/rbac/roles/{id}`
+
+**Response `200`** — `ApiResponse<Void>` (`data` bị bỏ qua nhờ `@JsonInclude(NON_NULL)`). Không dùng `204` để giữ nhất quán envelope.
+
+**Business rules — hai chốt chặn**
+
+| Điều kiện | Kết quả |
+|---|---|
+| Xoá role hệ thống (`ADMIN`, `OWNER`, `STAFF`, `VETERINARIAN`, `CUSTOMER`) | `422 Role 'X' is a system role and cannot be deleted` |
+| Role còn user giữ (`SELECT COUNT(*) FROM users JOIN user_roles`) | `422 Role 'X' is still assigned to N user(s)` |
+
+⚠ Trước đây xoá role đang được gán sẽ đụng FK `user_roles.role_id` và trả `409` do handler lỗi chung bắt — tức là "đúng kết quả, sai nguyên nhân". Giờ có kiểm tra tường minh trả `422` kèm số user.
+
+### RBAC.6 `GET /api/v1/rbac/permissions` · `GET /api/v1/rbac/permissions/{id}`
+
+**`GET /permissions`** — `200`, danh sách **35** permission sắp xếp `module ASC, code ASC`. Không phân trang.
+
+**`GET /permissions/{id}`** — `200` `ApiResponse<PermissionResponse>`; `404 Permission not found with id: <id>`.
+
+### RBAC.7 `POST /api/v1/rbac/permissions`
+
+**Request — `CreatePermissionRequest`**
+
+```json
+{ "code": "booking:reschedule", "name": "Đổi lịch hẹn", "module": "booking", "description": "Cho phép chuyển sang slot khác" }
+```
+
+| Field | Validation |
+|---|---|
+| `code` | `@NotBlank`; **`trim().toUpperCase()`**; UNIQUE |
+| `name` | `@NotBlank`; ≤ 255 |
+| `module` | ≤ 100 |
+| `description` | ≤ 500 |
+
+⚠ Vì `code` được `toUpperCase()` khi tạo, nhưng **seed trong V5 viết lowercase** (`medical:create`). Hai đường vào đang lệch quy ước ⇒ cần chốt một chuẩn và chuẩn hoá cả hai. Xem `P-43`.
+
+**Errors:** `400`, `403`, `422 Permission with code 'X' already exists`.
+
+### RBAC.8 `POST /api/v1/rbac/roles/{roleId}/permissions`
+
+**Request — `AssignPermissionsRequest`**
+
+```json
+{ "permissionIds": ["9f8e7d6c-5b4a-4392-8170-6f5e4d3c2b1a"] }
+```
+
+| Field | Validation |
+|---|---|
+| `permissionIds` | `@NotEmpty`; `Set<UUID>` |
+
+**Response `200`** — `ApiResponse<RoleResponse>` với tập permission **đã thay thế**.
+
+**Business rules**
+
+- Ngữ nghĩa là **"đặt đúng tập này"**, không phải "thêm". Muốn gỡ thì dùng `DELETE .../permissions/{permissionId}`.
+- Nếu có `permissionId` không tồn tại ⇒ `404 Permission not found with id: <id>` (trước đây âm thầm bỏ qua và trả `200` với tập thiếu phần tử).
+
+**Errors:** `400` (`permissionIds` rỗng), `403`, `404` (role hoặc permission không tồn tại).
+
+### RBAC.9 `DELETE /api/v1/rbac/roles/{roleId}/permissions/{permissionId}`
+
+**Response `200`** — `ApiResponse<RoleResponse>` sau khi gỡ.
+
+**Business rules:** chỉ gỡ; không tự tạo lại link đã xoá. `404` nếu role hoặc permission không tồn tại.
+
+### RBAC.10 Liên kết role ↔ user
+
+| Method | Path | Trạng thái | Auth |
+|---|---|---|---|
+| POST | `/users/{id}/roles` | `Implemented` | `ADMIN` |
+| DELETE | `/users/{id}/roles/{roleId}` | `Proposed` | `ADMIN` |
+
+Xem mục **B. Users → `POST /users/{id}/roles`**. Endpoint hiện có là **thay toàn bộ tập role**, không phải thêm/bớt từng role. `users.role` (role chính) được chọn theo thứ tự ổn định `ADMIN > OWNER > VETERINARIAN > STAFF > CUSTOMER`, giữ nguyên role chính cũ nếu nó vẫn được gán.
 
 ## B. Users — `/api/v1/users`
 
@@ -687,7 +888,8 @@ Controller: `user/controller/UserController.java`. Service `UserService`, DTO `U
 
 - `@NotBlank`; giá trị được `toUpperCase()` trước khi lưu.
 - ⚠ **Không có `CHECK` constraint trong migration** và **không validate danh sách giá trị** ở service. Chỉ cần `NOT NULL`. Giá trị hợp lệ theo `UserPrincipal`: `ACTIVE`, `INACTIVE`, `LOCKED` — `LOCKED` làm `isAccountNonLocked()` false, `ACTIVE` làm `isEnabled()` true.
-- Đặt `INACTIVE`/`LOCKED` **không** thu hồi `refresh_tokens` đang hoạt động; token cũ vẫn refresh được cho tới khi hết hạn (7 ngày), dù `AuthService.refreshToken` có kiểm tra `status` và sẽ chặn.
+- **Đặt `INACTIVE`/`LOCKED` sẽ thu hồi toàn bộ refresh token** của user đó (`revokeAllForUser`, transaction `REQUIRES_NEW`). Nếu không, token nằm lại trong bảng và sẽ hoạt động lại khi account được kích hoạt lại. Access token cũng bị chặn ngay ở `JwtAuthenticationFilter` qua `isEnabled()`/`isAccountNonLocked()`.
+- Login lúc account bị khoá trả **`401`**, không phải `422` (xem A.2).
 - Không xóa cứng user — dùng `status`.
 
 **Errors:** `400` (thiếu `status`), `403`, `404 User not found with id: <id>`.
@@ -716,8 +918,9 @@ Controller: `user/controller/UserController.java`. Service `UserService`, DTO `U
 
 - `POST` này **thay thế toàn bộ** tập role (`user.setRoles(roles)`), không phải thêm một role.
 - `userRepository.findByIdIn(roleIds)` có thể trả về tập rỗng nếu ID không tồn tại → `422 No valid roles found for provided IDs`.
-- ⚠ **Cập nhật `users.role` không xác định:** `roles.stream().findFirst().ifPresent(...)` lấy phần tử đầu tiên của `HashSet`, thứ tự **không đảm bảo**. `users.role` là cột mà `CustomUserDetailsService` dùng để cấp `ROLE_*`, nên sau lệnh này role chính có thể là bất kỳ role nào trong tập. Nếu cần xác định, phải sửa service hoặc thêm field `primaryRoleId` vào request — **không** coi hành vi hiện tại là contract ổn định.
+- **Role chính (`users.role`) được chọn có thứ tự ổn định:** giữ nguyên role chính hiện tại nếu nó vẫn nằm trong tập mới; nếu không thì chọn theo thứ tự `ADMIN > OWNER > VETERINARIAN > STAFF > CUSTOMER`, sau đó theo tên. Trước đây lấy `HashSet.findFirst()` — thứ tự không bảo đảm nên role chính có thể đổi giữa các lần gọi.
 - Bảng `user_roles` được tạo bởi `V4__add_rbac_tables.sql`.
+- Endpoint này **thay toàn bộ** tập role. Gỡ riêng từng role cần `DELETE /users/{id}/roles/{roleId}` (`Proposed`, xem RBAC.10).
 
 **Errors**
 
@@ -4795,6 +4998,7 @@ Các migration dưới đây **chưa tồn tại**. Chỉ tạo khi nghiệp v�
 | `P-40` | Soft-delete cho service category | `service_categories.is_active` | Trung bình |
 | `P-41` | Chống double-book resource | index `time_slots(resource_id, …)` | Cao |
 | `P-42` | Audit actor type + `ip_address` rộng hơn | `audit_logs.actor_type`, `ip_address` | Thấp |
+| `P-43` | **Chuẩn hoá permission code** + enforce bằng `hasAuthority` | `permissions.code` convention, `@PreAuthorize` | Trung bình |
 
 ## Nội dung chi tiết các migration Blocker
 
@@ -4960,6 +5164,24 @@ CREATE INDEX idx_loyalty_transactions_account ON loyalty_transactions(account_id
 
 ---
 
+### `P-43` — Chuẩn hoá permission code và enforce bằng permission
+
+Hai điểm chưa nhất quán sau khi thêm catalogue:
+
+1. **`permissions.code` có hai quy ước.** `RbacService.createPermission` gọi `trim().toUpperCase()`, nên tạo qua API sẽ lưu `MEDICAL:CREATE`; nhưng seed trong `V5` viết lowercase `medical:create`, và `CustomUserDetailsService` cấp authority đúng theo chuỗi trong DB. Cần chọn một dạng. Khuyến nghị giữ **lowercase `module:action`** và bỏ `toUpperCase()` ở `createPermission` (giữ `toUpperCase` cho `roles.name` vì `hasRole('ADMIN')` so sánh không phân biệt hoa thường):
+
+   ```sql
+   UPDATE permissions SET code = upper(code) WHERE code <> upper(code);
+   -- hoặc ngược lại: UPDATE permissions SET code = lower(code) WHERE code <> lower(code);
+   ```
+
+2. **Chưa endpoint nào enforce theo permission.** Tất cả controller dùng `hasRole(...)`; catalogue permission hiện chỉ là dữ liệu được nạp vào authorities. Khi muốn chuyển sang `@PreAuthorize("hasAuthority('medical:create')")` cần:
+   - Giữ `hasRole('ADMIN')` cho chính `/api/v1/rbac/**` (quản trị RBAC không được tự cấp quyền cho mình).
+   - Thay các rule khác theo catalogue RBAC.1, ví dụ `AuditLogController` → `hasAuthority('audit:read')`, `UserController` → `hasAuthority('user:read')` / `user:set-roles`.
+   - Cân nhắc `@EnableMethodSecurity` đã bật nên không cần cấu hình thêm.
+
+---
+
 ## Chi tiết các migration còn lại (tham khảo, không kèm DDL)
 
 | ID | Cột / index chính |
@@ -5097,16 +5319,18 @@ Xem **O.4**. Chỉ chặn trùng mốc thời gian chính xác; chặn overlap t
 | Auth | `POST /auth/login` | `Implemented` | |
 | Auth | `POST /auth/refresh` | `Implemented` ⚠ | Cần `P-1` |
 | Auth | `POST /auth/logout` | `Implemented` ⚠ | Cần `P-1`; ⚠ không kiểm tra chủ token |
-| RBAC | `GET /rbac/roles` | `Implemented` ⚠ | Cần `P-2` |
-| RBAC | `POST /rbac/roles` | `Implemented` ⚠ | Cần `P-2` |
-| RBAC | `GET /rbac/roles/{id}` | `Implemented` ⚠ | Cần `P-2` |
-| RBAC | `PUT /rbac/roles/{id}` | `Implemented` ⚠ | Cần `P-2` |
-| RBAC | `DELETE /rbac/roles/{id}` | `Implemented` ⚠ | Cần `P-2` |
-| RBAC | `GET /rbac/permissions` | `Implemented` ⚠ | Cần `P-2` |
-| RBAC | `POST /rbac/permissions` | `Implemented` ⚠ | Cần `P-2` |
-| RBAC | `POST /rbac/roles/{roleId}/permissions` | `Implemented` ⚠ | Cần `P-2` |
-| RBAC | `DELETE /rbac/roles/{roleId}/permissions/{permissionId}` | `Implemented` ⚠ | Cần `P-2` |
+| RBAC | `GET /rbac/roles` | `Implemented` | RBAC.2; danh sách kèm permission |
+| RBAC | `POST /rbac/roles` | `Implemented` | RBAC.3; `name` tự uppercase |
+| RBAC | `GET /rbac/roles/{id}` | `Implemented` | RBAC.4 |
+| RBAC | `PUT /rbac/roles/{id}` | `Implemented` | RBAC.4; chặn đổi tên role hệ thống |
+| RBAC | `DELETE /rbac/roles/{id}` | `Implemented` | RBAC.5; chặn xoá role hệ thống / role đang được gán |
+| RBAC | `GET /rbac/permissions` | `Implemented` | RBAC.6 |
+| RBAC | `GET /rbac/permissions/{id}` | `Implemented` | RBAC.6 |
+| RBAC | `POST /rbac/permissions` | `Implemented` | RBAC.7 |
+| RBAC | `POST /rbac/roles/{roleId}/permissions` | `Implemented` | RBAC.8; **thay toàn bộ** tập |
+| RBAC | `DELETE /rbac/roles/{roleId}/permissions/{permissionId}` | `Implemented` | RBAC.9 |
 | RBAC | `PUT /rbac/permissions/{id}` | **Bị gỡ** | Không có trong source |
+| RBAC | `DELETE /users/{id}/roles/{roleId}` | `Proposed` | RBAC.10 |
 | Users | `GET /users/me` | `Implemented` | |
 | Users | `PUT /users/me` | `Implemented` | |
 | Users | `GET /users` | `Implemented` | |
