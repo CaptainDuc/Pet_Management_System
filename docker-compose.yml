@@ -4,6 +4,7 @@ services:
     image: pgvector/pgvector:pg16
     container_name: petcare-backend-postgres
     restart: unless-stopped
+    mem_limit: 150m
     environment:
       POSTGRES_DB: ${BACKEND_DB_NAME:-petcare}
       POSTGRES_USER: ${BACKEND_DB_USER:-petcare}
@@ -23,6 +24,7 @@ services:
     image: postgres:16-alpine
     container_name: petcare-payment-postgres
     restart: unless-stopped
+    mem_limit: 100m
     environment:
       POSTGRES_DB: ${PAYMENT_DB_NAME:-petcare_payment}
       POSTGRES_USER: ${PAYMENT_DB_USER:-petcare_payment}
@@ -41,6 +43,7 @@ services:
     image: postgres:16-alpine
     container_name: petcare-notification-postgres
     restart: unless-stopped
+    mem_limit: 100m
     environment:
       POSTGRES_DB: ${NOTIFICATION_DB_NAME:-petcare_notification}
       POSTGRES_USER: ${NOTIFICATION_DB_USER:-petcare_notification}
@@ -60,6 +63,7 @@ services:
     image: redis:7-alpine
     container_name: petcare-redis
     restart: unless-stopped
+    mem_limit: 50m
     ports:
       - "6379:6379"
     volumes:
@@ -75,6 +79,7 @@ services:
     image: rabbitmq:3.13-management-alpine
     container_name: petcare-rabbitmq
     restart: unless-stopped
+    mem_limit: 250m
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-petcare}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-petcare123}
@@ -96,7 +101,9 @@ services:
       dockerfile: Dockerfile
     container_name: petcare-backend
     restart: unless-stopped
+    mem_limit: 550m
     environment:
+      JAVA_TOOL_OPTIONS: "-Xms128m -Xmx384m"
       SPRING_PROFILES_ACTIVE: docker
       POSTGRES_HOST: backend-postgres
       POSTGRES_PORT: 5432
@@ -135,7 +142,9 @@ services:
       dockerfile: Dockerfile
     container_name: petcare-payment-service
     restart: unless-stopped
+    mem_limit: 400m
     environment:
+      JAVA_TOOL_OPTIONS: "-Xms64m -Xmx280m"
       PAYMENT_DB_HOST: payment-postgres
       PAYMENT_DB_PORT: 5432
       PAYMENT_DB_NAME: ${PAYMENT_DB_NAME:-petcare_payment}
@@ -164,7 +173,9 @@ services:
       dockerfile: Dockerfile
     container_name: petcare-notification-service
     restart: unless-stopped
+    mem_limit: 400m
     environment:
+      JAVA_TOOL_OPTIONS: "-Xms64m -Xmx280m"
       NOTIFICATION_DB_HOST: notification-postgres
       NOTIFICATION_DB_PORT: 5432
       NOTIFICATION_DB_NAME: ${NOTIFICATION_DB_NAME:-petcare_notification}
@@ -196,14 +207,20 @@ services:
     build:
       context: ./web
       dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:8080/api/v1}
     container_name: petcare-web
     restart: unless-stopped
+    mem_limit: 50m
     ports:
       - "80:80"
+      - "3000:80"
+    volumes:
+      - ./web/dist:/usr/share/nginx/html
     depends_on:
       - backend
     environment:
-      VITE_API_URL: http://localhost:8080/api/v1
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:8080/api/v1}
 
   # ─── AI Services ──────────────────────────────────────────────────────────────
   ai-agent:
@@ -212,6 +229,7 @@ services:
       dockerfile: Dockerfile
     container_name: petcare-ai-agent
     restart: unless-stopped
+    mem_limit: 100m
     ports:
       - "8001:8001"
     environment:
@@ -228,6 +246,7 @@ services:
       dockerfile: Dockerfile
     container_name: petcare-ai-rag
     restart: unless-stopped
+    mem_limit: 100m
     ports:
       - "8002:8002"
     environment:
@@ -243,6 +262,7 @@ services:
       dockerfile: Dockerfile
     container_name: petcare-ai-vision
     restart: unless-stopped
+    mem_limit: 100m
     ports:
       - "8003:8003"
     environment:
@@ -254,6 +274,7 @@ services:
       dockerfile: Dockerfile
     container_name: petcare-ai-recommendation
     restart: unless-stopped
+    mem_limit: 100m
     ports:
       - "8004:8004"
     environment:
@@ -262,43 +283,12 @@ services:
       backend-postgres:
         condition: service_healthy
 
-  # ─── Observability ────────────────────────────────────────────────────────────
-  prometheus:
-    image: prom/prometheus:latest
-    container_name: petcare-prometheus
-    restart: unless-stopped
-    ports:
-      - "9090:9090"
-    volumes:
-      - ./infrastructure/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
-      - prometheus_data:/prometheus
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.retention.time=15d'
-
-  grafana:
-    image: grafana/grafana:latest
-    container_name: petcare-grafana
-    restart: unless-stopped
-    ports:
-      - "3001:3000"
-    environment:
-      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin123}
-    volumes:
-      - grafana_data:/var/lib/grafana
-      - ./infrastructure/grafana/provisioning:/etc/grafana/provisioning
-    depends_on:
-      - prometheus
-
 volumes:
   backend_postgres_data:
   payment_postgres_data:
   notification_postgres_data:
   redis_data:
   rabbitmq_data:
-  prometheus_data:
-  grafana_data:
 
 networks:
   default:

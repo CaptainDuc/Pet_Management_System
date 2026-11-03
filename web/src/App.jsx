@@ -1,747 +1,542 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Shield, Key, User, Users, Lock, LogOut, RefreshCw, 
-  CheckCircle, XCircle, Plus, Edit, Trash, Settings, 
-  Send, Database, Server, UserCheck, AlertTriangle
+import {
+  Shield, Key, User, Users, Lock, LogOut, RefreshCw,
+  CheckCircle, XCircle, Plus, Edit, Trash, Settings,
+  Send, Database, Server, UserCheck, AlertTriangle, ArrowRight,
+  ExternalLink, Sparkles, Stethoscope, Calendar, CreditCard,
+  TrendingUp, Building2, ChevronDown, Eye, Code, Layers
 } from 'lucide-react';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import LoginPage from './pages/auth/LoginPage';
+import RegisterPage from './pages/auth/RegisterPage';
+import ForgotPasswordPage from './pages/auth/ForgotPasswordPage';
+import CustomerDashboard from './pages/dashboard/CustomerDashboard';
+import AdminDashboard from './pages/dashboard/AdminDashboard';
+import VetDashboard from './pages/dashboard/VetDashboard';
+import StaffDashboard from './pages/dashboard/StaffDashboard';
+import OwnerDashboard from './pages/dashboard/OwnerDashboard';
+import ProfileTab from './pages/dashboard/ProfileTab';
 
-const API_BASE = 'http://localhost:8080/api/v1';
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8080/api/v1';
 
-export default function App() {
-  const [activeTab, setActiveTab] = useState('auth');
-  
-  // Auth state
-  const [token, setToken] = useState(localStorage.getItem('accessToken') || '');
-  const [refreshToken, setRefreshToken] = useState(localStorage.getItem('refreshToken') || '');
-  const [currentUser, setCurrentUser] = useState(JSON.parse(localStorage.getItem('user') || 'null'));
+// Role configurations
+const ROLE_CONFIGS = {
+  CUSTOMER: {
+    name: 'Khách hàng',
+    title: 'PetCare Customer Portal',
+    subtitle: 'Chăm sóc & Lịch hẹn thú cưng',
+    badgeColor: 'bg-blue-50 text-blue-700 border-blue-200',
+    accentColor: '#2563EB',
+    defaultTab: 'pets',
+    tabs: [
+      { id: 'pets', label: 'Thú cưng của tôi', icon: '🐾' },
+      { id: 'bookings', label: 'Đặt lịch hẹn', icon: '📅' },
+      { id: 'loyalty', label: 'Điểm thưởng & Hạng thẻ', icon: '⭐' },
+      { id: 'ai-chat', label: 'Trợ lý AI Thú y', icon: '🤖' },
+      { id: 'profile', label: 'Hồ sơ cá nhân', icon: '👤' }
+    ]
+  },
+  VETERINARIAN: {
+    name: 'Bác sĩ thú y',
+    title: 'PetCare Clinical EMR',
+    subtitle: 'Hồ sơ bệnh án & Khám bệnh',
+    badgeColor: 'bg-teal-50 text-teal-700 border-teal-200',
+    accentColor: '#0D9488',
+    defaultTab: 'medical',
+    tabs: [
+      { id: 'medical', label: 'Bệnh án điện tử', icon: '🩺' },
+      { id: 'schedule', label: 'Lịch khám hôm nay', icon: '📅' },
+      { id: 'prescriptions', label: 'Kê đơn thuốc', icon: '💊' },
+      { id: 'ai-diagnostics', label: 'AI Tham vấn lâm sàng', icon: '✨' },
+      { id: 'profile', label: 'Hồ sơ Bác sĩ', icon: '👤' }
+    ]
+  },
+  STAFF: {
+    name: 'Lễ tân & Thu ngân',
+    title: 'PetCare Reception Desk',
+    subtitle: 'Tiếp đón, Check-in & Hóa đơn',
+    badgeColor: 'bg-sky-50 text-sky-700 border-sky-200',
+    accentColor: '#0284C7',
+    defaultTab: 'reception',
+    tabs: [
+      { id: 'reception', label: 'Bàn tiếp đón & Check-in', icon: '🛎️' },
+      { id: 'invoices', label: 'Quầy Thu ngân & Hóa đơn', icon: '🧾' },
+      { id: 'customers', label: 'Danh bạ Khách hàng', icon: '👥' },
+      { id: 'profile', label: 'Hồ sơ Nhân viên', icon: '👤' }
+    ]
+  },
+  OWNER: {
+    name: 'Chủ phòng khám',
+    title: 'PetCare Executive Suite',
+    subtitle: 'Doanh thu, Nhân sự & KPI',
+    badgeColor: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+    accentColor: '#4F46E5',
+    defaultTab: 'analytics',
+    tabs: [
+      { id: 'analytics', label: 'Báo cáo Doanh thu & KPI', icon: '📊' },
+      { id: 'staff-mgmt', label: 'Đội ngũ Y Bác sĩ', icon: '👨‍⚕️' },
+      { id: 'services', label: 'Bảng giá niêm yết', icon: '🏷️' },
+      { id: 'audit', label: 'Nhật ký giám sát', icon: '📜' },
+      { id: 'profile', label: 'Hồ sơ Chủ phòng khám', icon: '👤' }
+    ]
+  },
+  ADMIN: {
+    name: 'Quản trị viên',
+    title: 'PetCare System Admin',
+    subtitle: 'Người dùng, RBAC & Hệ thống',
+    badgeColor: 'bg-purple-50 text-purple-700 border-purple-200',
+    accentColor: '#7C3AED',
+    defaultTab: 'users',
+    tabs: [
+      { id: 'users', label: 'Quản lý người dùng', icon: '👥' },
+      { id: 'rbac', label: 'Phân quyền RBAC', icon: '🛡️' },
+      { id: 'audit', label: 'Nhật ký kiểm toán', icon: '📜' },
+      { id: 'system', label: 'Giám sát hạ tầng & AI', icon: '⚡' },
+      { id: 'profile', label: 'Hồ sơ Quản trị', icon: '👤' }
+    ]
+  }
+};
+
+function AppContent() {
+  const { user, token, refreshToken, isAuthenticated, logout, saveAuthSession } = useAuth();
+
+  // Navigation state: 'login' | 'register' | 'forgot-password' | 'dashboard'
+  const [screen, setScreen] = useState('login');
+
+  // Detect user's primary role or allow Admin / Multi-role user to switch perspective
+  const [activeRole, setActiveRole] = useState('CUSTOMER');
+  const [activeTab, setActiveTab] = useState('pets');
+  const [showRoleDropdown, setShowRoleDropdown] = useState(false);
+  const [showInspector, setShowInspector] = useState(false);
   const [responseLog, setResponseLog] = useState(null);
-  const [loading, setLoading] = useState(false);
 
-  // Form states
-  const [loginData, setLoginData] = useState({ email: 'owner@petcare.vn', password: 'SecureP@ss1' });
-  const [regData, setRegData] = useState({ fullName: '', email: '', password: '', phone: '' });
-  const [profileData, setProfileData] = useState({ fullName: '', phone: '', avatarUrl: '' });
-  
-  // Admin Users list & RBAC state
-  const [usersList, setUsersList] = useState([]);
-  const [rolesList, setRolesList] = useState([]);
-  const [permissionsList, setPermissionsList] = useState([]);
-  
-  // Role & Perm form states
-  const [newRole, setNewRole] = useState({ name: '', description: '' });
-  const [newPerm, setNewPerm] = useState({ code: '', name: '', module: '', description: '' });
-  const [selectedUserForRole, setSelectedUserForRole] = useState('');
-  const [selectedRolesForUser, setSelectedRolesForUser] = useState([]);
-  const [selectedRoleForPerm, setSelectedRoleForPerm] = useState('');
-  const [selectedPermsForRole, setSelectedPermsForRole] = useState([]);
+  // Determine user primary role on login
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      setScreen('dashboard');
+      let primaryRole = 'CUSTOMER';
+      const userRole = (user.role || '').toUpperCase();
+      const rolesArray = Array.isArray(user.roles) ? user.roles.map(r => (typeof r === 'string' ? r : r.name).toUpperCase()) : [];
 
-  // Save tokens to localStorage
-  const saveAuth = (authRes) => {
-    if (!authRes) return;
-    setToken(authRes.accessToken);
-    setRefreshToken(authRes.refreshToken);
-    setCurrentUser(authRes.user);
-    localStorage.setItem('accessToken', authRes.accessToken);
-    localStorage.setItem('refreshToken', authRes.refreshToken);
-    localStorage.setItem('user', JSON.stringify(authRes.user));
-  };
-
-  const clearAuth = () => {
-    setToken('');
-    setRefreshToken('');
-    setCurrentUser(null);
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('refreshToken');
-    localStorage.removeItem('user');
-  };
-
-  // Generic fetch wrapper with Bearer token
-  const apiCall = async (url, method = 'GET', body = null, useRefreshToken = false) => {
-    setLoading(true);
-    setResponseLog(null);
-    try {
-      const headers = { 'Content-Type': 'application/json' };
-      const authToken = useRefreshToken ? refreshToken : token;
-      if (authToken) {
-        headers['Authorization'] = `Bearer ${authToken}`;
+      if (userRole === 'ADMIN' || rolesArray.includes('ADMIN')) {
+        primaryRole = 'ADMIN';
+      } else if (userRole === 'OWNER' || rolesArray.includes('OWNER')) {
+        primaryRole = 'OWNER';
+      } else if (userRole === 'VETERINARIAN' || rolesArray.includes('VETERINARIAN')) {
+        primaryRole = 'VETERINARIAN';
+      } else if (userRole === 'STAFF' || rolesArray.includes('STAFF')) {
+        primaryRole = 'STAFF';
+      } else {
+        primaryRole = 'CUSTOMER';
       }
 
-      const opts = { method, headers };
-      if (body) opts.body = JSON.stringify(body);
-
-      const res = await fetch(`${API_BASE}${url}`, opts);
-      const data = await res.json();
-      
-      setResponseLog({ status: res.status, data });
-      setLoading(false);
-      return { status: res.status, data };
-    } catch (err) {
-      setResponseLog({ status: 'FETCH_ERROR', data: { message: err.message } });
-      setLoading(false);
-      return { status: 'ERROR', data: null };
+      setActiveRole(primaryRole);
+      setActiveTab(ROLE_CONFIGS[primaryRole]?.defaultTab || 'profile');
+    } else if (screen === 'dashboard') {
+      setScreen('login');
     }
+  }, [isAuthenticated, user]);
+
+  // Handle changing perspective
+  const handleRoleChange = (newRole) => {
+    setActiveRole(newRole);
+    setActiveTab(ROLE_CONFIGS[newRole]?.defaultTab || 'profile');
+    setShowRoleDropdown(false);
   };
 
-  // Auth Handlers
-  const handleRegister = async (e) => {
-    e.preventDefault();
-    const res = await apiCall('/auth/register', 'POST', regData);
-    if (res.status === 201 && res.data?.data) {
-      saveAuth(res.data.data);
-    }
-  };
-
-  const handleLogin = async (e) => {
-    e.preventDefault();
-    const res = await apiCall('/auth/login', 'POST', loginData);
-    if (res.status === 200 && res.data?.data) {
-      saveAuth(res.data.data);
-    }
-  };
-
-  const handleRefresh = async () => {
-    const res = await apiCall('/auth/refresh', 'POST', { refreshToken }, true);
-    if (res.status === 200 && res.data?.data) {
-      saveAuth(res.data.data);
-    }
-  };
-
-  const handleLogout = async (logoutAll = false) => {
-    await apiCall('/auth/logout', 'POST', { refreshToken, logoutAll });
-    clearAuth();
-  };
-
-  // Profile Handlers
-  const fetchMyProfile = async () => {
-    const res = await apiCall('/users/me', 'GET');
-    if (res.status === 200 && res.data?.data) {
-      setCurrentUser(res.data.data);
-      setProfileData({
-        fullName: res.data.data.fullName || '',
-        phone: res.data.data.phone || '',
-        avatarUrl: res.data.data.avatarUrl || ''
+  const handleRotateToken = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken })
       });
+      const data = await res.json();
+      setResponseLog({ status: res.status, data });
+      if (res.ok && data?.data) {
+        saveAuthSession(data.data);
+      }
+    } catch (err) {
+      setResponseLog({ status: 'ERROR', data: { message: err.message } });
     }
   };
 
-  const handleUpdateProfile = async (e) => {
-    e.preventDefault();
-    const res = await apiCall('/users/me', 'PUT', profileData);
-    if (res.status === 200 && res.data?.data) {
-      setCurrentUser(res.data.data);
-    }
+  const handleLogoutAll = async () => {
+    await logout(true);
+    setScreen('login');
   };
 
-  // Admin Users & RBAC Handlers
-  const fetchUsersList = async () => {
-    const res = await apiCall('/users?page=0&size=50', 'GET');
-    if (res.status === 200 && res.data?.data?.content) {
-      setUsersList(res.data.data.content);
-    }
-  };
+  const currentRoleConfig = ROLE_CONFIGS[activeRole] || ROLE_CONFIGS.CUSTOMER;
 
-  const handleUserStatus = async (userId, newStatus) => {
-    await apiCall(`/users/${userId}/status`, 'PATCH', { status: newStatus });
-    fetchUsersList();
-  };
+  // Top navigation bar
+  const renderNavSwitcher = () => (
+    <div className="bg-white/90 backdrop-blur-md border-b border-[#E2E8F0] px-4 py-2 flex items-center justify-between text-xs font-sans sticky top-0 z-50 shadow-xs">
+      <div className="flex items-center space-x-3">
+        <span className="font-bold text-[#0F172A] flex items-center space-x-2">
+          <img src="/logo.png" alt="PetCare Logo" className="h-6 w-auto object-contain" />
+          <span className="text-sm tracking-tight text-blue-600">PetCare Platform</span>
+        </span>
+      </div>
 
-  const handleAssignRolesToUser = async (e) => {
-    e.preventDefault();
-    if (!selectedUserForRole) return;
-    await apiCall(`/users/${selectedUserForRole}/roles`, 'POST', { roleIds: selectedRolesForUser });
-    fetchUsersList();
-  };
+      <div className="flex items-center space-x-1 sm:space-x-2">
+        <button
+          onClick={() => setScreen('login')}
+          className={`px-3 py-1.5 rounded-xl transition-all duration-150 font-medium active:scale-95 ${screen === 'login'
+            ? 'bg-[#2563EB] text-white shadow-sm shadow-blue-500/30'
+            : 'text-[#475569] hover:text-[#0F172A] hover:bg-slate-100'
+            }`}
+        >
+          Đăng nhập
+        </button>
+        <button
+          onClick={() => setScreen('register')}
+          className={`px-3 py-1.5 rounded-xl transition-all duration-150 font-medium active:scale-95 ${screen === 'register'
+            ? 'bg-[#2563EB] text-white shadow-sm shadow-blue-500/30'
+            : 'text-[#475569] hover:text-[#0F172A] hover:bg-slate-100'
+            }`}
+        >
+          Đăng ký
+        </button>
+        <button
+          onClick={() => setScreen('forgot-password')}
+          className={`px-3 py-1.5 rounded-xl transition-all duration-150 font-medium active:scale-95 ${screen === 'forgot-password'
+            ? 'bg-[#2563EB] text-white shadow-sm shadow-blue-500/30'
+            : 'text-[#475569] hover:text-[#0F172A] hover:bg-slate-100'
+            }`}
+        >
+          Quên mật khẩu
+        </button>
+        {isAuthenticated && (
+          <button
+            onClick={() => setScreen('dashboard')}
+            className={`px-3 py-1.5 rounded-xl transition-all duration-150 font-medium active:scale-95 ${screen === 'dashboard'
+              ? 'bg-[#0F172A] text-white shadow-sm'
+              : 'text-[#0F172A] bg-slate-100 hover:bg-slate-200'
+              }`}
+          >
+            Bảng điều khiển
+          </button>
+        )}
+      </div>
 
-  // RBAC Handlers
-  const fetchRoles = async () => {
-    const res = await apiCall('/rbac/roles', 'GET');
-    if (res.status === 200 && res.data?.data) {
-      setRolesList(res.data.data);
-    }
-  };
+      <div className="hidden md:flex items-center space-x-2 text-[#64748B]">
+        {user ? (
+          <div className="flex items-center space-x-2">
+            <span className="text-xs text-[#0F172A] font-medium">{user.fullName || user.email}</span>
+            <button
+              onClick={() => {
+                logout();
+                setScreen('login');
+              }}
+              className="text-[#DC2626] hover:underline font-medium"
+            >
+              Thoát
+            </button>
+          </div>
+        ) : (
+          <span className="text-[11px] text-[#94A3B8]">Chưa xác thực</span>
+        )}
+      </div>
+    </div>
+  );
 
-  const fetchPermissions = async () => {
-    const res = await apiCall('/rbac/permissions', 'GET');
-    if (res.status === 200 && res.data?.data) {
-      setPermissionsList(res.data.data);
-    }
-  };
+  // AUTH SCREENS
+  if (screen === 'login') {
+    return (
+      <div className="min-h-screen flex flex-col">
+        {renderNavSwitcher()}
+        <LoginPage
+          onNavigate={(target) => setScreen(target)}
+          onSuccess={() => setScreen('dashboard')}
+        />
+      </div>
+    );
+  }
 
-  const handleCreateRole = async (e) => {
-    e.preventDefault();
-    await apiCall('/rbac/roles', 'POST', newRole);
-    setNewRole({ name: '', description: '' });
-    fetchRoles();
-  };
+  if (screen === 'register') {
+    return (
+      <div className="min-h-screen flex flex-col">
+        {renderNavSwitcher()}
+        <RegisterPage
+          onNavigate={(target) => setScreen(target)}
+          onSuccess={() => setScreen('dashboard')}
+        />
+      </div>
+    );
+  }
 
-  const handleCreatePerm = async (e) => {
-    e.preventDefault();
-    await apiCall('/rbac/permissions', 'POST', newPerm);
-    setNewPerm({ code: '', name: '', module: '', description: '' });
-    fetchPermissions();
-  };
+  if (screen === 'forgot-password') {
+    return (
+      <div className="min-h-screen flex flex-col">
+        {renderNavSwitcher()}
+        <ForgotPasswordPage onNavigate={(target) => setScreen(target)} />
+      </div>
+    );
+  }
 
-  const handleAssignPermsToRole = async (e) => {
-    e.preventDefault();
-    if (!selectedRoleForPerm) return;
-    await apiCall(`/rbac/roles/${selectedRoleForPerm}/permissions`, 'POST', { permissionIds: selectedPermsForRole });
-    fetchRoles();
-  };
-
-  useEffect(() => {
-    if (token) {
-      fetchMyProfile();
-    }
-  }, []);
-
+  // AUTHENTICATED ROLE-BASED DASHBOARD
   return (
-    <div className="flex h-screen bg-slate-950 text-slate-100 font-sans overflow-hidden">
-      {/* Sidebar */}
-      <aside className="w-72 bg-slate-900 border-r border-slate-800 flex flex-col">
-        <div className="p-5 border-b border-slate-800 flex items-center space-x-3">
-          <Shield className="w-7 h-7 text-indigo-400" />
+    <div className="flex flex-col h-screen bg-[#F8FAFC] text-[#0F172A] font-sans overflow-hidden">
+      {renderNavSwitcher()}
+
+      <div className="flex flex-1 overflow-hidden">
+        {/* SIDEBAR */}
+        <aside className="w-64 bg-white border-r border-[#E2E8F0] flex flex-col justify-between flex-shrink-0 z-20">
           <div>
-            <span className="text-lg font-bold bg-gradient-to-r from-indigo-400 to-cyan-400 bg-clip-text text-transparent block">
-              PetCare Tester
-            </span>
-            <span className="text-[10px] text-slate-500 uppercase font-mono tracking-wider">Auth & RBAC Console</span>
-          </div>
-        </div>
-
-        <nav className="flex-1 p-4 space-y-2">
-          <button
-            onClick={() => setActiveTab('auth')}
-            className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
-              activeTab === 'auth' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30' : 'hover:bg-slate-800 text-slate-400'
-            }`}
-          >
-            <Key className="w-4 h-4" />
-            <span>Auth & Sessions</span>
-          </button>
-
-          <button
-            onClick={() => { setActiveTab('profile'); fetchMyProfile(); }}
-            className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
-              activeTab === 'profile' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30' : 'hover:bg-slate-800 text-slate-400'
-            }`}
-          >
-            <User className="w-4 h-4" />
-            <span>My Profile</span>
-          </button>
-
-          <button
-            onClick={() => { setActiveTab('users'); fetchUsersList(); fetchRoles(); }}
-            className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
-              activeTab === 'users' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30' : 'hover:bg-slate-800 text-slate-400'
-            }`}
-          >
-            <Users className="w-4 h-4" />
-            <span>User Management</span>
-          </button>
-
-          <button
-            onClick={() => { setActiveTab('rbac'); fetchRoles(); fetchPermissions(); }}
-            className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
-              activeTab === 'rbac' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30' : 'hover:bg-slate-800 text-slate-400'
-            }`}
-          >
-            <Lock className="w-4 h-4" />
-            <span>RBAC (Roles & Perms)</span>
-          </button>
-        </nav>
-
-        {/* User Session Info Box */}
-        <div className="p-4 border-t border-slate-800 bg-slate-900/50">
-          {currentUser ? (
-            <div className="space-y-2">
-              <div className="flex items-center space-x-2">
-                <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center font-bold text-xs">
-                  {currentUser.fullName ? currentUser.fullName.charAt(0) : 'U'}
-                </div>
-                <div className="truncate">
-                  <div className="text-xs font-semibold text-slate-200 truncate">{currentUser.fullName}</div>
-                  <div className="text-[10px] text-indigo-400 font-mono truncate">{currentUser.email}</div>
-                </div>
+            {/* Header / Brand for current role */}
+            <div className="p-4 border-b border-[#E2E8F0] flex items-center space-x-3 bg-slate-50/50">
+              <div className="w-10 h-10 rounded-2xl bg-white border border-slate-200/80 flex items-center justify-center p-1.5 overflow-hidden shadow-xs">
+                <img src="/logo.png" alt="PetCare Logo" className="h-full w-auto object-contain" />
               </div>
-              <div className="flex items-center justify-between pt-1">
-                <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 font-mono">
-                  {currentUser.role || 'CUSTOMER'}
-                </span>
+              <div className="flex-1 min-w-0">
+                <span className="text-xs font-bold text-[#0F172A] block truncate">{currentRoleConfig.title}</span>
+                <span className="text-[10px] text-[#64748B] block truncate">{currentRoleConfig.subtitle}</span>
+              </div>
+            </div>
+
+            {/* Role Perspective Switcher Banner */}
+            <div className="px-3 pt-3">
+              <div className="relative">
                 <button
-                  onClick={() => handleLogout(false)}
-                  className="text-xs text-rose-400 hover:text-rose-300 flex items-center space-x-1"
+                  type="button"
+                  onClick={() => setShowRoleDropdown(!showRoleDropdown)}
+                  className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50/90 hover:bg-slate-100/90 text-left flex items-center justify-between transition group shadow-2xs"
                 >
-                  <LogOut className="w-3 h-3" />
-                  <span>Logout</span>
+                  <div className="flex items-center space-x-2 min-w-0">
+                    <span className="text-xs">🎭</span>
+                    <div className="min-w-0">
+                      <span className="text-[10px] text-slate-500 uppercase font-semibold block leading-tight">Góc nhìn vai trò</span>
+                      <span className="text-xs font-bold text-slate-900 truncate block">{currentRoleConfig.name}</span>
+                    </div>
+                  </div>
+                  <ChevronDown className="w-4 h-4 text-slate-400 group-hover:text-slate-700 transition flex-shrink-0" />
                 </button>
+
+                {showRoleDropdown && (
+                  <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg z-50 p-1.5 space-y-1 animate-fadeIn">
+                    <div className="px-2 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                      Chọn góc nhìn màn hình:
+                    </div>
+                    {Object.entries(ROLE_CONFIGS).map(([roleKey, conf]) => (
+                      <button
+                        key={roleKey}
+                        onClick={() => handleRoleChange(roleKey)}
+                        className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium transition ${activeRole === roleKey
+                          ? 'bg-blue-50 text-blue-700 font-bold'
+                          : 'text-slate-700 hover:bg-slate-50'
+                          }`}
+                      >
+                        <span className="flex items-center space-x-2">
+                          <span>{roleKey === 'ADMIN' ? '👑' : roleKey === 'OWNER' ? '🏢' : roleKey === 'VETERINARIAN' ? '🩺' : roleKey === 'STAFF' ? '🛎️' : '🐾'}</span>
+                          <span>{conf.name}</span>
+                        </span>
+                        {activeRole === roleKey && <CheckCircle className="w-3.5 h-3.5 text-blue-600" />}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
-          ) : (
-            <div className="text-xs text-slate-500 text-center py-2">Not logged in</div>
-          )}
-        </div>
-      </aside>
 
-      {/* Main Content Area */}
-      <main className="flex-1 flex flex-col overflow-hidden bg-slate-950">
-        {/* Top Header */}
-        <header className="h-16 border-b border-slate-800 flex items-center justify-between px-8 bg-slate-900/40 backdrop-blur">
-          <div className="flex items-center space-x-3">
-            <Server className="w-5 h-5 text-indigo-400" />
-            <span className="text-xs font-mono text-slate-400">Target API:</span>
-            <span className="text-xs font-mono text-emerald-400 bg-slate-900 px-2.5 py-1 rounded border border-slate-800">
-              {API_BASE}
-            </span>
+            {/* Role-Specific Navigation Menu */}
+            <nav className="p-3 space-y-1 mt-1">
+              {currentRoleConfig.tabs.map(tab => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`w-full flex items-center space-x-2.5 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all duration-150 ${activeTab === tab.id
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80'
+                    }`}
+                >
+                  <span className="text-sm">{tab.icon}</span>
+                  <span>{tab.label}</span>
+                </button>
+              ))}
+            </nav>
           </div>
 
-          {token && (
-            <div className="flex items-center space-x-2">
-              <button
-                onClick={handleRefresh}
-                className="text-xs bg-slate-800 hover:bg-slate-700 text-indigo-300 px-3 py-1.5 rounded flex items-center space-x-1.5 transition border border-slate-700"
-              >
-                <RefreshCw className="w-3.5 h-3.5 animate-spin-hover" />
-                <span>Rotate Refresh Token</span>
-              </button>
-              <button
-                onClick={() => handleLogout(true)}
-                className="text-xs bg-rose-950/60 hover:bg-rose-900 text-rose-300 px-3 py-1.5 rounded flex items-center space-x-1.5 transition border border-rose-800/50"
-              >
-                <LogOut className="w-3.5 h-3.5" />
-                <span>Logout All Devices</span>
-              </button>
-            </div>
-          )}
-        </header>
-
-        {/* Content Body & JSON Response Log Panel */}
-        <div className="flex-1 grid grid-cols-1 lg:grid-cols-3 overflow-hidden">
-          {/* Active Tab View */}
-          <div className="lg:col-span-2 overflow-y-auto p-8 space-y-6">
-            {/* AUTH TAB */}
-            {activeTab === 'auth' && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Login Form */}
-                <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-4">
-                  <h3 className="font-bold text-lg text-indigo-300 flex items-center space-x-2">
-                    <Key className="w-5 h-5" />
-                    <span>Login (POST /auth/login)</span>
-                  </h3>
-                  <form onSubmit={handleLogin} className="space-y-3">
-                    <div>
-                      <label className="text-xs text-slate-400 block mb-1">Email</label>
-                      <input
-                        type="email"
-                        value={loginData.email}
-                        onChange={e => setLoginData({ ...loginData, email: e.target.value })}
-                        className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-indigo-500"
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs text-slate-400 block mb-1">Password</label>
-                      <input
-                        type="password"
-                        value={loginData.password}
-                        onChange={e => setLoginData({ ...loginData, password: e.target.value })}
-                        className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-indigo-500"
-                        required
-                      />
-                    </div>
-                    <button
-                      type="submit"
-                      disabled={loading}
-                      className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-medium py-2 rounded text-sm transition"
-                    >
-                      Login & Get Tokens
-                    </button>
-                  </form>
-                </div>
-
-                {/* Register Form */}
-                <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-4">
-                  <h3 className="font-bold text-lg text-cyan-300 flex items-center space-x-2">
-                    <UserCheck className="w-5 h-5" />
-                    <span>Register (POST /auth/register)</span>
-                  </h3>
-                  <form onSubmit={handleRegister} className="space-y-3">
-                    <div>
-                      <label className="text-xs text-slate-400 block mb-1">Full Name</label>
-                      <input
-                        type="text"
-                        placeholder="Nguyễn Minh Anh"
-                        value={regData.fullName}
-                        onChange={e => setRegData({ ...regData, fullName: e.target.value })}
-                        className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-cyan-500"
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs text-slate-400 block mb-1">Email</label>
-                      <input
-                        type="email"
-                        placeholder="newuser@petcare.vn"
-                        value={regData.email}
-                        onChange={e => setRegData({ ...regData, email: e.target.value })}
-                        className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-cyan-500"
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs text-slate-400 block mb-1">Password</label>
-                      <input
-                        type="password"
-                        placeholder="SecureP@ss1"
-                        value={regData.password}
-                        onChange={e => setRegData({ ...regData, password: e.target.value })}
-                        className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-cyan-500"
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs text-slate-400 block mb-1">Phone</label>
-                      <input
-                        type="text"
-                        placeholder="0901234567"
-                        value={regData.phone}
-                        onChange={e => setRegData({ ...regData, phone: e.target.value })}
-                        className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-cyan-500"
-                      />
-                    </div>
-                    <button
-                      type="submit"
-                      disabled={loading}
-                      className="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-medium py-2 rounded text-sm transition"
-                    >
-                      Register New User
-                    </button>
-                  </form>
-                </div>
-              </div>
-            )}
-
-            {/* PROFILE TAB */}
-            {activeTab === 'profile' && (
-              <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-6">
-                <div className="flex items-center justify-between border-b border-slate-800 pb-4">
-                  <h3 className="font-bold text-lg text-indigo-300">My Profile (GET /users/me & PUT /users/me)</h3>
-                  <button
-                    onClick={fetchMyProfile}
-                    className="text-xs bg-slate-800 px-3 py-1.5 rounded text-slate-300 hover:bg-slate-700"
-                  >
-                    Refresh Profile
-                  </button>
-                </div>
-
-                <form onSubmit={handleUpdateProfile} className="space-y-4 max-w-md">
-                  <div>
-                    <label className="text-xs text-slate-400 block mb-1">Full Name</label>
-                    <input
-                      type="text"
-                      value={profileData.fullName}
-                      onChange={e => setProfileData({ ...profileData, fullName: e.target.value })}
-                      className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-indigo-500"
-                    />
+          {/* User Session Info Box */}
+          <div className="p-4 border-t border-[#E2E8F0] bg-slate-50/70">
+            {user ? (
+              <div className="space-y-2.5">
+                <div className="flex items-center space-x-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold text-xs shadow-2xs">
+                    {user.fullName ? user.fullName.charAt(0).toUpperCase() : 'U'}
                   </div>
-                  <div>
-                    <label className="text-xs text-slate-400 block mb-1">Phone</label>
-                    <input
-                      type="text"
-                      value={profileData.phone}
-                      onChange={e => setProfileData({ ...profileData, phone: e.target.value })}
-                      className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-indigo-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs text-slate-400 block mb-1">Avatar URL</label>
-                    <input
-                      type="text"
-                      value={profileData.avatarUrl}
-                      onChange={e => setProfileData({ ...profileData, avatarUrl: e.target.value })}
-                      className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-indigo-500"
-                    />
-                  </div>
-                  <button
-                    type="submit"
-                    className="bg-indigo-600 hover:bg-indigo-500 text-white font-medium px-5 py-2 rounded text-sm transition"
-                  >
-                    Save Profile
-                  </button>
-                </form>
-              </div>
-            )}
-
-            {/* USERS MANAGEMENT TAB */}
-            {activeTab === 'users' && (
-              <div className="space-y-6">
-                <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-4">
-                  <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                    <h3 className="font-bold text-lg text-indigo-300">Users List (GET /users)</h3>
-                    <button
-                      onClick={fetchUsersList}
-                      className="text-xs bg-indigo-600 px-3 py-1.5 rounded text-white hover:bg-indigo-500"
-                    >
-                      Reload Users
-                    </button>
-                  </div>
-
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs border-collapse">
-                      <thead>
-                        <tr className="border-b border-slate-800 text-slate-400">
-                          <th className="p-2">Name</th>
-                          <th className="p-2">Email</th>
-                          <th className="p-2">Role</th>
-                          <th className="p-2">Status</th>
-                          <th className="p-2">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {usersList.map(u => (
-                          <tr key={u.id} className="border-b border-slate-800/50 hover:bg-slate-800/30">
-                            <td className="p-2 font-medium text-slate-200">{u.fullName}</td>
-                            <td className="p-2 font-mono text-slate-400">{u.email}</td>
-                            <td className="p-2">
-                              <span className="px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 font-mono">
-                                {u.role}
-                              </span>
-                            </td>
-                            <td className="p-2">
-                              <span className={`px-2 py-0.5 rounded font-mono ${
-                                u.status === 'ACTIVE' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'
-                              }`}>
-                                {u.status}
-                              </span>
-                            </td>
-                            <td className="p-2 space-x-1">
-                              {u.status === 'ACTIVE' ? (
-                                <button
-                                  onClick={() => handleUserStatus(u.id, 'INACTIVE')}
-                                  className="px-2 py-1 bg-amber-950 text-amber-300 rounded hover:bg-amber-900"
-                                >
-                                  Deactivate
-                                </button>
-                              ) : (
-                                <button
-                                  onClick={() => handleUserStatus(u.id, 'ACTIVE')}
-                                  className="px-2 py-1 bg-emerald-950 text-emerald-300 rounded hover:bg-emerald-900"
-                                >
-                                  Activate
-                                </button>
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                  <div className="truncate flex-1 min-w-0">
+                    <div className="text-xs font-bold text-[#0F172A] truncate">{user.fullName || 'Người dùng'}</div>
+                    <div className="text-[11px] text-[#64748B] truncate font-mono">{user.email}</div>
                   </div>
                 </div>
-
-                {/* Assign Roles to User Form */}
-                <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-4">
-                  <h3 className="font-bold text-lg text-cyan-300">Assign RBAC Roles to User (POST /users/&#123;id&#125;/roles)</h3>
-                  <form onSubmit={handleAssignRolesToUser} className="space-y-4 max-w-md">
-                    <div>
-                      <label className="text-xs text-slate-400 block mb-1">Select User</label>
-                      <select
-                        value={selectedUserForRole}
-                        onChange={e => setSelectedUserForRole(e.target.value)}
-                        className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-sm text-slate-100"
-                      >
-                        <option value="">-- Choose User --</option>
-                        {usersList.map(u => (
-                          <option key={u.id} value={u.id}>{u.fullName} ({u.email})</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="text-xs text-slate-400 block mb-1">Select Roles</label>
-                      <div className="space-y-1 bg-slate-950 border border-slate-800 p-3 rounded max-h-40 overflow-y-auto">
-                        {rolesList.map(r => (
-                          <label key={r.id} className="flex items-center space-x-2 text-xs text-slate-300 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={selectedRolesForUser.includes(r.id)}
-                              onChange={e => {
-                                if (e.target.checked) {
-                                  setSelectedRolesForUser([...selectedRolesForUser, r.id]);
-                                } else {
-                                  setSelectedRolesForUser(selectedRolesForUser.filter(id => id !== r.id));
-                                }
-                              }}
-                            />
-                            <span>{r.name}</span>
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-
-                    <button
-                      type="submit"
-                      className="bg-cyan-600 hover:bg-cyan-500 text-white font-medium px-5 py-2 rounded text-sm transition"
-                    >
-                      Assign Roles
-                    </button>
-                  </form>
-                </div>
-              </div>
-            )}
-
-            {/* RBAC MANAGEMENT TAB */}
-            {activeTab === 'rbac' && (
-              <div className="space-y-6">
-                {/* Create Role & Perm Forms */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Create Role */}
-                  <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-4">
-                    <h3 className="font-bold text-lg text-indigo-300">Create Role (POST /rbac/roles)</h3>
-                    <form onSubmit={handleCreateRole} className="space-y-3">
-                      <div>
-                        <label className="text-xs text-slate-400 block mb-1">Role Name</label>
-                        <input
-                          type="text"
-                          placeholder="VETERINARIAN"
-                          value={newRole.name}
-                          onChange={e => setNewRole({ ...newRole, name: e.target.value })}
-                          className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-sm text-slate-100"
-                          required
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs text-slate-400 block mb-1">Description</label>
-                        <input
-                          type="text"
-                          placeholder="Bác sĩ thú y"
-                          value={newRole.description}
-                          onChange={e => setNewRole({ ...newRole, description: e.target.value })}
-                          className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-sm text-slate-100"
-                        />
-                      </div>
-                      <button type="submit" className="w-full bg-indigo-600 text-white py-2 rounded text-sm font-medium hover:bg-indigo-500">
-                        Create Role
-                      </button>
-                    </form>
-                  </div>
-
-                  {/* Create Permission */}
-                  <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-4">
-                    <h3 className="font-bold text-lg text-cyan-300">Create Permission (POST /rbac/permissions)</h3>
-                    <form onSubmit={handleCreatePerm} className="space-y-3">
-                      <div>
-                        <label className="text-xs text-slate-400 block mb-1">Permission Code</label>
-                        <input
-                          type="text"
-                          placeholder="medical:create"
-                          value={newPerm.code}
-                          onChange={e => setNewPerm({ ...newPerm, code: e.target.value })}
-                          className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-sm text-slate-100"
-                          required
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs text-slate-400 block mb-1">Permission Name</label>
-                        <input
-                          type="text"
-                          placeholder="Tạo hồ sơ bệnh án"
-                          value={newPerm.name}
-                          onChange={e => setNewPerm({ ...newPerm, name: e.target.value })}
-                          className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-sm text-slate-100"
-                          required
-                        />
-                      </div>
-                      <button type="submit" className="w-full bg-cyan-600 text-white py-2 rounded text-sm font-medium hover:bg-cyan-500">
-                        Create Permission
-                      </button>
-                    </form>
-                  </div>
-                </div>
-
-                {/* Assign Permissions to Role Form */}
-                <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-4">
-                  <h3 className="font-bold text-lg text-emerald-300">Assign Permissions to Role (POST /rbac/roles/&#123;id&#125;/permissions)</h3>
-                  <form onSubmit={handleAssignPermsToRole} className="space-y-4 max-w-md">
-                    <div>
-                      <label className="text-xs text-slate-400 block mb-1">Select Role</label>
-                      <select
-                        value={selectedRoleForPerm}
-                        onChange={e => setSelectedRoleForPerm(e.target.value)}
-                        className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-sm text-slate-100"
-                      >
-                        <option value="">-- Choose Role --</option>
-                        {rolesList.map(r => (
-                          <option key={r.id} value={r.id}>{r.name}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="text-xs text-slate-400 block mb-1">Select Permissions</label>
-                      <div className="space-y-1 bg-slate-950 border border-slate-800 p-3 rounded max-h-48 overflow-y-auto">
-                        {permissionsList.map(p => (
-                          <label key={p.id} className="flex items-center space-x-2 text-xs text-slate-300 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={selectedPermsForRole.includes(p.id)}
-                              onChange={e => {
-                                if (e.target.checked) {
-                                  setSelectedPermsForRole([...selectedPermsForRole, p.id]);
-                                } else {
-                                  setSelectedPermsForRole(selectedPermsForRole.filter(id => id !== p.id));
-                                }
-                              }}
-                            />
-                            <span className="font-mono text-cyan-400">{p.code}</span>
-                            <span className="text-slate-500">({p.name})</span>
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-
-                    <button
-                      type="submit"
-                      className="bg-emerald-600 hover:bg-emerald-500 text-white font-medium px-5 py-2 rounded text-sm transition"
-                    >
-                      Assign Permissions
-                    </button>
-                  </form>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Right Panel: JSON Response Log */}
-          <div className="border-l border-slate-800 bg-slate-900/60 p-6 flex flex-col space-y-4 overflow-hidden">
-            <h3 className="font-bold text-sm text-slate-300 flex items-center justify-between border-b border-slate-800 pb-3">
-              <span>Live API Response Inspector</span>
-              {loading && <span className="text-xs text-indigo-400 animate-pulse">Requesting...</span>}
-            </h3>
-
-            {responseLog ? (
-              <div className="flex-1 overflow-y-auto space-y-3 font-mono text-xs">
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-400">HTTP Status:</span>
-                  <span className={`px-2 py-0.5 rounded font-bold ${
-                    responseLog.status >= 200 && responseLog.status < 300 
-                      ? 'bg-emerald-500/20 text-emerald-400' 
-                      : 'bg-rose-500/20 text-rose-400'
-                  }`}>
-                    {responseLog.status}
+                <div className="flex items-center justify-between pt-1 text-xs">
+                  <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border uppercase ${currentRoleConfig.badgeColor}`}>
+                    {user.role || (user.roles && user.roles[0]) || 'CUSTOMER'}
                   </span>
-                </div>
-                <div className="bg-slate-950 border border-slate-800 p-4 rounded-lg text-slate-300 overflow-x-auto">
-                  <pre>{JSON.stringify(responseLog.data, null, 2)}</pre>
+                  <button
+                    onClick={() => {
+                      logout();
+                      setScreen('login');
+                    }}
+                    className="text-[#DC2626] hover:underline flex items-center space-x-1 font-medium"
+                  >
+                    <LogOut className="w-3 h-3" />
+                    <span>Đăng xuất</span>
+                  </button>
                 </div>
               </div>
             ) : (
-              <div className="flex-1 flex flex-col items-center justify-center text-slate-600 text-xs text-center space-y-2">
-                <Database className="w-8 h-8 opacity-40" />
-                <span>Execute any action to inspect HTTP response payload</span>
+              <div className="text-xs text-[#64748B] text-center">Chưa xác thực</div>
+            )}
+          </div>
+        </aside>
+
+        {/* MAIN CONTENT AREA */}
+        <main className="flex-1 flex flex-col overflow-hidden bg-[#F8FAFC]">
+          {/* Top Bar */}
+          <header className="h-14 border-b border-[#E2E8F0] bg-white flex items-center justify-between px-6 flex-shrink-0">
+            <div className="flex items-center space-x-3 text-xs">
+              <span className="font-semibold text-slate-800 flex items-center space-x-1.5">
+                <span>{currentRoleConfig.title}</span>
+                <span className="text-slate-300">/</span>
+                <span className="text-blue-600 font-medium">
+                  {currentRoleConfig.tabs.find(t => t.id === activeTab)?.label || 'Bảng điều khiển'}
+                </span>
+              </span>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => setShowInspector(!showInspector)}
+                className={`text-xs px-3 py-1.5 rounded-xl border flex items-center space-x-1.5 transition ${showInspector
+                  ? 'bg-slate-900 text-white border-slate-900'
+                  : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                  }`}
+              >
+                <Code className="w-3.5 h-3.5 text-blue-500" />
+                <span>{showInspector ? 'Ẩn API Inspector' : 'Hiện API Inspector'}</span>
+              </button>
+
+              {token && (
+                <>
+                  <button
+                    onClick={handleRotateToken}
+                    className="text-xs bg-white hover:bg-slate-50 text-[#0F172A] border border-[#E2E8F0] px-3 py-1.5 rounded-xl flex items-center space-x-1.5 transition"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5 text-[#2563EB]" />
+                    <span>Xoay Token</span>
+                  </button>
+                  <button
+                    onClick={handleLogoutAll}
+                    className="text-xs bg-[#FEF2F2] hover:bg-red-100 text-[#DC2626] border border-[#FECACA] px-3 py-1.5 rounded-xl flex items-center space-x-1.5 transition"
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                    <span>Đăng xuất mọi nơi</span>
+                  </button>
+                </>
+              )}
+            </div>
+          </header>
+
+          {/* Dynamic Role Dashboard Body */}
+          <div className="flex-1 flex overflow-hidden">
+            {/* Main Role Content View */}
+            <div className="flex-1 overflow-y-auto p-6">
+              {activeTab === 'profile' ? (
+                <ProfileTab user={user} token={token} onApiLog={setResponseLog} />
+              ) : activeRole === 'CUSTOMER' ? (
+                <CustomerDashboard
+                  user={user}
+                  token={token}
+                  activeTab={activeTab}
+                  setActiveTab={setActiveTab}
+                  onApiLog={setResponseLog}
+                />
+              ) : activeRole === 'VETERINARIAN' ? (
+                <VetDashboard
+                  user={user}
+                  token={token}
+                  activeTab={activeTab}
+                  setActiveTab={setActiveTab}
+                  onApiLog={setResponseLog}
+                />
+              ) : activeRole === 'STAFF' ? (
+                <StaffDashboard
+                  user={user}
+                  token={token}
+                  activeTab={activeTab}
+                  setActiveTab={setActiveTab}
+                  onApiLog={setResponseLog}
+                />
+              ) : activeRole === 'OWNER' ? (
+                <OwnerDashboard
+                  user={user}
+                  token={token}
+                  activeTab={activeTab}
+                  setActiveTab={setActiveTab}
+                  onApiLog={setResponseLog}
+                />
+              ) : (
+                <AdminDashboard
+                  user={user}
+                  token={token}
+                  activeTab={activeTab}
+                  setActiveTab={setActiveTab}
+                  onApiLog={setResponseLog}
+                />
+              )}
+            </div>
+
+            {/* Collapsible HTTP Response Inspector */}
+            {showInspector && (
+              <div className="w-96 bg-slate-900 border-l border-slate-800 p-4 flex flex-col overflow-hidden text-slate-200 flex-shrink-0 animate-fadeIn">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+                  <span className="text-xs font-mono font-semibold text-slate-300">Live API Inspector</span>
+                  <button
+                    onClick={() => setShowInspector(false)}
+                    className="text-slate-400 hover:text-white text-xs"
+                  >
+                    Đóng ✕
+                  </button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto mt-3 font-mono text-xs">
+                  {responseLog ? (
+                    <div className="space-y-2">
+                      <div className="flex items-center space-x-2">
+                        <span className="text-slate-400">Status:</span>
+                        <span
+                          className={`px-2 py-0.5 rounded text-[10px] font-bold ${responseLog.status >= 200 && responseLog.status < 300
+                            ? 'bg-emerald-950 text-emerald-400 border border-emerald-800'
+                            : 'bg-rose-950 text-rose-400 border border-rose-800'
+                            }`}
+                        >
+                          {responseLog.status}
+                        </span>
+                      </div>
+                      <pre className="p-3 bg-slate-950 rounded-xl border border-slate-800 overflow-x-auto text-[11px] text-slate-300">
+                        {JSON.stringify(responseLog.data, null, 2)}
+                      </pre>
+                    </div>
+                  ) : (
+                    <p className="text-slate-500 italic mt-4 text-[11px]">
+                      Chưa có phản hồi mạng mới. Thao tác trên màn hình (đổi trạng thái, đổi điểm, chat AI...) sẽ hiển thị JSON tại đây.
+                    </p>
+                  )}
+                </div>
               </div>
             )}
           </div>
-        </div>
-      </main>
+        </main>
+      </div>
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   );
 }
