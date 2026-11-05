@@ -186,6 +186,12 @@ public class GlobalExceptionHandler {
         return build(ErrorCode.ACCESS_DENIED, ErrorCode.ACCESS_DENIED.getDefaultMessage());
     }
 
+    @ExceptionHandler(ConflictException.class)
+    public ResponseEntity<ApiResponse<Void>> handleConflict(ConflictException ex) {
+        log.warn("Conflict: {}", ex.getMessage());
+        return build(ErrorCode.CONFLICT, ex.getMessage());
+    }
+    
     // ─── 422 ───────────────────────────────────────────────────────────────
 
     @ExceptionHandler(BusinessException.class)
