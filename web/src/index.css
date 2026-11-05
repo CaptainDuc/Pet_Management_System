@@ -2,10 +2,156 @@
 @tailwind components;
 @tailwind utilities;
 
-html, body, #root {
+html {
+  scroll-behavior: smooth;
+}
+
+body {
   margin: 0;
-  padding: 0;
+  min-width: 320px;
+  font-family: 'Nunito Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: #49b3f4;
+  color: #ffffff;
+}
+
+:root {
+  --color-primary: #2563EB;
+  --color-primary-hover: #1D4ED8;
+  --color-primary-active: #1E40AF;
+  --color-primary-glow: rgba(37, 99, 235, 0.28);
+  --color-accent: #38BDF8;
+  --color-accent-subtle: rgba(56, 189, 248, 0.15);
+  --color-accent-ring: rgba(56, 189, 248, 0.35);
+  --color-charcoal-dark: #070B14;
+  --color-charcoal-base: #0B0F19;
+  --color-charcoal-surface: #1E293B;
+  --color-frost-white: #FFFFFF;
+  --color-surface-card: rgba(255, 255, 255, 0.94);
+  --color-surface-subtle: rgba(248, 250, 252, 0.85);
+  --color-border-card: rgba(255, 255, 255, 0.88);
+  --color-border-subtle: #E2E8F0;
+  --color-border-input: #CBD5E1;
+  --color-border-focus: #2563EB;
+  --color-text-main: #0F172A;
+  --color-text-muted: #64748B;
+  --color-text-light: #F8FAFC;
+  --color-danger: #DC2626;
+  --color-danger-bg: #FEF2F2;
+  --color-danger-border: #FECACA;
+  --duration-fast: 150ms;
+  --duration-normal: 250ms;
+  --duration-entrance: 500ms;
+  --duration-ripple: 650ms;
+  --ease-spring: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-smooth: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-ripple: cubic-bezier(0.1, 0.8, 0.25, 1);
+}
+
+.auth-background {
+  position: fixed;
+  inset: 0;
   width: 100%;
   height: 100%;
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  height: 100dvh;
+  background-color: #070B14;
+  background-image: url("/husky-bg.png");
+  background-size: cover;
+  background-position: left center;
+  background-repeat: no-repeat;
+  z-index: 1;
+}
+
+.water-ripple {
+  position: fixed;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  pointer-events: none;
+  transform: translate(-50%, -50%) scale(0.2);
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.35) 0%, rgba(56, 189, 248, 0.15) 50%, transparent 75%);
+  box-shadow: 0 0 16px rgba(255, 255, 255, 0.8), inset 0 0 8px rgba(56, 189, 248, 0.4);
+  animation: waterRippleExpand var(--duration-ripple) var(--ease-ripple) forwards;
+  will-change: transform, opacity;
+  z-index: 4;
+}
+
+@keyframes waterRippleExpand {
+  0% {
+    transform: translate(-50%, -50%) scale(0.2);
+    opacity: 0.85;
+  }
+  45% {
+    opacity: 0.55;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1.25);
+    opacity: 0;
+  }
+}
+
+@keyframes formEntrance {
+  0% {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pageFadeSlide {
+  0% {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes errorSlideDown {
+  0% {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-form-entrance {
+  animation: formEntrance var(--duration-entrance) var(--ease-spring) forwards;
+  will-change: transform, opacity;
+}
+
+.animate-page-slide {
+  animation: pageFadeSlide var(--duration-normal) var(--ease-smooth) forwards;
+  will-change: transform, opacity;
+}
+
+.animate-error-slide {
+  animation: errorSlideDown var(--duration-fast) var(--ease-spring) forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .water-ripple {
+    display: none !important;
+  }
 }
