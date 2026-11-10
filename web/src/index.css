@@ -2,25 +2,34 @@
 @tailwind components;
 @tailwind utilities;
 
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  font-family: 'Nunito Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: #49b3f4;
+  color: #ffffff;
+}
+
 :root {
-  /* ─── Color Tokens Extracted from Husky Background ─────────────────── */
-  /* Sapphire & Cobalt Blue matching the Husky's blue eyes */
   --color-primary: #2563EB;
   --color-primary-hover: #1D4ED8;
   --color-primary-active: #1E40AF;
   --color-primary-glow: rgba(37, 99, 235, 0.28);
-
-  /* Ice Blue & Cyan Sunlight Accent */
   --color-accent: #38BDF8;
   --color-accent-subtle: rgba(56, 189, 248, 0.15);
   --color-accent-ring: rgba(56, 189, 248, 0.35);
-
-  /* Charcoal / Deep Midnight Obsidian coat colors */
   --color-charcoal-dark: #070B14;
   --color-charcoal-base: #0B0F19;
   --color-charcoal-surface: #1E293B;
-
-  /* Frost White & Cool Silver fur & reflections */
   --color-frost-white: #FFFFFF;
   --color-surface-card: rgba(255, 255, 255, 0.94);
   --color-surface-subtle: rgba(248, 250, 252, 0.85);
@@ -28,40 +37,21 @@
   --color-border-subtle: #E2E8F0;
   --color-border-input: #CBD5E1;
   --color-border-focus: #2563EB;
-
-  /* Text Hierarchy */
   --color-text-main: #0F172A;
   --color-text-muted: #64748B;
   --color-text-light: #F8FAFC;
-
-  /* Feedback Colors */
   --color-danger: #DC2626;
   --color-danger-bg: #FEF2F2;
   --color-danger-border: #FECACA;
-
-  /* ─── Motion Design Tokens ─────────────────────────────────────────── */
   --duration-fast: 150ms;
   --duration-normal: 250ms;
   --duration-entrance: 500ms;
   --duration-ripple: 650ms;
-
   --ease-spring: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-smooth: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-ripple: cubic-bezier(0.1, 0.8, 0.25, 1);
 }
 
-html, body, #root {
-  margin: 0;
-  padding: 0;
-  min-height: 100%;
-  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  color: var(--color-text-main);
-  background-color: #070B14;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-/* ─── Static Responsive Background ───────────────────────────────────── */
 .auth-background {
   position: fixed;
   inset: 0;
@@ -76,7 +66,6 @@ html, body, #root {
   z-index: 1;
 }
 
-/* ─── Interactive Mouse Water Ripple (Sunlit Crystal Ripple) ─────────── */
 .water-ripple {
   position: fixed;
   width: 64px;
@@ -106,7 +95,6 @@ html, body, #root {
   }
 }
 
-/* Page / Form entrance animation (runs once on mount) */
 @keyframes formEntrance {
   0% {
     opacity: 0;
@@ -118,7 +106,6 @@ html, body, #root {
   }
 }
 
-/* Page content slide transition between Login / Register */
 @keyframes pageFadeSlide {
   0% {
     opacity: 0;
@@ -130,7 +117,6 @@ html, body, #root {
   }
 }
 
-/* Error banner soft entrance */
 @keyframes errorSlideDown {
   0% {
     opacity: 0;
@@ -141,8 +127,6 @@ html, body, #root {
     transform: translateY(0);
   }
 }
-
-/* ─── Utility Animation Classes ─────────────────────────────────────── */
 
 .animate-form-entrance {
   animation: formEntrance var(--duration-entrance) var(--ease-spring) forwards;
@@ -158,7 +142,6 @@ html, body, #root {
   animation: errorSlideDown var(--duration-fast) var(--ease-spring) forwards;
 }
 
-/* ─── Accessibility: Reduced Motion Support ──────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
