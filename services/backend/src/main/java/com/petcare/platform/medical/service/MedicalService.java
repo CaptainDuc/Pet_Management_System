@@ -6,6 +6,7 @@ import com.petcare.platform.medical.repository.MedicalRecordRepository;
 import com.petcare.platform.medical.repository.VaccinationRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+
 import java.util.List;
 import java.util.UUID;
 
@@ -15,12 +16,15 @@ public class MedicalService {
 
     private final MedicalRecordRepository medicalRecordRepository;
     private final VaccinationRepository vaccinationRepository;
+    private final MedicalAccessService accessService;
 
-    public List<MedicalRecord> getRecordsByPet(UUID petId) {
+    public List<MedicalRecord> getRecordsByPet(UUID userId, UUID petId) {
+        accessService.requireRead(userId, petId);
         return medicalRecordRepository.findByPetId(petId);
     }
 
-    public List<Vaccination> getVaccinationsByPet(UUID petId) {
+    public List<Vaccination> getVaccinationsByPet(UUID userId, UUID petId) {
+        accessService.requireRead(userId, petId);
         return vaccinationRepository.findByPetId(petId);
     }
 }
