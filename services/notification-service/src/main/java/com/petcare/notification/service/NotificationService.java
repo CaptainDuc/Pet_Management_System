@@ -155,6 +155,12 @@ public class NotificationService {
         return repository.countByUserIdAndReadFalse(userId);
     }
 
+    @Transactional(readOnly = true)
+    public NotificationResponse get(UUID userId, UUID id) {
+        return repository.findByIdAndUserId(id, userId)
+                .map(this::toResponse)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Notification not found"));
+    }
     @Transactional
     public NotificationResponse markRead(UUID userId, UUID id) {
         Notification n = repository.findByIdAndUserId(id, userId)

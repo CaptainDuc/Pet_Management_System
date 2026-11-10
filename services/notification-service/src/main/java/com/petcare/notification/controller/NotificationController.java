@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RequestAttribute;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.PatchMapping;
 
 import java.util.Map;
 import java.util.UUID;
@@ -36,13 +37,19 @@ public class NotificationController {
         return ApiResponse.ok(Map.of("count", notificationService.unreadCount(userId)));
     }
 
-    @PostMapping("/{id}/read")
+    @GetMapping("/{id}")
+    public ApiResponse<NotificationResponse> get(
+            @RequestAttribute("userId") UUID userId, @PathVariable UUID id) {
+        return ApiResponse.ok(notificationService.get(userId, id));
+    }
+
+    @PatchMapping
     public ApiResponse<NotificationResponse> markRead(
             @RequestAttribute("userId") UUID userId, @PathVariable UUID id) {
         return ApiResponse.ok(notificationService.markRead(userId, id));
     }
 
-    @PostMapping("/read-all")
+    @PatchMapping
     public ApiResponse<Map<String, Integer>> markAllRead(@RequestAttribute("userId") UUID userId) {
         return ApiResponse.ok(Map.of("updated", notificationService.markAllRead(userId)));
     }
