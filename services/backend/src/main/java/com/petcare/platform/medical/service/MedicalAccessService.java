@@ -17,18 +17,18 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class MedicalAccessService {
 
-    // Bác sĩ chỉ xem hồ sơ khi lịch hẹn đã được xác nhận trở đi
-    private static final List<BookingStatus> VET_VISIBLE = List.of(
+    // Bác sĩ xem hồ sơ từ khi lịch hẹn được xác nhận; chỉ được ghi khi đang thực hiện hoặc đã hoàn thành
+    private static final List<BookingStatus> VET_READ = List.of(
             BookingStatus.CONFIRMED, BookingStatus.IN_PROGRESS, BookingStatus.COMPLETED);
+    private static final List<BookingStatus> VET_WRITE = List.of(
+            BookingStatus.IN_PROGRESS, BookingStatus.COMPLETED);
 
     private final PetRepository petRepository;
     private final BookingItemRepository bookingItemRepository;
 
     @Transactional(readOnly = true)
     public void requireRead(UUID userId, UUID petId) {
-        Pet pet = petRepository.findByIdAndActiveTrue(petId)
-                .orElseThrow(() -> new ResourceNotFoundException("Pet", petId));
-
+        Pet pet = findPet(petId);
         if (SecurityUtils.hasAnyRole("ADMIN", "OWNER")) {
             return;
         }
@@ -36,9 +36,27 @@ public class MedicalAccessService {
             return;
         }
         if (SecurityUtils.hasRole("VETERINARIAN")
-                && bookingItemRepository.existsAssignedAccess(userId, petId, VET_VISIBLE)) {
+                && bookingItemRepository.existsAssignedAccess(userId, petId, VET_READ)) {
             return;
         }
         throw new ResourceNotFoundException("Pet", petId);
+    }
+
+    @Transactional(readOnly = true)
+    public void requireWrite(UUID userId, UUID petId) {
+        findPet(petId);
+        if (SecurityUtils.hasAnyRole("ADMIN", "OWNER")) {
+            return;
+        }
+        if (SecurityUtils.hasRole("VETERINARIAN")
+                && bookingItemRepository.existsAssignedAccess(userId, petId, VET_WRITE)) {
+            return;
+        }
+        throw new ResourceNotFoundException("Pet", petId);
+    }
+
+    private Pet findPet(UUID petId) {
+        return petRepository.findByIdAndActiveTrue(petId)
+                .orElseThrow(() -> new ResourceNotFoundException("Pet", petId));
     }
 }

@@ -3,6 +3,7 @@ package com.petcare.platform.medical.domain;
 import com.petcare.platform.common.domain.BaseEntity;
 import jakarta.persistence.*;
 import lombok.*;
+
 import java.time.LocalDate;
 import java.util.UUID;
 
@@ -14,4 +15,6 @@ public class Vaccination extends BaseEntity {
     private String vaccineName;
     private LocalDate administeredDate;
     private LocalDate nextDueDate;
+    private String vetName;
+    private String batchNumber;
 }
