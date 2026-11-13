@@ -1,0 +1,38 @@
+server:
+  port: ${GATEWAY_PORT:8000}
+
+spring:
+  application:
+    name: api-gateway
+  cloud:
+    gateway:
+      # Cả gateway và các service đều có thể thêm header CORS, giữ lại một bản để trình duyệt không báo lỗi trùng
+      default-filters:
+        - DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials, RETAIN_FIRST
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowedOriginPatterns: "http://localhost:*"
+            allowedMethods: "*"
+            allowedHeaders: "*"
+            allowCredentials: true
+            maxAge: 3600
+      routes:
+        - id: payment-service
+          uri: ${PAYMENT_SERVICE_URL:http://localhost:8082}
+          predicates:
+            - Path=/api/v1/payments/**
+        - id: notification-service
+          uri: ${NOTIFICATION_SERVICE_URL:http://localhost:8083}
+          predicates:
+            - Path=/api/v1/notifications/**
+        - id: core-backend
+          uri: ${CORE_SERVICE_URL:http://localhost:8080}
+          predicates:
+            - Path=/api/v1/**,/v3/api-docs/**,/swagger-ui/**,/swagger-ui.html
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

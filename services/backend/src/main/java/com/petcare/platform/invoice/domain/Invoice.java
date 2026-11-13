@@ -9,14 +9,8 @@ import java.time.Instant;
 import java.util.UUID;
 
 /**
- * Maps {@code invoices} from Core DB migration V1.
- *
- * <p>The table has no status column, no tax column and no
- * {@code payment_id} — the latter was dropped by
- * V2__extract_payment_and_notification.sql because payment state lives in the
- * Payment Service database. Adding those fields here would break
- * {@code spring.jpa.hibernate.ddl-auto: validate}; they arrive with migration
- * P-24.
+ * Maps {@code invoices}. The payment state itself lives in the Payment Service database;
+ * {@code status} here only tells whether the invoice document is open, paid or cancelled.
  */
 @Entity
 @Table(name = "invoices")
@@ -38,4 +32,8 @@ public class Invoice extends BaseEntity {
 
     @Column(name = "issued_at", nullable = false)
     private Instant issuedAt;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private InvoiceStatus status;
 }

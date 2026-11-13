@@ -1,5 +1,9 @@
 package com.petcare.platform.booking.service;
 
+import com.petcare.platform.booking.event.BookingEventData;
+import com.petcare.platform.common.event.RabbitMQQueues;
+import com.petcare.platform.common.outbox.OutboxService;
+import java.time.OffsetDateTime;
 import com.petcare.platform.booking.domain.Booking;
 import com.petcare.platform.booking.domain.BookingItem;
 import com.petcare.platform.booking.domain.BookingStatus;
@@ -71,6 +75,7 @@ public class BookingService {
     private final StaffSkillRepository skillRepository;
     private final ScheduleRepository scheduleRepository;
     private final TimeSlotRepository timeSlotRepository;
+    private final OutboxService outboxService;
 
     @Value("${app.booking.cancel-cutoff-hours:2}")
     private int cancelCutoffHours;
@@ -160,11 +165,14 @@ public class BookingService {
             item.setNotes(p.notes());
             itemRepository.save(item);
         }
-        historyRepository.save(new BookingStatusHistory(
+                historyRepository.save(new BookingStatusHistory(
                 booking.getId(), null, BookingStatus.PENDING, customerId, null));
 
-        return toResponses(List.of(booking)).get(0);
+        BookingResponse response = toResponses(List.of(booking)).get(0);
+        recordEvent(response, RabbitMQQueues.BOOKING_CREATED, null);
+        return response;
     }
+
 
     // ─── Xem ───────────────────────────────────────────────────────────────
 
@@ -272,13 +280,42 @@ public class BookingService {
         if (to == BookingStatus.CANCELLED && !slotIds.isEmpty()) {
             timeSlotRepository.release(slotIds);
         }
-        return toResponses(List.of(booking)).get(0);
+        BookingResponse response = toResponses(List.of(booking)).get(0);
+        recordEvent(response, routingKeyFor(to), reason);
+        return response;
     }
+    
 
     // ─── Hàm phụ ───────────────────────────────────────────────────────────
 
     private boolean isClinicSide() {
         return SecurityUtils.hasAnyRole("ADMIN", "OWNER", "STAFF", "VETERINARIAN");
+    }
+
+        private void recordEvent(BookingResponse r, String routingKey, String reason) {
+        OffsetDateTime start = r.items().stream()
+                .map(ItemResponse::startTime)
+                .filter(Objects::nonNull)
+                .min(Comparator.naturalOrder())
+                .orElse(null);
+        List<String> serviceNames = r.items().stream()
+                .map(ItemResponse::serviceName)
+                .filter(Objects::nonNull)
+                .toList();
+
+        outboxService.append("Booking", r.id(), RabbitMQQueues.BOOKING_EXCHANGE, routingKey,
+                new BookingEventData(r.id(), r.customerId(), r.petId(), r.status(),
+                        r.totalAmount(), start, serviceNames, reason));
+    }
+
+    private String routingKeyFor(BookingStatus status) {
+        return switch (status) {
+            case CONFIRMED -> RabbitMQQueues.BOOKING_CONFIRMED;
+            case IN_PROGRESS -> RabbitMQQueues.BOOKING_STARTED;
+            case COMPLETED -> RabbitMQQueues.BOOKING_COMPLETED;
+            case CANCELLED -> RabbitMQQueues.BOOKING_CANCELLED;
+            default -> throw new IllegalStateException("No event for status " + status);
+        };
     }
 
     private List<BookingResponse> toResponses(List<Booking> bookings) {

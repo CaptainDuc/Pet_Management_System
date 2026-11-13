@@ -35,8 +35,8 @@ Thumbs.db
 *.log
 logs/
 
- Updated upstream
 .github
 
 web/dist/
-Stashed changes
+.github
+.agents

@@ -3,6 +3,7 @@ package com.petcare.platform.medical.domain;
 import com.petcare.platform.common.domain.BaseEntity;
 import jakarta.persistence.*;
 import lombok.*;
+
 import java.time.LocalDate;
 import java.util.UUID;
 
@@ -11,7 +12,9 @@ import java.util.UUID;
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 public class MedicalRecord extends BaseEntity {
     private UUID petId;
+    private String vetName;
     private String diagnosis;
     private String treatment;
+    private String notes;
     private LocalDate visitDate;
 }
