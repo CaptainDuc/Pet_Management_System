@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Shield, Key, User, Users, Lock, LogOut, RefreshCw,
+  Shield, Key, User, Users, Lock, LogOut,
   CheckCircle, XCircle, Plus, Edit, Trash, Settings,
   Send, Database, Server, UserCheck, AlertTriangle, ArrowRight,
   ExternalLink, Sparkles, Stethoscope, Calendar, CreditCard,
-  TrendingUp, Building2, ChevronDown, Eye, Code, Layers
+  TrendingUp, Building2, ChevronDown, Eye, Layers
 } from 'lucide-react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import LoginPage from './pages/auth/LoginPage';
@@ -16,8 +16,6 @@ import VetDashboard from './pages/dashboard/VetDashboard';
 import StaffDashboard from './pages/dashboard/StaffDashboard';
 import OwnerDashboard from './pages/dashboard/OwnerDashboard';
 import ProfileTab from './pages/dashboard/ProfileTab';
-
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8080/api/v1';
 
 // Role configurations
 const ROLE_CONFIGS = {
@@ -125,7 +123,7 @@ function getAssignedRoles(user) {
 }
 
 function AppContent({ initialScreen = 'login' }) {
-  const { user, token, refreshToken, isAuthenticated, logout, saveAuthSession } = useAuth();
+  const { user, token, isAuthenticated, logout } = useAuth();
 
   // Navigation state: 'login' | 'register' | 'forgot-password' | 'dashboard'
   const [screen, setScreen] = useState(initialScreen);
@@ -134,8 +132,6 @@ function AppContent({ initialScreen = 'login' }) {
   const [activeRole, setActiveRole] = useState('CUSTOMER');
   const [activeTab, setActiveTab] = useState('pets');
   const [showRoleDropdown, setShowRoleDropdown] = useState(false);
-  const [showInspector, setShowInspector] = useState(false);
-  const [responseLog, setResponseLog] = useState(null);
   const userRoles = getAssignedRoles(user);
 
   const navigate = (target) => {
@@ -168,28 +164,6 @@ function AppContent({ initialScreen = 'login' }) {
     setActiveRole(newRole);
     setActiveTab(ROLE_CONFIGS[newRole]?.defaultTab || 'profile');
     setShowRoleDropdown(false);
-  };
-
-  const handleRotateToken = async () => {
-    try {
-      const res = await fetch(`${API_BASE}/auth/refresh`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refreshToken })
-      });
-      const data = await res.json();
-      setResponseLog({ status: res.status, data });
-      if (res.ok && data?.data) {
-        saveAuthSession(data.data);
-      }
-    } catch (err) {
-      setResponseLog({ status: 'ERROR', data: { message: err.message } });
-    }
-  };
-
-  const handleLogoutAll = async () => {
-    await logout(true);
-    navigate('login');
   };
 
   const currentRoleConfig = ROLE_CONFIGS[activeRole] || ROLE_CONFIGS.CUSTOMER;
@@ -441,37 +415,6 @@ function AppContent({ initialScreen = 'login' }) {
               </span>
             </div>
 
-            <div className="flex items-center space-x-2">
-              <button
-                onClick={() => setShowInspector(!showInspector)}
-                className={`text-xs px-3 py-1.5 rounded-xl border flex items-center space-x-1.5 transition ${showInspector
-                  ? 'bg-slate-900 text-white border-slate-900'
-                  : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
-                  }`}
-              >
-                <Code className="w-3.5 h-3.5 text-blue-500" />
-                <span>{showInspector ? 'Ẩn API Inspector' : 'Hiện API Inspector'}</span>
-              </button>
-
-              {token && (
-                <>
-                  <button
-                    onClick={handleRotateToken}
-                    className="text-xs bg-white hover:bg-slate-50 text-[#0F172A] border border-[#E2E8F0] px-3 py-1.5 rounded-xl flex items-center space-x-1.5 transition"
-                  >
-                    <RefreshCw className="w-3.5 h-3.5 text-[#2563EB]" />
-                    <span>Xoay Token</span>
-                  </button>
-                  <button
-                    onClick={handleLogoutAll}
-                    className="text-xs bg-[#FEF2F2] hover:bg-red-100 text-[#DC2626] border border-[#FECACA] px-3 py-1.5 rounded-xl flex items-center space-x-1.5 transition"
-                  >
-                    <LogOut className="w-3.5 h-3.5" />
-                    <span>Đăng xuất mọi nơi</span>
-                  </button>
-                </>
-              )}
-            </div>
           </header>
 
           {/* Dynamic Role Dashboard Body */}
@@ -479,14 +422,13 @@ function AppContent({ initialScreen = 'login' }) {
             {/* Main Role Content View */}
             <div className="flex-1 overflow-y-auto p-6">
               {activeTab === 'profile' ? (
-                <ProfileTab user={user} token={token} onApiLog={setResponseLog} />
+                <ProfileTab user={user} token={token} />
               ) : activeRole === 'CUSTOMER' ? (
                 <CustomerDashboard
                   user={user}
                   token={token}
                   activeTab={activeTab}
                   setActiveTab={setActiveTab}
-                  onApiLog={setResponseLog}
                 />
               ) : activeRole === 'VETERINARIAN' ? (
                 <VetDashboard
@@ -494,7 +436,6 @@ function AppContent({ initialScreen = 'login' }) {
                   token={token}
                   activeTab={activeTab}
                   setActiveTab={setActiveTab}
-                  onApiLog={setResponseLog}
                 />
               ) : activeRole === 'STAFF' ? (
                 <StaffDashboard
@@ -502,7 +443,6 @@ function AppContent({ initialScreen = 'login' }) {
                   token={token}
                   activeTab={activeTab}
                   setActiveTab={setActiveTab}
-                  onApiLog={setResponseLog}
                 />
               ) : activeRole === 'OWNER' ? (
                 <OwnerDashboard
@@ -510,7 +450,6 @@ function AppContent({ initialScreen = 'login' }) {
                   token={token}
                   activeTab={activeTab}
                   setActiveTab={setActiveTab}
-                  onApiLog={setResponseLog}
                 />
               ) : (
                 <AdminDashboard
@@ -518,50 +457,9 @@ function AppContent({ initialScreen = 'login' }) {
                   token={token}
                   activeTab={activeTab}
                   setActiveTab={setActiveTab}
-                  onApiLog={setResponseLog}
                 />
               )}
             </div>
-
-            {/* Collapsible HTTP Response Inspector */}
-            {showInspector && (
-              <div className="w-96 bg-slate-900 border-l border-slate-800 p-4 flex flex-col overflow-hidden text-slate-200 flex-shrink-0 animate-fadeIn">
-                <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-                  <span className="text-xs font-mono font-semibold text-slate-300">Live API Inspector</span>
-                  <button
-                    onClick={() => setShowInspector(false)}
-                    className="text-slate-400 hover:text-white text-xs"
-                  >
-                    Đóng ✕
-                  </button>
-                </div>
-
-                <div className="flex-1 overflow-y-auto mt-3 font-mono text-xs">
-                  {responseLog ? (
-                    <div className="space-y-2">
-                      <div className="flex items-center space-x-2">
-                        <span className="text-slate-400">Status:</span>
-                        <span
-                          className={`px-2 py-0.5 rounded text-[10px] font-bold ${responseLog.status >= 200 && responseLog.status < 300
-                            ? 'bg-emerald-950 text-emerald-400 border border-emerald-800'
-                            : 'bg-rose-950 text-rose-400 border border-rose-800'
-                            }`}
-                        >
-                          {responseLog.status}
-                        </span>
-                      </div>
-                      <pre className="p-3 bg-slate-950 rounded-xl border border-slate-800 overflow-x-auto text-[11px] text-slate-300">
-                        {JSON.stringify(responseLog.data, null, 2)}
-                      </pre>
-                    </div>
-                  ) : (
-                    <p className="text-slate-500 italic mt-4 text-[11px]">
-                      Chưa có phản hồi mạng mới. Thao tác trên màn hình (đổi trạng thái, đổi điểm, chat AI...) sẽ hiển thị JSON tại đây.
-                    </p>
-                  )}
-                </div>
-              </div>
-            )}
           </div>
         </main>
       </div>

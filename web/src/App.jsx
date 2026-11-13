@@ -722,6 +722,9 @@ function LandingPage() {
                         </div>
                         <blockquote className="mt-2 text-sm leading-6 text-slate-500">{item.quote}</blockquote>
                       </div>
+                      <pre className="p-3 bg-slate-950 rounded-xl border border-slate-800 overflow-x-auto text-[11px] text-slate-300">
+                        {JSON.stringify(responseLog.data, null, 2)}
+                      </pre>
                     </div>
                   </figure>
                 ))}
