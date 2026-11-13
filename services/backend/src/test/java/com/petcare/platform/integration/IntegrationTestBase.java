@@ -203,6 +203,30 @@ public abstract class IntegrationTestBase {
 
     // ─── Chờ điều kiện (dùng cho việc gửi sự kiện bất đồng bộ) ────────────────
 
+        // Đưa một lịch hẹn qua đủ các bước đến COMPLETED, trả về mã lịch hẹn
+    protected UUID completedBooking(Scenario s) {
+        UUID slot = s.slotIds().get(0);
+        UUID bookingId = idOf(send(HttpMethod.POST, "/api/v1/bookings", s.customer().token(),
+                bookingBody(s.petId(), s.serviceId(), slot)));
+
+        ResponseEntity<String> confirm = send(HttpMethod.POST, "/api/v1/bookings/" + bookingId + "/confirm",
+                s.admin().token(), null);
+        assertThat(confirm.getStatusCode()).as(confirm.getBody()).isEqualTo(HttpStatus.OK);
+
+        // Kéo giờ khung về hiện tại để được phép bắt đầu
+        jdbc.update("update time_slots set start_time = now() - interval '10 minutes', "
+                + "end_time = now() + interval '20 minutes' where id = ?", slot);
+
+        ResponseEntity<String> start = send(HttpMethod.POST, "/api/v1/bookings/" + bookingId + "/start",
+                s.admin().token(), null);
+        assertThat(start.getStatusCode()).as(start.getBody()).isEqualTo(HttpStatus.OK);
+
+        ResponseEntity<String> complete = send(HttpMethod.POST, "/api/v1/bookings/" + bookingId + "/complete",
+                s.admin().token(), null);
+        assertThat(complete.getStatusCode()).as(complete.getBody()).isEqualTo(HttpStatus.OK);
+        return bookingId;
+    }
+    
     protected void eventually(String description, BooleanSupplier condition) {
         long deadline = System.currentTimeMillis() + 20_000;
         while (System.currentTimeMillis() < deadline) {
