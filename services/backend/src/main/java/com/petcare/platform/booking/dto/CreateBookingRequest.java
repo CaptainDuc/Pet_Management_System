@@ -13,5 +13,6 @@ public record CreateBookingRequest(
         @NotNull UUID petId,
         UUID branchId,
         String notes,
+        String promotionCode,
         @NotEmpty @Valid List<BookingItemRequest> items
 ) {}

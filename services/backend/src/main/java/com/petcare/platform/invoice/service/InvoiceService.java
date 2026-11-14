@@ -3,6 +3,7 @@ package com.petcare.platform.invoice.service;
 import com.petcare.platform.booking.domain.Booking;
 import com.petcare.platform.booking.domain.BookingItem;
 import com.petcare.platform.booking.domain.BookingStatus;
+import com.petcare.platform.booking.domain.PaymentStatus;
 import com.petcare.platform.booking.repository.BookingItemRepository;
 import com.petcare.platform.booking.repository.BookingRepository;
 import com.petcare.platform.common.event.RabbitMQQueues;
@@ -19,6 +20,8 @@ import com.petcare.platform.invoice.dto.InvoiceResponse.ItemResponse;
 import com.petcare.platform.invoice.event.InvoiceIssuedData;
 import com.petcare.platform.invoice.repository.InvoiceItemRepository;
 import com.petcare.platform.invoice.repository.InvoiceRepository;
+import com.petcare.platform.promotion.domain.Promotion;
+import com.petcare.platform.promotion.repository.PromotionRepository;
 import com.petcare.platform.servicecatalog.domain.CareService;
 import com.petcare.platform.servicecatalog.repository.CareServiceRepository;
 import lombok.RequiredArgsConstructor;
@@ -31,6 +34,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -49,6 +53,7 @@ public class InvoiceService {
     private final BookingRepository bookingRepository;
     private final BookingItemRepository bookingItemRepository;
     private final CareServiceRepository careServiceRepository;
+    private final PromotionRepository promotionRepository;
     private final OutboxService outboxService;
 
     // ─── Lập hóa đơn ───────────────────────────────────────────────────────
@@ -72,10 +77,15 @@ public class InvoiceService {
                 .stream()
                 .collect(Collectors.toMap(CareService::getId, CareService::getName));
 
-        // Tiền do server tính từ giá đã chụp lại, client không gửi giá
-        BigDecimal total = bookingItems.stream()
+        // Tiền do server tính từ giá đã chụp lại, client không gửi giá.
+        // Booking đã lưu tổng cuối cùng sau giảm giá, nên hóa đơn dùng lại giá trị đó.
+        BigDecimal subtotal = bookingItems.stream()
                 .map(BookingItem::getUnitPrice)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal discount = booking.getDiscountAmount() == null
+                ? BigDecimal.ZERO : booking.getDiscountAmount();
+        BigDecimal total = booking.getTotalAmount() == null
+                ? subtotal.subtract(discount) : booking.getTotalAmount();
         if (total.signum() <= 0) {
             throw new BusinessException("Invoice total must be greater than zero");
         }
@@ -84,15 +94,18 @@ public class InvoiceService {
         String number = "INV-" + now.atZone(ZONE).format(PERIOD) + "-"
                 + String.format("%06d", invoiceRepository.nextInvoiceSequence());
 
+        InvoiceStatus status = booking.getPaymentStatus() == PaymentStatus.PAID
+                ? InvoiceStatus.PAID : InvoiceStatus.ISSUED;
+
         Invoice invoice = invoiceRepository.save(Invoice.builder()
                 .bookingId(bookingId)
                 .invoiceNumber(number)
                 .totalAmount(total)
                 .issuedAt(now)
-                .status(InvoiceStatus.ISSUED)
+                .status(status)
                 .build());
 
-        List<InvoiceItem> items = bookingItems.stream()
+        List<InvoiceItem> items = new ArrayList<>(bookingItems.stream()
                 .map(bi -> InvoiceItem.builder()
                         .invoiceId(invoice.getId())
                         .description(serviceNames.getOrDefault(bi.getServiceId(), "Service"))
@@ -101,7 +114,20 @@ public class InvoiceService {
                         .subtotal(bi.getUnitPrice())
                         .createdAt(now)
                         .build())
-                .toList();
+                .toList());
+        if (discount.signum() > 0) {
+            String code = booking.getPromotionId() == null ? null
+                    : promotionRepository.findById(booking.getPromotionId())
+                            .map(Promotion::getCode).orElse(null);
+            items.add(InvoiceItem.builder()
+                    .invoiceId(invoice.getId())
+                    .description(code == null ? "Giảm giá" : "Giảm giá (" + code + ")")
+                    .quantity(1)
+                    .unitPrice(discount.negate())
+                    .subtotal(discount.negate())
+                    .createdAt(now)
+                    .build());
+        }
         itemRepository.saveAll(items);
 
         // Sự kiện ghi cùng giao dịch (outbox), payment-service sẽ nhận và tạo khoản thanh toán

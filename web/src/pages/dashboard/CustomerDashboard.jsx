@@ -3,41 +3,133 @@ import {
   Heart, Calendar, Award, MessageSquare, Plus, Search,
   CheckCircle2, Clock, AlertCircle, Sparkles, Send,
   ChevronRight, Phone, Mail, ShieldCheck, FileText,
-  User, Check, X, RefreshCw, Dog, Cat, DollarSign
+  User, Check, X, RefreshCw, Dog, Cat, DollarSign, QrCode
 } from 'lucide-react';
+import { clinicApi } from '../../api/clinic';
+import VietQrPaymentModal from '../../components/VietQrPaymentModal';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8080/api/v1';
 
+const BOOKING_STATUS_STYLES = {
+  PENDING: 'bg-amber-50 text-amber-700 border border-amber-200',
+  CONFIRMED: 'bg-blue-50 text-blue-700 border border-blue-200',
+  IN_PROGRESS: 'bg-indigo-50 text-indigo-700 border border-indigo-200',
+  COMPLETED: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
+  CANCELLED: 'bg-rose-50 text-rose-700 border border-rose-200',
+};
+
+const BOOKING_STATUS_LABELS = {
+  PENDING: 'Chờ duyệt',
+  CONFIRMED: 'Đã xác nhận',
+  IN_PROGRESS: 'Đang khám',
+  COMPLETED: 'Đã hoàn tất',
+  CANCELLED: 'Đã hủy',
+};
+
+const PAYMENT_STATUS_STYLES = {
+  UNPAID: 'bg-rose-50 text-rose-700 border border-rose-200',
+  PAID: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
+  REFUNDED: 'bg-slate-100 text-slate-600 border border-slate-200',
+};
+
+const PAYMENT_STATUS_LABELS = {
+  UNPAID: 'Chưa thanh toán',
+  PAID: 'Đã thanh toán',
+  REFUNDED: 'Đã hoàn tiền',
+};
+
+const FALLBACK_DOG_AVATAR = 'https://images.unsplash.com/photo-1552053831-71594a27632d?w=400&auto=format&fit=crop&q=80';
+const FALLBACK_CAT_AVATAR = 'https://images.unsplash.com/photo-1533738363-b7f9aef128ce?w=400&auto=format&fit=crop&q=80';
+
+function toISODate(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function tomorrowISODate() {
+  const date = new Date();
+  date.setDate(date.getDate() + 1);
+  return toISODate(date);
+}
+
+function formatAge(dateOfBirth) {
+  if (!dateOfBirth) return 'Chưa cập nhật';
+  const birth = new Date(`${dateOfBirth}T00:00:00`);
+  if (Number.isNaN(birth.getTime())) return 'Chưa cập nhật';
+
+  const now = new Date();
+  let months = (now.getFullYear() - birth.getFullYear()) * 12 + (now.getMonth() - birth.getMonth());
+  if (now.getDate() < birth.getDate()) months -= 1;
+
+  if (months < 1) return 'Dưới 1 tháng';
+  if (months < 12) return `${months} tháng`;
+  const years = Math.floor(months / 12);
+  const remainingMonths = months % 12;
+  return remainingMonths ? `${years} tuổi ${remainingMonths} tháng` : `${years} tuổi`;
+}
+
+function mapPet(pet) {
+  const notes = pet.notes || '';
+  const breedMatch = notes.match(/Giống:\s*([^.|]+)/i);
+  const allergyMatch = notes.match(/Dị ứng:\s*(.+)$/i);
+  const isDog = String(pet.species || '').toLowerCase().includes('chó');
+
+  return {
+    id: pet.id,
+    name: pet.name,
+    species: pet.species,
+    breed: breedMatch?.[1]?.trim() || 'Chưa cập nhật',
+    gender: pet.gender || 'Chưa cập nhật',
+    age: formatAge(pet.dateOfBirth),
+    weight: pet.weight ? `${Number(pet.weight)} kg` : 'Chưa cập nhật',
+    avatarUrl: pet.photoUrl || (isDog ? FALLBACK_DOG_AVATAR : FALLBACK_CAT_AVATAR),
+    lastVaccine: 'Chưa cập nhật',
+    allergies: allergyMatch?.[1]?.trim() || notes || 'Không có',
+    status: pet.isActive === false ? 'Ngừng theo dõi' : 'Khỏe mạnh',
+  };
+}
+
+function formatSlotTime(value) {
+  if (!value) return '--:--';
+  return new Date(value).toLocaleTimeString('vi-VN', {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function mapBooking(booking, pets) {
+  const items = booking.items || [];
+  const firstItem = items[0];
+  const pet = pets.find(p => p.id === booking.petId);
+  const startTime = firstItem?.startTime ? new Date(firstItem.startTime) : null;
+
+  return {
+    id: booking.id,
+    code: `BK-${String(booking.id).slice(0, 8).toUpperCase()}`,
+    petName: pet?.name || 'Thú cưng',
+    service: items.map(item => item.serviceName).filter(Boolean).join(', ') || 'Dịch vụ khám',
+    date: startTime ? startTime.toLocaleDateString('vi-VN') : 'Chưa xác định',
+    time: formatSlotTime(firstItem?.startTime),
+    doctor: firstItem?.staffId ? `NV ${String(firstItem.staffId).slice(0, 8)}` : 'Chưa phân công',
+    status: booking.status || 'PENDING',
+    paymentStatus: booking.paymentStatus || 'UNPAID',
+    promotionCode: booking.promotionCode || '',
+    discountAmount: Number(booking.discountAmount || 0),
+    staffNote: booking.staffNote || '',
+    rawAmount: Number(booking.totalAmount || 0),
+    price: booking.totalAmount != null
+      ? `${Number(booking.totalAmount).toLocaleString('vi-VN')} đ`
+      : '—',
+  };
+}
+
 export default function CustomerDashboard({ user, token, activeTab, setActiveTab, onApiLog }) {
   // My Pets state
-  const [pets, setPets] = useState([
-    {
-      id: 'p-1',
-      name: 'Lu Lu',
-      species: 'Chó',
-      breed: 'Siberian Husky',
-      gender: 'Đực',
-      age: '2 tuổi',
-      weight: '23.5 kg',
-      avatarUrl: 'https://images.unsplash.com/photo-1605568427561-40dd23c2acea?w=400&auto=format&fit=crop&q=80',
-      lastVaccine: '15/09/2026',
-      allergies: 'Không có dị ứng',
-      status: 'Khỏe mạnh'
-    },
-    {
-      id: 'p-2',
-      name: 'Miu Miu',
-      species: 'Mèo',
-      breed: 'British Shorthair (Mèo Anh lông ngắn)',
-      gender: 'Cái',
-      age: '1.5 tuổi',
-      weight: '4.2 kg',
-      avatarUrl: 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=400&auto=format&fit=crop&q=80',
-      lastVaccine: '20/08/2026',
-      allergies: 'Dị ứng thức ăn có thịt bò',
-      status: 'Cần kiểm tra tai'
-    }
-  ]);
+  const [pets, setPets] = useState([]);
+  const [petsLoading, setPetsLoading] = useState(false);
+  const [petError, setPetError] = useState('');
 
   const [showAddPetModal, setShowAddPetModal] = useState(false);
   const [newPet, setNewPet] = useState({
@@ -45,46 +137,33 @@ export default function CustomerDashboard({ user, token, activeTab, setActiveTab
     species: 'Chó',
     breed: '',
     gender: 'Đực',
-    age: '',
+    dateOfBirth: '',
     weight: '',
     allergies: ''
   });
+  const [savingPet, setSavingPet] = useState(false);
 
   // Bookings state
-  const [bookings, setBookings] = useState([
-    {
-      id: 'BK-1082',
-      petName: 'Lu Lu',
-      service: 'Khám tổng quát & Tiêm phòng dại',
-      branch: 'Chi nhánh 1 - 128 Nguyễn Trãi, Ba Đình',
-      doctor: 'BS. Lê Minh Hoàng',
-      date: '28/10/2026',
-      time: '09:30',
-      status: 'CONFIRMED',
-      price: '350.000 đ'
-    },
-    {
-      id: 'BK-1049',
-      petName: 'Miu Miu',
-      service: 'Tắm spa & Vệ sinh tai khử mùi',
-      branch: 'Chi nhánh 2 - 45 Hai Bà Trưng, Quận 1',
-      doctor: 'KTV. Trần Thảo Vy',
-      date: '15/10/2026',
-      time: '14:00',
-      status: 'COMPLETED',
-      price: '280.000 đ'
-    }
-  ]);
+  const [bookings, setBookings] = useState([]);
+  const [bookingsLoading, setBookingsLoading] = useState(false);
+  const [bookingError, setBookingError] = useState('');
+  const [services, setServices] = useState([]);
+  const [availableSlots, setAvailableSlots] = useState([]);
+  const [slotsLoading, setSlotsLoading] = useState(false);
+  const [savingBooking, setSavingBooking] = useState(false);
+  const [paymentBooking, setPaymentBooking] = useState(null);
+  const [promotionCheck, setPromotionCheck] = useState(null);
+  const [checkingPromotion, setCheckingPromotion] = useState(false);
 
   const [showAddBookingModal, setShowAddBookingModal] = useState(false);
   const [newBooking, setNewBooking] = useState({
-    petId: 'p-1',
-    service: 'Khám tổng quát & Tư vấn dinh dưỡng',
-    branch: 'Chi nhánh 1 - 128 Nguyễn Trãi, Ba Đình',
-    doctor: 'BS. Lê Minh Hoàng',
-    date: '2026-10-30',
-    time: '10:00',
-    note: ''
+    petId: '',
+    serviceId: '',
+    date: tomorrowISODate(),
+    timeSlotId: '',
+    staffId: '',
+    note: '',
+    promotionCode: ''
   });
 
   // Loyalty state
@@ -135,53 +214,218 @@ export default function CustomerDashboard({ user, token, activeTab, setActiveTab
     }
   };
 
+  const fetchPets = async () => {
+    if (!token) return;
+    setPetsLoading(true);
+    setPetError('');
+    try {
+      const data = await clinicApi.listPets(token);
+      setPets((data?.content || []).map(mapPet));
+    } catch (err) {
+      setPetError(err.message || 'Không tải được danh sách thú cưng.');
+    } finally {
+      setPetsLoading(false);
+    }
+  };
+
+  const fetchServices = async () => {
+    if (!token) return;
+    try {
+      const data = await clinicApi.listServices(token);
+      setServices((data?.content || []).map(service => ({
+        id: service.id,
+        name: service.name,
+        description: service.description,
+        basePrice: Number(service.basePrice || 0),
+        durationMinutes: service.durationMinutes || 60,
+      })));
+    } catch (err) {
+      setBookingError(err.message || 'Không tải được danh mục dịch vụ.');
+    }
+  };
+
+  const fetchBookings = async () => {
+    if (!token) return;
+    setBookingsLoading(true);
+    setBookingError('');
+    try {
+      const data = await clinicApi.listBookings(token);
+      setBookings(data?.content || []);
+    } catch (err) {
+      setBookingError(err.message || 'Không tải được lịch hẹn.');
+    } finally {
+      setBookingsLoading(false);
+    }
+  };
+
+  const fetchSlots = async (date, serviceId) => {
+    if (!token || !date || !serviceId) {
+      setAvailableSlots([]);
+      return;
+    }
+
+    setSlotsLoading(true);
+    setBookingError('');
+    try {
+      const data = await clinicApi.availableSlots(
+        { date, serviceId, includeBooked: false },
+        token
+      );
+      const slots = (data?.staff || []).flatMap(group =>
+        (group.slots || [])
+          .filter(slot => slot.available)
+          .map(slot => ({ ...slot, staffId: group.staffId }))
+      );
+
+      setAvailableSlots(slots);
+      setNewBooking(prev => {
+        const stillAvailable = slots.find(
+          slot => slot.slotId === prev.timeSlotId && slot.staffId === prev.staffId
+        );
+        const chosen = stillAvailable || slots[0];
+        return {
+          ...prev,
+          timeSlotId: chosen?.slotId || '',
+          staffId: chosen?.staffId || '',
+        };
+      });
+    } catch (err) {
+      setAvailableSlots([]);
+      setBookingError(err.message || 'Không tải được khung giờ trống.');
+    } finally {
+      setSlotsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!token) return;
+    fetchPets();
+    fetchServices();
+  }, [token]);
+
   useEffect(() => {
     if (activeTab === 'loyalty') {
       fetchLoyalty();
     }
-  }, [activeTab]);
+    if (activeTab === 'bookings') {
+      fetchBookings();
+    }
+  }, [activeTab, token]);
+
+  useEffect(() => {
+    if (!showAddBookingModal) return;
+    if (!newBooking.date || !newBooking.serviceId) {
+      setAvailableSlots([]);
+      return;
+    }
+    fetchSlots(newBooking.date, newBooking.serviceId);
+  }, [showAddBookingModal, newBooking.date, newBooking.serviceId]);
+
+  useEffect(() => {
+    if (showAddBookingModal && !newBooking.serviceId && services.length > 0) {
+      setNewBooking(prev => ({ ...prev, serviceId: services[0].id }));
+    }
+  }, [showAddBookingModal, services, newBooking.serviceId]);
+
+  const openBookingModal = (petId) => {
+    if (pets.length === 0) {
+      alert('Vui lòng thêm thú cưng trước khi đặt lịch.');
+      return;
+    }
+
+    setNewBooking({
+      petId: petId || pets[0].id,
+      serviceId: services[0]?.id || '',
+      date: tomorrowISODate(),
+      timeSlotId: '',
+      staffId: '',
+      note: '',
+      promotionCode: '',
+    });
+    setPromotionCheck(null);
+    setBookingError('');
+    setShowAddBookingModal(true);
+  };
+
+  const handleCheckPromotion = async () => {
+    const code = newBooking.promotionCode.trim();
+    if (!code) {
+      setPromotionCheck(null);
+      return;
+    }
+    const service = services.find(item => item.id === newBooking.serviceId);
+    setCheckingPromotion(true);
+    try {
+      const result = await clinicApi.validatePromotion(
+        code, Number(service?.basePrice || 0), token);
+      setPromotionCheck(result);
+    } catch (err) {
+      setPromotionCheck({ valid: false, message: err.message || 'Không kiểm tra được mã giảm giá.' });
+    } finally {
+      setCheckingPromotion(false);
+    }
+  };
 
   // Handle Add Pet
-  const handleAddPet = (e) => {
+  const handleAddPet = async (e) => {
     e.preventDefault();
-    if (!newPet.name.trim()) return;
-    const petItem = {
-      id: `p-${Date.now()}`,
-      name: newPet.name,
-      species: newPet.species,
-      breed: newPet.breed || (newPet.species === 'Chó' ? 'Golden Retriever' : 'Mèo ta'),
-      gender: newPet.gender,
-      age: newPet.age || '1 tuổi',
-      weight: newPet.weight ? `${newPet.weight} kg` : '5 kg',
-      avatarUrl: newPet.species === 'Chó'
-        ? 'https://images.unsplash.com/photo-1552053831-71594a27632d?w=400&auto=format&fit=crop&q=80'
-        : 'https://images.unsplash.com/photo-1533738363-b7f9aef128ce?w=400&auto=format&fit=crop&q=80',
-      lastVaccine: 'Chưa cập nhật',
-      allergies: newPet.allergies || 'Không có',
-      status: 'Khỏe mạnh'
-    };
-    setPets([petItem, ...pets]);
-    setShowAddPetModal(false);
-    setNewPet({ name: '', species: 'Chó', breed: '', gender: 'Đực', age: '', weight: '', allergies: '' });
+    if (!newPet.name.trim() || savingPet) return;
+
+    setSavingPet(true);
+    setPetError('');
+    try {
+      const pet = await clinicApi.createPet({
+        name: newPet.name.trim(),
+        species: newPet.species,
+        gender: newPet.gender,
+        dateOfBirth: newPet.dateOfBirth || null,
+        weight: newPet.weight ? Number(newPet.weight) : null,
+        notes: `Giống: ${newPet.breed.trim() || 'Chưa cập nhật'}. Dị ứng: ${newPet.allergies.trim() || 'Không có'}`,
+      }, token);
+      setPets(prev => [mapPet(pet), ...prev]);
+      setShowAddPetModal(false);
+      setNewPet({ name: '', species: 'Chó', breed: '', gender: 'Đực', dateOfBirth: '', weight: '', allergies: '' });
+    } catch (err) {
+      setPetError(err.message || 'Không lưu được hồ sơ thú cưng.');
+    } finally {
+      setSavingPet(false);
+    }
   };
 
   // Handle Add Booking
-  const handleAddBooking = (e) => {
+  const handleAddBooking = async (e) => {
     e.preventDefault();
-    const selectedPet = pets.find(p => p.id === newBooking.petId) || pets[0];
-    const bookingItem = {
-      id: `BK-${Math.floor(1000 + Math.random() * 9000)}`,
-      petName: selectedPet?.name || 'Thú cưng',
-      service: newBooking.service,
-      branch: newBooking.branch,
-      doctor: newBooking.doctor,
-      date: newBooking.date,
-      time: newBooking.time,
-      status: 'PENDING',
-      price: '300.000 đ'
-    };
-    setBookings([bookingItem, ...bookings]);
-    setShowAddBookingModal(false);
+    if (savingBooking) return;
+
+    if (!newBooking.petId || !newBooking.serviceId || !newBooking.timeSlotId) {
+      setBookingError('Vui lòng chọn thú cưng, dịch vụ và khung giờ trống.');
+      return;
+    }
+
+    setSavingBooking(true);
+    setBookingError('');
+    try {
+      await clinicApi.createBooking({
+        petId: newBooking.petId,
+        notes: newBooking.note.trim() || null,
+        promotionCode: newBooking.promotionCode.trim() || null,
+        items: [{
+          serviceId: newBooking.serviceId,
+          timeSlotId: newBooking.timeSlotId,
+          staffId: newBooking.staffId || null,
+        }],
+      }, token);
+      setShowAddBookingModal(false);
+      setNewBooking(prev => ({
+        ...prev, timeSlotId: '', staffId: '', note: '', promotionCode: '',
+      }));
+      setPromotionCheck(null);
+      await fetchBookings();
+    } catch (err) {
+      setBookingError(err.message || 'Không đặt được lịch hẹn.');
+    } finally {
+      setSavingBooking(false);
+    }
   };
 
   // Handle AI Chat submission
@@ -241,6 +485,9 @@ export default function CustomerDashboard({ user, token, activeTab, setActiveTab
     alert(`Chúc mừng bạn đã đổi thành công "${voucherName}"! Mã ưu đãi đã được lưu vào ví voucher.`);
   };
 
+  const bookingRows = bookings.map(booking => mapBooking(booking, pets));
+  const today = toISODate(new Date());
+
   return (
     <div className="space-y-6">
       {/* TAB 1: THÚ CƯNG CỦA TÔI */}
@@ -266,6 +513,28 @@ export default function CustomerDashboard({ user, token, activeTab, setActiveTab
               <span>Thêm thú cưng mới</span>
             </button>
           </div>
+
+          {petError && (
+            <div className="flex items-center space-x-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-700">
+              <AlertCircle className="w-4 h-4 flex-shrink-0" />
+              <span>{petError}</span>
+            </div>
+          )}
+
+          {petsLoading && (
+            <div className="flex items-center justify-center rounded-2xl border border-slate-200 bg-white p-8 text-xs text-slate-500">
+              <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+              Đang tải hồ sơ thú cưng...
+            </div>
+          )}
+
+          {!petsLoading && pets.length === 0 && (
+            <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center">
+              <div className="text-3xl">🐾</div>
+              <p className="mt-2 text-sm font-semibold text-slate-800">Chưa có hồ sơ thú cưng</p>
+              <p className="mt-1 text-xs text-slate-500">Bấm “Thêm thú cưng mới” để tạo hồ sơ đầu tiên.</p>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             {pets.map(pet => (
@@ -316,10 +585,7 @@ export default function CustomerDashboard({ user, token, activeTab, setActiveTab
 
                 <div className="mt-5 pt-3 border-t border-slate-100 flex items-center space-x-2">
                   <button
-                    onClick={() => {
-                      setNewBooking(prev => ({ ...prev, petId: pet.id }));
-                      setShowAddBookingModal(true);
-                    }}
+                    onClick={() => openBookingModal(pet.id)}
                     className="flex-1 py-2 text-xs font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-xl transition text-center"
                   >
                     Đặt lịch khám cho bé
@@ -349,6 +615,11 @@ export default function CustomerDashboard({ user, token, activeTab, setActiveTab
                   </button>
                 </div>
                 <form onSubmit={handleAddPet} className="space-y-3.5 text-xs">
+                  {petError && (
+                    <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-rose-700">
+                      {petError}
+                    </div>
+                  )}
                   <div>
                     <label className="font-semibold text-slate-700 block mb-1">Tên thú cưng *</label>
                     <input
@@ -398,12 +669,12 @@ export default function CustomerDashboard({ user, token, activeTab, setActiveTab
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="font-semibold text-slate-700 block mb-1">Tuổi</label>
+                      <label className="font-semibold text-slate-700 block mb-1">Ngày sinh</label>
                       <input
-                        type="text"
-                        placeholder="Ví dụ: 8 tháng, 2 tuổi"
-                        value={newPet.age}
-                        onChange={e => setNewPet({ ...newPet, age: e.target.value })}
+                        type="date"
+                        max={today}
+                        value={newPet.dateOfBirth}
+                        onChange={e => setNewPet({ ...newPet, dateOfBirth: e.target.value })}
                         className="w-full h-9 px-3 border border-slate-200 rounded-xl focus:border-blue-500 focus:outline-none"
                       />
                     </div>
@@ -439,9 +710,10 @@ export default function CustomerDashboard({ user, token, activeTab, setActiveTab
                     </button>
                     <button
                       type="submit"
-                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold shadow-xs"
+                      disabled={savingPet}
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed text-white rounded-xl font-semibold shadow-xs"
                     >
-                      Lưu hồ sơ
+                      {savingPet ? 'Đang lưu...' : 'Lưu hồ sơ'}
                     </button>
                   </div>
                 </form>
@@ -467,13 +739,20 @@ export default function CustomerDashboard({ user, token, activeTab, setActiveTab
               </p>
             </div>
             <button
-              onClick={() => setShowAddBookingModal(true)}
+              onClick={() => openBookingModal()}
               className="inline-flex items-center space-x-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold shadow-sm transition active:scale-95"
             >
               <Plus className="w-4 h-4" />
               <span>Đặt lịch hẹn mới</span>
             </button>
           </div>
+
+          {bookingError && (
+            <div className="flex items-center space-x-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-700">
+              <AlertCircle className="w-4 h-4 flex-shrink-0" />
+              <span>{bookingError}</span>
+            </div>
+          )}
 
           <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
             <div className="overflow-x-auto">
@@ -486,33 +765,72 @@ export default function CustomerDashboard({ user, token, activeTab, setActiveTab
                     <th className="py-3 px-4 font-semibold">Thời gian</th>
                     <th className="py-3 px-4 font-semibold">Bác sĩ phụ trách</th>
                     <th className="py-3 px-4 font-semibold">Trạng thái</th>
+                    <th className="py-3 px-4 font-semibold">Thanh toán</th>
                     <th className="py-3 px-4 font-semibold">Phí ước tính</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {bookings.map(b => (
+                  {bookingsLoading && (
+                    <tr>
+                      <td colSpan={8} className="py-8 text-center text-slate-500">
+                        <RefreshCw className="w-4 h-4 mr-2 inline animate-spin" />
+                        Đang tải lịch hẹn...
+                      </td>
+                    </tr>
+                  )}
+                  {!bookingsLoading && bookingRows.length === 0 && (
+                    <tr>
+                      <td colSpan={8} className="py-8 text-center text-slate-500">
+                        Chưa có lịch hẹn nào. Bấm “Đặt lịch hẹn mới” để tạo lịch.
+                      </td>
+                    </tr>
+                  )}
+                  {!bookingsLoading && bookingRows.map(b => (
                     <tr key={b.id} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="py-3.5 px-4 font-mono font-semibold text-blue-600">{b.id}</td>
+                      <td className="py-3.5 px-4 font-mono font-semibold text-blue-600">{b.code}</td>
                       <td className="py-3.5 px-4 font-medium text-slate-900">{b.petName}</td>
-                      <td className="py-3.5 px-4 text-slate-700">{b.service}</td>
+                      <td className="py-3.5 px-4 text-slate-700">
+                        <div>{b.service}</div>
+                        {b.staffNote && (
+                          <div className="mt-1 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1">
+                            Lễ tân: {b.staffNote}
+                          </div>
+                        )}
+                      </td>
                       <td className="py-3.5 px-4 text-slate-600">
                         <div className="font-medium text-slate-800">{b.time}</div>
                         <div className="text-[11px] text-slate-400">{b.date}</div>
                       </td>
                       <td className="py-3.5 px-4 text-slate-600">{b.doctor}</td>
                       <td className="py-3.5 px-4">
-                        <span
-                          className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${b.status === 'CONFIRMED'
-                            ? 'bg-blue-50 text-blue-700 border border-blue-200'
-                            : b.status === 'COMPLETED'
-                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                              : 'bg-amber-50 text-amber-700 border border-amber-200'
-                            }`}
-                        >
-                          {b.status === 'CONFIRMED' ? 'Đã xác nhận' : b.status === 'COMPLETED' ? 'Đã hoàn tất' : 'Chờ duyệt'}
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${BOOKING_STATUS_STYLES[b.status] || BOOKING_STATUS_STYLES.PENDING}`}>
+                          {BOOKING_STATUS_LABELS[b.status] || b.status}
                         </span>
                       </td>
-                      <td className="py-3.5 px-4 font-semibold text-slate-900">{b.price}</td>
+                      <td className="py-3.5 px-4">
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${PAYMENT_STATUS_STYLES[b.paymentStatus] || PAYMENT_STATUS_STYLES.UNPAID}`}>
+                          {PAYMENT_STATUS_LABELS[b.paymentStatus] || b.paymentStatus}
+                        </span>
+                        {b.paymentStatus !== 'PAID' && b.status !== 'CANCELLED' && (
+                          <button
+                            type="button"
+                            onClick={() => setPaymentBooking({ id: b.id, code: b.code, amount: b.rawAmount })}
+                            className="mt-1.5 w-full inline-flex items-center justify-center space-x-1 px-2 py-1 rounded-lg bg-sky-600 hover:bg-sky-700 text-white text-[10px] font-semibold transition"
+                          >
+                            <QrCode className="w-3 h-3" />
+                            <span>Thanh toán online</span>
+                          </button>
+                        )}
+                      </td>
+                      <td className="py-3.5 px-4 font-semibold text-slate-900">
+                        <div>{b.price}</div>
+                        {b.discountAmount > 0 && (
+                          <div className="text-[11px] font-medium text-emerald-600">
+                            -{b.discountAmount.toLocaleString('vi-VN')} đ
+                            {b.promotionCode ? ` (${b.promotionCode})` : ''}
+                          </div>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -534,67 +852,83 @@ export default function CustomerDashboard({ user, token, activeTab, setActiveTab
                   </button>
                 </div>
                 <form onSubmit={handleAddBooking} className="space-y-3.5 text-xs">
+                  {bookingError && (
+                    <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-rose-700">
+                      {bookingError}
+                    </div>
+                  )}
                   <div>
                     <label className="font-semibold text-slate-700 block mb-1">Chọn thú cưng *</label>
                     <select
                       value={newBooking.petId}
                       onChange={e => setNewBooking({ ...newBooking, petId: e.target.value })}
+                      required
                       className="w-full h-9 px-3 border border-slate-200 rounded-xl focus:border-blue-500 focus:outline-none"
                     >
                       {pets.map(p => (
-                        <option key={p.id} value={p.id}>{p.name} ({p.species} - {p.breed})</option>
+                        <option key={p.id} value={p.id}>{p.name} ({p.species})</option>
                       ))}
                     </select>
                   </div>
                   <div>
-                    <label className="font-semibold text-slate-700 block mb-1">Dịch vụ yêu cầu</label>
+                    <label className="font-semibold text-slate-700 block mb-1">Dịch vụ yêu cầu *</label>
                     <select
-                      value={newBooking.service}
-                      onChange={e => setNewBooking({ ...newBooking, service: e.target.value })}
+                      value={newBooking.serviceId}
+                      onChange={e => {
+                        setNewBooking({ ...newBooking, serviceId: e.target.value });
+                        setPromotionCheck(null);
+                      }}
+                      required
                       className="w-full h-9 px-3 border border-slate-200 rounded-xl focus:border-blue-500 focus:outline-none"
                     >
-                      <option value="Khám tổng quát & Tư vấn dinh dưỡng">Khám tổng quát & Tư vấn dinh dưỡng</option>
-                      <option value="Tiêm phòng định kỳ (Dại / 7 bệnh)">Tiêm phòng định kỳ (Dại / 7 bệnh)</option>
-                      <option value="Tắm spa & Vệ sinh tai cắt móng">Tắm spa & Vệ sinh tai cắt móng</option>
-                      <option value="Siêu âm / Xét nghiệm máu chẩn đoán">Siêu âm / Xét nghiệm máu chẩn đoán</option>
-                      <option value="Cạo vôi răng & Vệ sinh nha khoa thú cưng">Cạo vôi răng & Vệ sinh nha khoa</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="font-semibold text-slate-700 block mb-1">Chi nhánh phòng khám</label>
-                    <select
-                      value={newBooking.branch}
-                      onChange={e => setNewBooking({ ...newBooking, branch: e.target.value })}
-                      className="w-full h-9 px-3 border border-slate-200 rounded-xl focus:border-blue-500 focus:outline-none"
-                    >
-                      <option value="Chi nhánh 1 - 128 Nguyễn Trãi, Ba Đình">Chi nhánh 1 - 128 Nguyễn Trãi, Ba Đình, Hà Nội</option>
-                      <option value="Chi nhánh 2 - 45 Hai Bà Trưng, Quận 1">Chi nhánh 2 - 45 Hai Bà Trưng, Quận 1, TP.HCM</option>
+                      {services.length === 0 && <option value="">Chưa có dịch vụ</option>}
+                      {services.map(service => (
+                        <option key={service.id} value={service.id}>
+                          {service.name} ({service.durationMinutes} phút)
+                        </option>
+                      ))}
                     </select>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="font-semibold text-slate-700 block mb-1">Ngày hẹn</label>
+                      <label className="font-semibold text-slate-700 block mb-1">Ngày hẹn *</label>
                       <input
                         type="date"
                         required
+                        min={today}
                         value={newBooking.date}
                         onChange={e => setNewBooking({ ...newBooking, date: e.target.value })}
                         className="w-full h-9 px-3 border border-slate-200 rounded-xl focus:border-blue-500 focus:outline-none"
                       />
                     </div>
                     <div>
-                      <label className="font-semibold text-slate-700 block mb-1">Khung giờ</label>
+                      <label className="font-semibold text-slate-700 block mb-1">Khung giờ trống *</label>
                       <select
-                        value={newBooking.time}
-                        onChange={e => setNewBooking({ ...newBooking, time: e.target.value })}
-                        className="w-full h-9 px-3 border border-slate-200 rounded-xl focus:border-blue-500 focus:outline-none"
+                        value={newBooking.timeSlotId}
+                        onChange={e => {
+                          const slot = availableSlots.find(item => item.slotId === e.target.value);
+                          setNewBooking({
+                            ...newBooking,
+                            timeSlotId: e.target.value,
+                            staffId: slot?.staffId || '',
+                          });
+                        }}
+                        required
+                        disabled={slotsLoading || availableSlots.length === 0}
+                        className="w-full h-9 px-3 border border-slate-200 rounded-xl focus:border-blue-500 focus:outline-none disabled:bg-slate-100 disabled:text-slate-400"
                       >
-                        <option value="08:30">08:30 sáng</option>
-                        <option value="09:30">09:30 sáng</option>
-                        <option value="10:30">10:30 sáng</option>
-                        <option value="14:00">14:00 chiều</option>
-                        <option value="15:30">15:30 chiều</option>
-                        <option value="17:00">17:00 chiều</option>
+                        <option value="">
+                          {slotsLoading
+                            ? 'Đang tải khung giờ...'
+                            : availableSlots.length === 0
+                              ? 'Không có khung giờ trống'
+                              : 'Chọn khung giờ'}
+                        </option>
+                        {availableSlots.map(slot => (
+                          <option key={slot.slotId} value={slot.slotId}>
+                            {formatSlotTime(slot.startTime)} - {formatSlotTime(slot.endTime)}
+                          </option>
+                        ))}
                       </select>
                     </div>
                   </div>
@@ -608,6 +942,39 @@ export default function CustomerDashboard({ user, token, activeTab, setActiveTab
                       className="w-full p-2.5 border border-slate-200 rounded-xl focus:border-blue-500 focus:outline-none"
                     />
                   </div>
+                  <div className="rounded-xl border border-emerald-100 bg-emerald-50/60 p-3 space-y-2">
+                    <label className="font-semibold text-slate-700 block">Mã giảm giá (không bắt buộc)</label>
+                    <div className="flex space-x-2">
+                      <input
+                        type="text"
+                        value={newBooking.promotionCode}
+                        onChange={e => {
+                          setNewBooking({ ...newBooking, promotionCode: e.target.value });
+                          setPromotionCheck(null);
+                        }}
+                        placeholder="VD: WELCOME10"
+                        className="flex-1 h-9 px-3 border border-slate-200 rounded-xl focus:border-blue-500 focus:outline-none uppercase"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleCheckPromotion}
+                        disabled={checkingPromotion || !newBooking.promotionCode.trim()}
+                        className="px-3 h-9 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-xl font-semibold"
+                      >
+                        {checkingPromotion ? 'Đang kiểm tra...' : 'Áp dụng'}
+                      </button>
+                    </div>
+                    {promotionCheck && (
+                      <p className={`text-[11px] ${promotionCheck.valid ? 'text-emerald-700' : 'text-rose-600'}`}>
+                        {promotionCheck.valid
+                          ? `Giảm ${Number(promotionCheck.discountAmount || 0).toLocaleString('vi-VN')} đ, còn ${Number(promotionCheck.finalAmount || 0).toLocaleString('vi-VN')} đ`
+                          : promotionCheck.message}
+                      </p>
+                    )}
+                    <p className="text-[10px] text-slate-400">
+                      Hệ thống tự kiểm tra và tính lại mã khi bạn xác nhận đặt lịch.
+                    </p>
+                  </div>
                   <div className="pt-2 flex justify-end space-x-2">
                     <button
                       type="button"
@@ -618,15 +985,26 @@ export default function CustomerDashboard({ user, token, activeTab, setActiveTab
                     </button>
                     <button
                       type="submit"
-                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold shadow-xs"
+                      disabled={savingBooking || slotsLoading || !newBooking.timeSlotId}
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed text-white rounded-xl font-semibold shadow-xs"
                     >
-                      Xác nhận đặt lịch
+                      {savingBooking ? 'Đang đặt lịch...' : 'Xác nhận đặt lịch'}
                     </button>
                   </div>
                 </form>
               </div>
             </div>
           )}
+
+          <VietQrPaymentModal
+            open={Boolean(paymentBooking)}
+            booking={paymentBooking}
+            onClose={() => setPaymentBooking(null)}
+            onPaid={async () => {
+              setPaymentBooking(null);
+              await fetchBookings();
+            }}
+          />
         </div>
       )}
 

@@ -104,6 +104,9 @@ app:
       # Explicit origins. "*" is tolerated for local development but logs a warning.
       allowed-origin-patterns: ${CORS_ALLOWED_ORIGIN_PATTERNS:http://localhost:*,http://127.0.0.1:*}
       allow-credentials: ${CORS_ALLOW_CREDENTIALS:true}
+  internal:
+    # Shared secret used by payment-service to fetch the authoritative amount.
+    api-key: ${INTERNAL_API_KEY:petcare_internal_dev_key}
   ai:
     agent-url: ${AI_AGENT_URL:http://localhost:8001}
     rag-url: ${AI_RAG_URL:http://localhost:8002}

@@ -43,13 +43,13 @@ public class NotificationController {
         return ApiResponse.ok(notificationService.get(userId, id));
     }
 
-    @PatchMapping
+    @PatchMapping("/{id}")
     public ApiResponse<NotificationResponse> markRead(
             @RequestAttribute("userId") UUID userId, @PathVariable UUID id) {
         return ApiResponse.ok(notificationService.markRead(userId, id));
     }
 
-    @PatchMapping
+    @PatchMapping("/read-all")
     public ApiResponse<Map<String, Integer>> markAllRead(@RequestAttribute("userId") UUID userId) {
         return ApiResponse.ok(Map.of("updated", notificationService.markAllRead(userId)));
     }

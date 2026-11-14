@@ -11,6 +11,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.UUID;
 
 @Entity
@@ -41,6 +42,25 @@ public class Booking extends BaseEntity {
 
     @Column(name = "discount_amount", nullable = false)
     private BigDecimal discountAmount = BigDecimal.ZERO;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "payment_status", nullable = false, length = 20)
+    private PaymentStatus paymentStatus = PaymentStatus.UNPAID;
+
+    @Column(name = "payment_method", length = 20)
+    private String paymentMethod;
+
+    @Column(name = "paid_at")
+    private Instant paidAt;
+
+    @Column(name = "payment_order_code", length = 50)
+    private String paymentOrderCode;
+
+    @Column(name = "staff_note", columnDefinition = "text")
+    private String staffNote;
+
+    @Column(name = "staff_note_at")
+    private Instant staffNoteAt;
 
     private String notes;
 }

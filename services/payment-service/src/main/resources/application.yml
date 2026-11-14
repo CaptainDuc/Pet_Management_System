@@ -22,6 +22,23 @@ spring:
 server:
   port: ${PAYMENT_SERVICE_PORT:8082}
 
+app:
+  core:
+    base-url: ${CORE_SERVICE_URL:http://localhost:8080}
+  internal:
+    api-key: ${INTERNAL_API_KEY:petcare_internal_dev_key}
+  outbox:
+    poll-interval-ms: ${PAYMENT_OUTBOX_POLL_MS:2000}
+  sepay:
+    api-key: ${SEPAY_API_KEY:sepay_local_dev_key}
+    bank-account-number: ${BANK_ACCOUNT_NUMBER:0123456789}
+    bank-code: ${BANK_CODE:MB}
+    bank-account-name: ${BANK_ACCOUNT_NAME:PETCARE SERVICE}
+    payment-prefix: ${PAYMENT_PREFIX:DH}
+    qr-base-url: ${SEPAY_QR_BASE_URL:https://qr.sepay.vn/img}
+  cors:
+    allowed-origin-patterns: ${CORS_ALLOWED_ORIGIN_PATTERNS:http://localhost:*,http://127.0.0.1:*}
+
 management:
   endpoints:
     web:

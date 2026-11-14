@@ -23,6 +23,8 @@ public final class RabbitMQQueues {
     public static final String BOOKING_CANCELLED = "booking.cancelled";
     public static final String BOOKING_COMPLETED = "booking.completed";
     public static final String BOOKING_STARTED   = "booking.started";
+    public static final String BOOKING_PAID      = "booking.paid";
+    public static final String BOOKING_ISSUE     = "booking.issue";
 
     // ─── Invoice ───────────────────────────────────────────────────────────────────
     public static final String INVOICE_EXCHANGE = "petcare.invoice";

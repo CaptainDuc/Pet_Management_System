@@ -21,7 +21,7 @@ spring:
         - id: payment-service
           uri: ${PAYMENT_SERVICE_URL:http://localhost:8082}
           predicates:
-            - Path=/api/v1/payments/**
+            - Path=/api/v1/payments/**,/api/v1/orders/**,/api/v1/webhooks/**
         - id: notification-service
           uri: ${NOTIFICATION_SERVICE_URL:http://localhost:8083}
           predicates:

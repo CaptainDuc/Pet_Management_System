@@ -16,6 +16,7 @@ import VetDashboard from './pages/dashboard/VetDashboard';
 import StaffDashboard from './pages/dashboard/StaffDashboard';
 import OwnerDashboard from './pages/dashboard/OwnerDashboard';
 import ProfileTab from './pages/dashboard/ProfileTab';
+import NotificationBell from './components/NotificationBell';
 
 // Role configurations
 const ROLE_CONFIGS = {
@@ -58,6 +59,7 @@ const ROLE_CONFIGS = {
     defaultTab: 'reception',
     tabs: [
       { id: 'reception', label: 'Bàn tiếp đón & Check-in', icon: '🛎️' },
+      { id: 'bookings', label: 'Lịch hẹn', icon: '📅' },
       { id: 'invoices', label: 'Quầy Thu ngân & Hóa đơn', icon: '🧾' },
       { id: 'customers', label: 'Danh bạ Khách hàng', icon: '👥' },
       { id: 'profile', label: 'Hồ sơ Nhân viên', icon: '👤' }
@@ -414,7 +416,9 @@ function AppContent({ initialScreen = 'login' }) {
                 </span>
               </span>
             </div>
-
+            <div className="flex items-center space-x-2">
+              <NotificationBell token={token} />
+            </div>
           </header>
 
           {/* Dynamic Role Dashboard Body */}
