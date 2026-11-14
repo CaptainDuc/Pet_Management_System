@@ -36,4 +36,7 @@ Thumbs.db
 logs/
 
 .github
+
+web/dist/
+.github
 .agents

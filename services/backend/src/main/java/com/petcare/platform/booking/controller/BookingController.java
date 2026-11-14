@@ -4,6 +4,7 @@ import com.petcare.platform.booking.domain.BookingStatus;
 import com.petcare.platform.booking.dto.BookingResponse;
 import com.petcare.platform.booking.dto.CancelRequest;
 import com.petcare.platform.booking.dto.CreateBookingRequest;
+import com.petcare.platform.booking.dto.ReportIssueRequest;
 import com.petcare.platform.booking.service.BookingService;
 import com.petcare.platform.common.dto.ApiResponse;
 import com.petcare.platform.common.dto.PageResponse;
@@ -90,5 +91,22 @@ public class BookingController {
             @Valid @RequestBody CancelRequest request) {
         return ResponseEntity.ok(ApiResponse.ok(
                 bookingService.cancel(principal.getId(), id, request.reason())));
+    }
+
+    @PostMapping("/{id}/mark-paid")
+    @PreAuthorize("hasAuthority('booking:update')")
+    public ResponseEntity<ApiResponse<BookingResponse>> markPaid(
+            @AuthenticationPrincipal UserPrincipal principal, @PathVariable UUID id) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                bookingService.markPaidAtCounter(principal.getId(), id)));
+    }
+
+    @PostMapping("/{id}/report")
+    @PreAuthorize("hasAuthority('booking:update')")
+    public ResponseEntity<ApiResponse<BookingResponse>> report(
+            @AuthenticationPrincipal UserPrincipal principal, @PathVariable UUID id,
+            @Valid @RequestBody ReportIssueRequest request) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                bookingService.reportIssue(id, request.message())));
     }
 }

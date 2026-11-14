@@ -1,9 +1,34 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Bell, CreditCard, Users, Plus, Search, CheckCircle2,
   Clock, DollarSign, Printer, ArrowRight, X, Phone,
-  FileText, Check, AlertCircle, Sparkles
+  FileText, Check, AlertCircle, Sparkles, QrCode
 } from 'lucide-react';
+import { clinicApi, invoiceApi } from '../../api/clinic';
+import VietQrPaymentModal from '../../components/VietQrPaymentModal';
+
+const INVOICE_STATUS = {
+  ISSUED: { label: 'Đã phát hành', cls: 'bg-sky-50 text-sky-700 border-sky-200' },
+  PENDING_PAYMENT: { label: 'Chờ thanh toán', cls: 'bg-amber-50 text-amber-700 border-amber-200' },
+  PAID: { label: 'Đã thanh toán', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  PARTIALLY_PAID: { label: 'Thanh toán một phần', cls: 'bg-amber-50 text-amber-700 border-amber-200' },
+  CANCELLED: { label: 'Đã hủy', cls: 'bg-slate-100 text-slate-500 border-slate-200' },
+  REFUNDED: { label: 'Đã hoàn tiền', cls: 'bg-slate-100 text-slate-600 border-slate-200' },
+};
+
+const BOOKING_STATUS = {
+  PENDING: { label: 'Chờ xác nhận', cls: 'bg-amber-50 text-amber-700 border-amber-200' },
+  CONFIRMED: { label: 'Đã xác nhận', cls: 'bg-sky-50 text-sky-700 border-sky-200' },
+  IN_PROGRESS: { label: 'Đang thực hiện', cls: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
+  COMPLETED: { label: 'Đã hoàn tất', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  CANCELLED: { label: 'Đã hủy', cls: 'bg-slate-100 text-slate-500 border-slate-200' },
+};
+
+const BOOKING_PAYMENT = {
+  UNPAID: { label: 'Chưa thanh toán', cls: 'bg-rose-50 text-rose-700 border-rose-200' },
+  PAID: { label: 'Đã thanh toán', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  REFUNDED: { label: 'Đã hoàn tiền', cls: 'bg-slate-100 text-slate-600 border-slate-200' },
+};
 
 export default function StaffDashboard({ user, token, activeTab, setActiveTab }) {
   // Reception state
@@ -53,54 +78,144 @@ export default function StaffDashboard({ user, token, activeTab, setActiveTab })
   });
 
   // Billing / Invoices state
-  const [invoices, setInvoices] = useState([
-    {
-      id: 'INV-2026-089',
-      customer: 'Nguyễn Minh Anh (0901234567)',
-      pet: 'Lu Lu (Husky)',
-      items: 'Khám tổng quát (150.000) + Tiêm dại Rabisin (120.000) + Sữa tắm trị nấm (180.000)',
-      total: 450000,
-      discount: 45000,
-      finalAmount: 405000,
-      method: 'VNPay QR',
-      status: 'PAID',
-      time: '26/10/2026 10:15'
-    },
-    {
-      id: 'INV-2026-090',
-      customer: 'Trần Thu Hà (0988765432)',
-      pet: 'Miu Miu (Mèo)',
-      items: 'Vệ sinh tai trị ve (80.000) + Thuốc nhỏ tai Otomax (195.000)',
-      total: 275000,
-      discount: 0,
-      finalAmount: 275000,
-      method: 'Tiền mặt',
-      status: 'PAID',
-      time: '26/10/2026 11:20'
-    },
-    {
-      id: 'INV-2026-091',
-      customer: 'Hoàng Quốc Việt (0912334455)',
-      pet: 'Bơ (Golden Retriever)',
-      items: 'Cấp cứu viêm dạ dày (300.000) + Truyền dịch Ringer (150.000) + Thuốc men tiêu hóa (110.000)',
-      total: 560000,
-      discount: 50000,
-      finalAmount: 510000,
-      method: 'Chưa thanh toán',
-      status: 'PENDING',
-      time: '26/10/2026 11:45'
-    }
-  ]);
+  const [invoices, setInvoices] = useState([]);
+  const [invoicesLoading, setInvoicesLoading] = useState(false);
+  const [invoicesError, setInvoicesError] = useState('');
+  const [completedBookings, setCompletedBookings] = useState([]);
 
   const [showAddInvoiceModal, setShowAddInvoiceModal] = useState(false);
-  const [newInvoice, setNewInvoice] = useState({
-    customer: '',
-    pet: '',
-    items: '',
-    total: 350000,
-    discount: 0,
-    method: 'VNPay QR'
+  const [newInvoice, setNewInvoice] = useState({ bookingId: '' });
+  const [invoiceSubmitting, setInvoiceSubmitting] = useState(false);
+  const [payingInvoice, setPayingInvoice] = useState(null);
+
+  // Bookings state
+  const [bookings, setBookings] = useState([]);
+  const [bookingsLoading, setBookingsLoading] = useState(false);
+  const [bookingsError, setBookingsError] = useState('');
+  const [bookingStatusFilter, setBookingStatusFilter] = useState('ALL');
+  const [bookingActionId, setBookingActionId] = useState(null);
+  const [reportingBooking, setReportingBooking] = useState(null);
+  const [reportMessage, setReportMessage] = useState('');
+
+  const formatDateTime = (value) => {
+    if (!value) return '—';
+    return new Date(value).toLocaleString('vi-VN', { dateStyle: 'short', timeStyle: 'short' });
+  };
+
+  const mapInvoice = (inv) => ({
+    id: inv.id,
+    number: inv.invoiceNumber,
+    bookingId: inv.bookingId,
+    items: (inv.items || []).map(i => i.description).join(' + ') || 'Dịch vụ khám & Thuốc',
+    total: Number(inv.totalAmount || 0),
+    currency: inv.currency || 'VND',
+    status: inv.status,
+    issuedAt: inv.issuedAt,
   });
+
+  const fetchInvoices = async () => {
+    if (!token) return;
+    setInvoicesLoading(true);
+    setInvoicesError('');
+    try {
+      const page = await invoiceApi.listInvoices(token);
+      setInvoices((page?.content || []).map(mapInvoice));
+    } catch (err) {
+      setInvoicesError(err.message || 'Không tải được danh sách hóa đơn.');
+    } finally {
+      setInvoicesLoading(false);
+    }
+  };
+
+  const mapStaffBooking = (booking) => {
+    const items = booking.items || [];
+    const firstItem = items[0];
+    const startTime = firstItem?.startTime ? new Date(firstItem.startTime) : null;
+    return {
+      id: booking.id,
+      code: `BK-${String(booking.id).slice(0, 8).toUpperCase()}`,
+      customerId: booking.customerId,
+      petId: booking.petId,
+      petName: booking.petId ? `Bé #${String(booking.petId).slice(0, 8)}` : 'Thú cưng',
+      service: items.map(i => i.serviceName).filter(Boolean).join(', ') || 'Dịch vụ khám',
+      dateTime: startTime
+        ? startTime.toLocaleString('vi-VN', { dateStyle: 'short', timeStyle: 'short' })
+        : 'Chưa xác định',
+      status: booking.status || 'PENDING',
+      paymentStatus: booking.paymentStatus || 'UNPAID',
+      amount: Number(booking.totalAmount || 0),
+      promotionCode: booking.promotionCode || '',
+      staffNote: booking.staffNote || '',
+    };
+  };
+
+  const fetchBookings = async () => {
+    if (!token) return;
+    setBookingsLoading(true);
+    setBookingsError('');
+    try {
+      const params = { page: 0, size: 100 };
+      if (bookingStatusFilter !== 'ALL') params.status = bookingStatusFilter;
+      const page = await clinicApi.listBookings(token, params);
+      setBookings((page?.content || []).map(mapStaffBooking));
+    } catch (err) {
+      setBookingsError(err.message || 'Không tải được danh sách lịch hẹn.');
+    } finally {
+      setBookingsLoading(false);
+    }
+  };
+
+  const handleCounterPay = async (booking) => {
+    if (!token) return;
+    if (!window.confirm(`Xác nhận đã thu tiền mặt cho lịch hẹn ${booking.code}?\nSố tiền: ${booking.amount.toLocaleString('vi-VN')} đ`)) return;
+    setBookingActionId(booking.id);
+    try {
+      await clinicApi.markBookingPaid(booking.id, token);
+      await fetchBookings();
+    } catch (err) {
+      alert(err.message || 'Không thể ghi nhận thanh toán.');
+    } finally {
+      setBookingActionId(null);
+    }
+  };
+
+  const handleReportIssue = async (e) => {
+    e.preventDefault();
+    if (!token || !reportingBooking) return;
+    if (!reportMessage.trim()) return;
+    setBookingActionId(reportingBooking.id);
+    try {
+      await clinicApi.reportBookingIssue(reportingBooking.id, reportMessage.trim(), token);
+      setReportingBooking(null);
+      setReportMessage('');
+      await fetchBookings();
+    } catch (err) {
+      alert(err.message || 'Không thể gửi báo cáo sự cố.');
+    } finally {
+      setBookingActionId(null);
+    }
+  };
+
+  const fetchCompletedBookings = async () => {
+    if (!token) return;
+    try {
+      const page = await clinicApi.listBookings(token, { status: 'COMPLETED' });
+      setCompletedBookings(page?.content || []);
+    } catch {
+      setCompletedBookings([]);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'invoices') {
+      fetchInvoices();
+      fetchCompletedBookings();
+    }
+    if (activeTab === 'bookings') {
+      fetchBookings();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, token, bookingStatusFilter]);
 
   // Client Directory search state
   const [clientSearch, setClientSearch] = useState('');
@@ -165,30 +280,21 @@ export default function StaffDashboard({ user, token, activeTab, setActiveTab })
     setNewWalkin({ ownerName: '', phone: '', petName: '', service: 'Khám tổng quát', doctor: 'BS. Lê Minh Hoàng' });
   };
 
-  const handlePayInvoice = (id, method) => {
-    setInvoices(prev =>
-      prev.map(inv => inv.id === id ? { ...inv, status: 'PAID', method: method || 'Tiền mặt' } : inv)
-    );
-  };
-
-  const handleCreateInvoice = (e) => {
+  const handleCreateInvoice = async (e) => {
     e.preventDefault();
-    const finalAmt = Math.max(0, Number(newInvoice.total) - Number(newInvoice.discount));
-    const invItem = {
-      id: `INV-2026-${String(invoices.length + 1).padStart(3, '0')}`,
-      customer: newInvoice.customer || 'Khách vãng lai',
-      pet: newInvoice.pet || 'Thú cưng',
-      items: newInvoice.items || 'Dịch vụ khám & Thuốc',
-      total: Number(newInvoice.total),
-      discount: Number(newInvoice.discount),
-      finalAmount: finalAmt,
-      method: newInvoice.method,
-      status: 'PAID',
-      time: new Date().toLocaleString('vi-VN')
-    };
-    setInvoices([invItem, ...invoices]);
-    setShowAddInvoiceModal(false);
-    setNewInvoice({ customer: '', pet: '', items: '', total: 350000, discount: 0, method: 'VNPay QR' });
+    if (!newInvoice.bookingId) return;
+    setInvoiceSubmitting(true);
+    try {
+      await invoiceApi.issueInvoice(newInvoice.bookingId, token);
+      setShowAddInvoiceModal(false);
+      setNewInvoice({ bookingId: '' });
+      await fetchInvoices();
+      await fetchCompletedBookings();
+    } catch (err) {
+      alert(err.message || 'Không thể tạo hóa đơn.');
+    } finally {
+      setInvoiceSubmitting(false);
+    }
   };
 
   const filteredClients = clients.filter(c =>
@@ -353,6 +459,185 @@ export default function StaffDashboard({ user, token, activeTab, setActiveTab })
         </div>
       )}
 
+      {/* TAB: LỊCH HẸN */}
+      {activeTab === 'bookings' && (
+        <div className="space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
+            <div>
+              <div className="flex items-center space-x-2">
+                <span className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold">
+                  📅
+                </span>
+                <h2 className="text-lg font-bold text-slate-900">Quản lý lịch hẹn</h2>
+              </div>
+              <p className="text-xs text-slate-500 mt-1">
+                Theo dõi lịch hẹn, thu tiền mặt tại quầy và báo trùng lịch / sự cố cho khách hàng
+              </p>
+            </div>
+            <div className="flex items-center space-x-2">
+              <select
+                value={bookingStatusFilter}
+                onChange={e => setBookingStatusFilter(e.target.value)}
+                className="h-9 px-3 border border-slate-200 rounded-xl text-xs focus:border-indigo-500 focus:outline-none"
+              >
+                <option value="ALL">Tất cả trạng thái</option>
+                <option value="PENDING">Chờ xác nhận</option>
+                <option value="CONFIRMED">Đã xác nhận</option>
+                <option value="IN_PROGRESS">Đang thực hiện</option>
+                <option value="COMPLETED">Đã hoàn tất</option>
+                <option value="CANCELLED">Đã hủy</option>
+              </select>
+              <button
+                onClick={fetchBookings}
+                className="inline-flex items-center space-x-1.5 px-3 h-9 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold shadow-sm transition active:scale-95"
+              >
+                <Search className="w-4 h-4" />
+                <span>Làm mới</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="border-b border-slate-200 bg-slate-50/70 text-slate-600">
+                    <th className="py-3 px-4 font-semibold">Mã</th>
+                    <th className="py-3 px-4 font-semibold">Thú cưng</th>
+                    <th className="py-3 px-4 font-semibold">Dịch vụ</th>
+                    <th className="py-3 px-4 font-semibold">Thời gian</th>
+                    <th className="py-3 px-4 font-semibold">Số tiền</th>
+                    <th className="py-3 px-4 font-semibold">Thanh toán</th>
+                    <th className="py-3 px-4 font-semibold">Trạng thái</th>
+                    <th className="py-3 px-4 font-semibold">Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {bookingsLoading && (
+                    <tr>
+                      <td colSpan={8} className="py-8 px-4 text-center text-slate-500">Đang tải lịch hẹn...</td>
+                    </tr>
+                  )}
+                  {!bookingsLoading && bookingsError && (
+                    <tr>
+                      <td colSpan={8} className="py-8 px-4 text-center text-rose-600">{bookingsError}</td>
+                    </tr>
+                  )}
+                  {!bookingsLoading && !bookingsError && bookings.length === 0 && (
+                    <tr>
+                      <td colSpan={8} className="py-8 px-4 text-center text-slate-500">Không có lịch hẹn nào.</td>
+                    </tr>
+                  )}
+                  {!bookingsLoading && !bookingsError && bookings.map(b => {
+                    const statusMeta = BOOKING_STATUS[b.status] || { label: b.status, cls: 'bg-slate-100 text-slate-600 border-slate-200' };
+                    const payMeta = BOOKING_PAYMENT[b.paymentStatus] || BOOKING_PAYMENT.UNPAID;
+                    const isPaid = b.paymentStatus === 'PAID';
+                    const isCancelled = b.status === 'CANCELLED';
+                    return (
+                      <tr key={b.id} className="hover:bg-slate-50/80 transition-colors align-top">
+                        <td className="py-3.5 px-4 font-mono font-bold text-slate-900">{b.code}</td>
+                        <td className="py-3.5 px-4 text-slate-700">{b.petName}</td>
+                        <td className="py-3.5 px-4 text-slate-600 max-w-[220px]">
+                          {b.service}
+                          {b.promotionCode && (
+                            <span className="block mt-1 text-[10px] font-semibold text-emerald-700">
+                              Mã: {b.promotionCode}
+                            </span>
+                          )}
+                          {b.staffNote && (
+                            <span className="block mt-1 text-[10px] text-amber-700">Ghi chú: {b.staffNote}</span>
+                          )}
+                        </td>
+                        <td className="py-3.5 px-4 text-slate-600">{b.dateTime}</td>
+                        <td className="py-3.5 px-4 font-bold text-slate-900">{b.amount.toLocaleString('vi-VN')} đ</td>
+                        <td className="py-3.5 px-4">
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${payMeta.cls}`}>
+                            {payMeta.label}
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${statusMeta.cls}`}>
+                            {statusMeta.label}
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <div className="flex flex-col gap-1.5">
+                            {!isPaid && !isCancelled && (
+                              <button
+                                onClick={() => handleCounterPay(b)}
+                                disabled={bookingActionId === b.id}
+                                className="inline-flex items-center space-x-1 px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg text-[11px] font-semibold shadow-xs"
+                              >
+                                <DollarSign className="w-3.5 h-3.5" />
+                                <span>{bookingActionId === b.id ? 'Đang lưu...' : 'Thu tiền tại quầy'}</span>
+                              </button>
+                            )}
+                            {!isCancelled && (
+                              <button
+                                onClick={() => { setReportingBooking(b); setReportMessage(''); }}
+                                className="inline-flex items-center space-x-1 px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 rounded-lg text-[11px] font-semibold"
+                              >
+                                <AlertCircle className="w-3.5 h-3.5" />
+                                <span>Báo trùng / sự cố</span>
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {reportingBooking && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs animate-fadeIn">
+              <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-200 space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <h3 className="font-bold text-slate-900 text-base">Báo trùng lịch / sự cố</h3>
+                  <button onClick={() => setReportingBooking(null)} className="p-1 text-slate-400 hover:text-slate-600 rounded-lg">
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+                <p className="text-xs text-slate-500">
+                  Lịch hẹn <span className="font-semibold text-slate-800">{reportingBooking.code}</span> — khách hàng sẽ nhận được thông báo kèm nội dung bên dưới.
+                </p>
+                <form onSubmit={handleReportIssue} className="space-y-3.5 text-xs">
+                  <div>
+                    <label className="font-semibold text-slate-700 block mb-1">Nội dung thông báo *</label>
+                    <textarea
+                      rows={3}
+                      required
+                      value={reportMessage}
+                      onChange={e => setReportMessage(e.target.value)}
+                      placeholder="VD: Khung giờ này đã có bác sĩ bận, vui lòng chọn giờ khác..."
+                      className="w-full p-2.5 border border-slate-200 rounded-xl focus:border-amber-500 focus:outline-none"
+                    />
+                  </div>
+                  <div className="pt-2 flex justify-end space-x-2">
+                    <button
+                      type="button"
+                      onClick={() => setReportingBooking(null)}
+                      className="px-4 py-2 border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 font-medium"
+                    >
+                      Hủy
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={bookingActionId === reportingBooking.id || !reportMessage.trim()}
+                      className="px-4 py-2 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl font-semibold shadow-xs"
+                    >
+                      {bookingActionId === reportingBooking.id ? 'Đang gửi...' : 'Gửi báo cáo'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* TAB 2: HÓA ĐƠN & THU NGÂN */}
       {activeTab === 'invoices' && (
         <div className="space-y-6">
@@ -383,141 +668,114 @@ export default function StaffDashboard({ user, token, activeTab, setActiveTab })
                 <thead>
                   <tr className="border-b border-slate-200 bg-slate-50/70 text-slate-600">
                     <th className="py-3 px-4 font-semibold">Số HĐ</th>
-                    <th className="py-3 px-4 font-semibold">Khách hàng / Thú cưng</th>
+                    <th className="py-3 px-4 font-semibold">Lịch hẹn</th>
                     <th className="py-3 px-4 font-semibold">Chi tiết dịch vụ & Thuốc</th>
-                    <th className="py-3 px-4 font-semibold">Số tiền phải thu</th>
-                    <th className="py-3 px-4 font-semibold">Hình thức</th>
+                    <th className="py-3 px-4 font-semibold">Số tiền</th>
+                    <th className="py-3 px-4 font-semibold">Ngày phát hành</th>
                     <th className="py-3 px-4 font-semibold">Trạng thái</th>
                     <th className="py-3 px-4 font-semibold">Thao tác</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {invoices.map(inv => (
-                    <tr key={inv.id} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="py-3.5 px-4 font-mono font-bold text-slate-900">{inv.id}</td>
-                      <td className="py-3.5 px-4">
-                        <div className="font-semibold text-slate-900">{inv.customer}</div>
-                        <div className="text-[11px] text-blue-600">{inv.pet}</div>
-                      </td>
-                      <td className="py-3.5 px-4 text-slate-600 max-w-xs">{inv.items}</td>
-                      <td className="py-3.5 px-4 font-bold text-slate-900">
-                        {inv.finalAmount.toLocaleString()} đ
-                        {inv.discount > 0 && (
-                          <div className="text-[10px] text-amber-600 font-normal">Đã giảm {inv.discount.toLocaleString()} đ</div>
-                        )}
-                      </td>
-                      <td className="py-3.5 px-4 font-medium text-slate-700">{inv.method}</td>
-                      <td className="py-3.5 px-4">
-                        <span
-                          className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${inv.status === 'PAID'
-                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                            : 'bg-rose-50 text-rose-700 border border-rose-200'
-                            }`}
-                        >
-                          {inv.status === 'PAID' ? 'Đã thanh toán' : 'Chờ thu tiền'}
-                        </span>
-                      </td>
-                      <td className="py-3.5 px-4">
-                        {inv.status === 'PENDING' ? (
-                          <button
-                            onClick={() => handlePayInvoice(inv.id, 'VNPay QR')}
-                            className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-xs"
-                          >
-                            Thu tiền ngay
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => alert(`Đang in hóa đơn điện tử ${inv.id}...`)}
-                            className="inline-flex items-center space-x-1 text-slate-500 hover:text-slate-800 text-xs font-medium"
-                          >
-                            <Printer className="w-3.5 h-3.5" />
-                            <span>In phiếu</span>
-                          </button>
-                        )}
-                      </td>
+                  {invoicesLoading && (
+                    <tr>
+                      <td colSpan={7} className="py-8 px-4 text-center text-slate-500">Đang tải hóa đơn...</td>
                     </tr>
-                  ))}
+                  )}
+                  {!invoicesLoading && invoicesError && (
+                    <tr>
+                      <td colSpan={7} className="py-8 px-4 text-center text-rose-600">{invoicesError}</td>
+                    </tr>
+                  )}
+                  {!invoicesLoading && !invoicesError && invoices.length === 0 && (
+                    <tr>
+                      <td colSpan={7} className="py-8 px-4 text-center text-slate-500">Chưa có hóa đơn nào.</td>
+                    </tr>
+                  )}
+                  {!invoicesLoading && !invoicesError && invoices.map(inv => {
+                    const statusMeta = INVOICE_STATUS[inv.status] || { label: inv.status, cls: 'bg-slate-100 text-slate-600 border-slate-200' };
+                    return (
+                      <tr key={inv.id} className="hover:bg-slate-50/80 transition-colors">
+                        <td className="py-3.5 px-4 font-mono font-bold text-slate-900">{inv.number}</td>
+                        <td className="py-3.5 px-4 font-mono text-[11px] text-slate-500">#{String(inv.bookingId).slice(0, 8)}</td>
+                        <td className="py-3.5 px-4 text-slate-600 max-w-xs">{inv.items}</td>
+                        <td className="py-3.5 px-4 font-bold text-slate-900">
+                          {inv.total.toLocaleString('vi-VN')} {inv.currency}
+                        </td>
+                        <td className="py-3.5 px-4 text-slate-600">{formatDateTime(inv.issuedAt)}</td>
+                        <td className="py-3.5 px-4">
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${statusMeta.cls}`}>
+                            {statusMeta.label}
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <div className="flex items-center space-x-3">
+                            {inv.status !== 'PAID' && inv.status !== 'CANCELLED' && inv.status !== 'REFUNDED' && (
+                              <button
+                                onClick={() => setPayingInvoice(inv)}
+                                className="inline-flex items-center space-x-1 px-2.5 py-1 bg-sky-600 hover:bg-sky-700 text-white rounded-lg text-[11px] font-semibold shadow-xs"
+                              >
+                                <QrCode className="w-3.5 h-3.5" />
+                                <span>VietQR</span>
+                              </button>
+                            )}
+                            <button
+                              onClick={() => alert(`Đang in hóa đơn điện tử ${inv.number}...`)}
+                              className="inline-flex items-center space-x-1 text-slate-500 hover:text-slate-800 text-xs font-medium"
+                            >
+                              <Printer className="w-3.5 h-3.5" />
+                              <span>In phiếu</span>
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
           </div>
+
+          <VietQrPaymentModal
+            open={Boolean(payingInvoice)}
+            invoice={payingInvoice}
+            onClose={() => setPayingInvoice(null)}
+            onPaid={() => fetchInvoices()}
+          />
 
           {/* Modal Tạo hóa đơn */}
           {showAddInvoiceModal && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs animate-fadeIn">
               <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-200 space-y-4">
                 <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                  <h3 className="font-bold text-slate-900 text-base">Tạo hóa đơn thanh toán</h3>
+                  <h3 className="font-bold text-slate-900 text-base">Phát hành hóa đơn từ lịch hẹn</h3>
                   <button onClick={() => setShowAddInvoiceModal(false)} className="p-1 text-slate-400 hover:text-slate-600 rounded-lg">
                     <X className="w-5 h-5" />
                   </button>
                 </div>
                 <form onSubmit={handleCreateInvoice} className="space-y-3.5 text-xs">
                   <div>
-                    <label className="font-semibold text-slate-700 block mb-1">Khách hàng & SĐT *</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="Ví dụ: Nguyễn Minh Anh (0901234567)"
-                      value={newInvoice.customer}
-                      onChange={e => setNewInvoice({ ...newInvoice, customer: e.target.value })}
-                      className="w-full h-9 px-3 border border-slate-200 rounded-xl focus:border-emerald-500 focus:outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="font-semibold text-slate-700 block mb-1">Thú cưng</label>
-                    <input
-                      type="text"
-                      placeholder="Ví dụ: Lu Lu (Husky)"
-                      value={newInvoice.pet}
-                      onChange={e => setNewInvoice({ ...newInvoice, pet: e.target.value })}
-                      className="w-full h-9 px-3 border border-slate-200 rounded-xl focus:border-emerald-500 focus:outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="font-semibold text-slate-700 block mb-1">Chi tiết các khoản thu *</label>
-                    <textarea
-                      rows={2}
-                      required
-                      placeholder="Khám bệnh + Thuốc kháng sinh + Dịch vụ spa..."
-                      value={newInvoice.items}
-                      onChange={e => setNewInvoice({ ...newInvoice, items: e.target.value })}
-                      className="w-full p-2.5 border border-slate-200 rounded-xl focus:border-emerald-500 focus:outline-none"
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="font-semibold text-slate-700 block mb-1">Tổng tiền gốc (VNĐ)</label>
-                      <input
-                        type="number"
-                        value={newInvoice.total}
-                        onChange={e => setNewInvoice({ ...newInvoice, total: e.target.value })}
-                        className="w-full h-9 px-3 border border-slate-200 rounded-xl focus:border-emerald-500 focus:outline-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="font-semibold text-slate-700 block mb-1">Giảm giá / Voucher (VNĐ)</label>
-                      <input
-                        type="number"
-                        value={newInvoice.discount}
-                        onChange={e => setNewInvoice({ ...newInvoice, discount: e.target.value })}
-                        className="w-full h-9 px-3 border border-slate-200 rounded-xl focus:border-emerald-500 focus:outline-none"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="font-semibold text-slate-700 block mb-1">Phương thức thanh toán</label>
+                    <label className="font-semibold text-slate-700 block mb-1">Lịch hẹn đã hoàn thành *</label>
                     <select
-                      value={newInvoice.method}
-                      onChange={e => setNewInvoice({ ...newInvoice, method: e.target.value })}
+                      required
+                      value={newInvoice.bookingId}
+                      onChange={e => setNewInvoice({ bookingId: e.target.value })}
                       className="w-full h-9 px-3 border border-slate-200 rounded-xl focus:border-emerald-500 focus:outline-none"
                     >
-                      <option value="VNPay QR">Quét mã QR (VNPay / VietQR)</option>
-                      <option value="Tiền mặt">Tiền mặt tại quầy</option>
-                      <option value="Thẻ tín dụng / Ghi nợ POS">Quẹt thẻ POS ngân hàng</option>
-                      <option value="Chuyển khoản">Chuyển khoản ngân hàng</option>
+                      <option value="">-- Chọn lịch hẹn --</option>
+                      {completedBookings.map(b => (
+                        <option key={b.id} value={b.id}>
+                          #{b.id.slice(0, 8)} • {(b.items || []).map(i => i.serviceName).join(', ') || 'Dịch vụ'} • {(Number(b.totalAmount) || 0).toLocaleString('vi-VN')} đ
+                        </option>
+                      ))}
                     </select>
+                    {completedBookings.length === 0 && (
+                      <p className="text-[11px] text-amber-600 mt-1">Chưa có lịch hẹn nào ở trạng thái COMPLETED.</p>
+                    )}
                   </div>
+                  <p className="text-[11px] text-slate-500">
+                    Hóa đơn được tạo tự động từ các dịch vụ của lịch hẹn. Số tiền do hệ thống tính toán.
+                  </p>
                   <div className="pt-2 flex justify-end space-x-2">
                     <button
                       type="button"
@@ -528,9 +786,10 @@ export default function StaffDashboard({ user, token, activeTab, setActiveTab })
                     </button>
                     <button
                       type="submit"
-                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-semibold shadow-xs"
+                      disabled={invoiceSubmitting || !newInvoice.bookingId}
+                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl font-semibold shadow-xs"
                     >
-                      Xuất & Xác nhận thu
+                      {invoiceSubmitting ? 'Đang phát hành...' : 'Phát hành hóa đơn'}
                     </button>
                   </div>
                 </form>

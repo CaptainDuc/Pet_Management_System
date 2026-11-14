@@ -8,6 +8,7 @@ import com.petcare.platform.booking.domain.Booking;
 import com.petcare.platform.booking.domain.BookingItem;
 import com.petcare.platform.booking.domain.BookingStatus;
 import com.petcare.platform.booking.domain.BookingStatusHistory;
+import com.petcare.platform.booking.domain.PaymentStatus;
 import com.petcare.platform.booking.dto.BookingItemRequest;
 import com.petcare.platform.booking.dto.BookingResponse;
 import com.petcare.platform.booking.dto.BookingResponse.ItemResponse;
@@ -21,6 +22,10 @@ import com.petcare.platform.common.exception.ResourceNotFoundException;
 import com.petcare.platform.common.security.SecurityUtils;
 import com.petcare.platform.pet.domain.Pet;
 import com.petcare.platform.pet.repository.PetRepository;
+import com.petcare.platform.promotion.domain.Promotion;
+import com.petcare.platform.promotion.dto.AppliedPromotion;
+import com.petcare.platform.promotion.repository.PromotionRepository;
+import com.petcare.platform.promotion.service.PromotionService;
 import com.petcare.platform.schedule.domain.Schedule;
 import com.petcare.platform.schedule.domain.TimeSlot;
 import com.petcare.platform.schedule.repository.ScheduleRepository;
@@ -31,6 +36,7 @@ import com.petcare.platform.staff.domain.Staff;
 import com.petcare.platform.staff.repository.StaffRepository;
 import com.petcare.platform.staff.repository.StaffSkillRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -54,6 +60,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class BookingService {
@@ -76,6 +83,8 @@ public class BookingService {
     private final ScheduleRepository scheduleRepository;
     private final TimeSlotRepository timeSlotRepository;
     private final OutboxService outboxService;
+    private final PromotionService promotionService;
+    private final PromotionRepository promotionRepository;
 
     @Value("${app.booking.cancel-cutoff-hours:2}")
     private int cancelCutoffHours;
@@ -143,7 +152,7 @@ public class BookingService {
         });
 
         // 3. Lưu lịch hẹn, giá được chụp lại từ dịch vụ
-        BigDecimal total = planned.stream()
+        BigDecimal subtotal = planned.stream()
                 .map(p -> p.service().getBasePrice())
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
@@ -152,8 +161,18 @@ public class BookingService {
         booking.setPetId(request.petId());
         booking.setBranchId(request.branchId());
         booking.setNotes(request.notes());
-        booking.setTotalAmount(total);
+        booking.setTotalAmount(subtotal);
         booking = bookingRepository.save(booking);
+
+        // 4. Áp mã giảm giá (nếu có). Server luôn tự tính lại số tiền.
+        if (request.promotionCode() != null && !request.promotionCode().isBlank()) {
+            AppliedPromotion applied = promotionService.reserve(
+                    request.promotionCode(), subtotal, booking.getId());
+            booking.setPromotionId(applied.promotionId());
+            booking.setDiscountAmount(applied.discountAmount());
+            booking.setTotalAmount(applied.finalAmount());
+            booking = bookingRepository.save(booking);
+        }
 
         for (PlannedItem p : planned) {
             BookingItem item = new BookingItem();
@@ -229,6 +248,102 @@ public class BookingService {
         return transition(userId, id, BookingStatus.CANCELLED, reason);
     }
 
+    // ─── Thanh toán & phản hồi của phòng khám ─────────────────────────────
+
+    @Transactional
+    public BookingResponse markPaidAtCounter(UUID userId, UUID id) {
+        if (!isClinicSide()) {
+            throw new AccessDeniedException("Access denied");
+        }
+        Booking booking = bookingRepository.findByIdForUpdate(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Booking", id));
+        if (booking.getPaymentStatus() == PaymentStatus.PAID) {
+            return toResponses(List.of(booking)).get(0);
+        }
+        if (booking.getStatus() == BookingStatus.CANCELLED) {
+            throw new BusinessException("Cannot collect payment for a cancelled booking");
+        }
+
+        boolean autoConfirm = applyPayment(booking, userId, "CASH", null, Instant.now());
+        BookingResponse response = toResponses(List.of(booking)).get(0);
+        if (autoConfirm) {
+            recordEvent(response, RabbitMQQueues.BOOKING_CONFIRMED, null);
+        }
+        recordEvent(response, RabbitMQQueues.BOOKING_PAID, null);
+        return response;
+    }
+
+    /**
+     * Applies a {@code payment.completed} event from the payment service.
+     * Idempotent: a booking that is already PAID is left untouched.
+     */
+    @Transactional
+    public boolean applyOnlinePayment(UUID id, String orderCode, BigDecimal amount, Instant paidAt) {
+        Booking booking = bookingRepository.findByIdForUpdate(id).orElse(null);
+        if (booking == null) {
+            log.warn("payment.completed for unknown booking {}", id);
+            return false;
+        }
+        if (booking.getPaymentStatus() == PaymentStatus.PAID) {
+            return false;
+        }
+        if (booking.getStatus() == BookingStatus.CANCELLED) {
+            log.warn("payment.completed for cancelled booking {}", id);
+            return false;
+        }
+        if (amount != null && booking.getTotalAmount() != null
+                && amount.compareTo(booking.getTotalAmount()) < 0) {
+            log.warn("payment.completed amount {} is lower than booking {} total {}",
+                    amount, id, booking.getTotalAmount());
+            return false;
+        }
+
+        Instant paidTime = paidAt != null ? paidAt : Instant.now();
+        boolean autoConfirm = applyPayment(
+                booking, booking.getCustomerId(), "ONLINE", orderCode, paidTime);
+        BookingResponse response = toResponses(List.of(booking)).get(0);
+        if (autoConfirm) {
+            recordEvent(response, RabbitMQQueues.BOOKING_CONFIRMED, null);
+        }
+        recordEvent(response, RabbitMQQueues.BOOKING_PAID, null);
+        return true;
+    }
+
+    @Transactional
+    public BookingResponse reportIssue(UUID id, String message) {
+        if (message == null || message.isBlank()) {
+            throw new BusinessException("Vui lòng nhập nội dung cần báo cho khách hàng");
+        }
+        Booking booking = bookingRepository.findByIdForUpdate(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Booking", id));
+        booking.setStaffNote(message.trim());
+        booking.setStaffNoteAt(Instant.now());
+        bookingRepository.save(booking);
+        BookingResponse response = toResponses(List.of(booking)).get(0);
+        recordEvent(response, RabbitMQQueues.BOOKING_ISSUE, message.trim());
+        return response;
+    }
+
+    private boolean applyPayment(Booking booking, UUID actorId, String method,
+                                 String orderCode, Instant paidAt) {
+        boolean autoConfirm = booking.getStatus() == BookingStatus.PENDING;
+        booking.setPaymentStatus(PaymentStatus.PAID);
+        booking.setPaymentMethod(method);
+        booking.setPaidAt(paidAt);
+        booking.setPaymentOrderCode(orderCode);
+        if (autoConfirm) {
+            booking.setStatus(BookingStatus.CONFIRMED);
+            itemRepository.findByBookingId(booking.getId())
+                    .forEach(i -> i.setStatus(BookingStatus.CONFIRMED));
+            historyRepository.save(new BookingStatusHistory(
+                    booking.getId(), BookingStatus.PENDING, BookingStatus.CONFIRMED,
+                    actorId, null));
+        }
+        bookingRepository.save(booking);
+        promotionService.consume(booking.getId());
+        return autoConfirm;
+    }
+
     private BookingResponse transition(UUID userId, UUID id, BookingStatus to, String reason) {
         Booking booking = bookingRepository.findByIdForUpdate(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Booking", id));
@@ -262,6 +377,9 @@ public class BookingService {
         }
 
         if (to == BookingStatus.CANCELLED) {
+            if (booking.getPaymentStatus() == PaymentStatus.PAID) {
+                throw new ConflictException("BOOKING_ALREADY_PAID");
+            }
             if (from == BookingStatus.IN_PROGRESS && !SecurityUtils.hasRole("ADMIN")) {
                 throw new AccessDeniedException("Access denied");
             }
@@ -277,8 +395,11 @@ public class BookingService {
         historyRepository.save(new BookingStatusHistory(
                 id, from, to, userId, to == BookingStatus.CANCELLED ? reason : null));
 
-        if (to == BookingStatus.CANCELLED && !slotIds.isEmpty()) {
-            timeSlotRepository.release(slotIds);
+        if (to == BookingStatus.CANCELLED) {
+            if (!slotIds.isEmpty()) {
+                timeSlotRepository.release(slotIds);
+            }
+            promotionService.release(id);
         }
         BookingResponse response = toResponses(List.of(booking)).get(0);
         recordEvent(response, routingKeyFor(to), reason);
@@ -335,6 +456,10 @@ public class BookingService {
                 .findAllById(all.stream().map(BookingItem::getTimeSlotId)
                         .filter(Objects::nonNull).distinct().toList())
                 .stream().collect(Collectors.toMap(TimeSlot::getId, t -> t));
+        Map<UUID, Promotion> promotions = promotionRepository
+                .findAllById(bookings.stream().map(Booking::getPromotionId)
+                        .filter(Objects::nonNull).distinct().toList())
+                .stream().collect(Collectors.toMap(Promotion::getId, p -> p));
 
         return bookings.stream().map(b -> {
             List<ItemResponse> itemResponses = itemsByBooking.getOrDefault(b.getId(), List.of())
@@ -349,9 +474,12 @@ public class BookingService {
                                 slot == null ? null : slot.getEndTime().atZone(ZONE).toOffsetDateTime(),
                                 i.getStatus().name(), i.getUnitPrice(), i.getNotes());
                     }).toList();
+            Promotion promotion = b.getPromotionId() == null ? null : promotions.get(b.getPromotionId());
             return new BookingResponse(b.getId(), b.getCustomerId(), b.getPetId(), b.getBranchId(),
-                    b.getPromotionId(), b.getStatus().name(), b.getTotalAmount(),
-                    b.getDiscountAmount(), b.getNotes(), itemResponses,
+                    b.getPromotionId(), promotion == null ? null : promotion.getCode(),
+                    b.getStatus().name(), b.getTotalAmount(), b.getDiscountAmount(),
+                    b.getPaymentStatus().name(), b.getPaymentMethod(), b.getPaidAt(),
+                    b.getStaffNote(), b.getNotes(), itemResponses,
                     b.getCreatedAt(), b.getUpdatedAt());
         }).toList();
     }

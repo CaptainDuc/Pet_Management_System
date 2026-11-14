@@ -142,9 +142,9 @@ function LandingPage() {
               <Clock className="h-3.5 w-3.5" />
               Mở cửa 8:00 – 20:00 hằng ngày
             </span>
-            <a href="/staff" className="flex items-center gap-1.5 rounded-full border border-white/15 px-3 py-1 font-semibold text-white/80 transition hover:border-brand-peach hover:text-brand-peach">
+            <a href="/login" className="flex items-center gap-1.5 rounded-full border border-white/15 px-3 py-1 font-semibold text-white/80 transition hover:border-brand-peach hover:text-brand-peach">
               <Users className="h-3.5 w-3.5" />
-              Cổng nhân viên
+              Đăng nhập
             </a>
             <a href="https://facebook.com/petservicehcm/" aria-label="Facebook" className="transition hover:text-brand-peach">
               <Facebook className="h-4 w-4" />
@@ -223,11 +223,11 @@ function LandingPage() {
                 Gọi {PHONE_DISPLAY}
               </a>
               <a
-                href="/staff"
+                href="/login"
                 className="flex items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold text-brand-navy"
               >
                 <Users className="h-4 w-4" />
-                Cổng nhân viên (Thú y / Lễ tân)
+                Đăng nhập
               </a>
             </div>
           </div>
@@ -722,9 +722,6 @@ function LandingPage() {
                         </div>
                         <blockquote className="mt-2 text-sm leading-6 text-slate-500">{item.quote}</blockquote>
                       </div>
-                      <pre className="p-3 bg-slate-950 rounded-xl border border-slate-800 overflow-x-auto text-[11px] text-slate-300">
-                        {JSON.stringify(responseLog.data, null, 2)}
-                      </pre>
                     </div>
                   </figure>
                 ))}
@@ -860,7 +857,7 @@ function LandingPage() {
                   { label: 'Combo dịch vụ', href: '#combo' },
                   { label: 'Đánh giá khách hàng', href: '#danh-gia' },
                   { label: 'Đăng nhập để đặt lịch', href: '/login' },
-                  { label: 'Cổng nhân viên (Thú y / Lễ tân)', href: '/staff' },
+                  { label: 'Đăng nhập', href: '/login' },
                 ].map((item) => (
                   <li key={item.label}>
                     <a href={item.href} className="transition hover:text-brand-peach">

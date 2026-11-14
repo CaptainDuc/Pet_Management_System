@@ -108,6 +108,13 @@ public class NotificationService {
                     "Lịch hẹn đã bị hủy",
                     "Lịch hẹn " + services + " lúc " + time + " đã bị hủy."
                             + (reason.isBlank() ? "" : " Lý do: " + reason)};
+            case "booking.paid" -> new String[]{
+                    "Thanh toán thành công",
+                    "Lịch hẹn " + services + " lúc " + time + " đã được thanh toán "
+                            + formatAmount(data.get("totalAmount")) + "."};
+            case "booking.issue" -> new String[]{
+                    "Phòng khám cần trao đổi về lịch hẹn",
+                    "Về lịch hẹn " + services + " lúc " + time + ": " + reason};
             default -> null;
         };
     }
@@ -117,6 +124,18 @@ public class NotificationService {
             return String.join(", ", list.stream().map(String::valueOf).toList());
         }
         return "của bạn";
+    }
+
+    private String formatAmount(Object raw) {
+        if (raw == null) {
+            return "thành công";
+        }
+        try {
+            java.math.BigDecimal amount = new java.math.BigDecimal(raw.toString());
+            return String.format("%,.0fđ", amount).replace(',', '.');
+        } catch (NumberFormatException ex) {
+            return raw.toString();
+        }
     }
 
     private String formatTime(Object raw) {

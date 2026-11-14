@@ -121,6 +121,7 @@ services:
       AI_AGENT_URL: http://ai-agent:8001
       AI_RAG_URL: http://ai-rag:8002
       AI_VISION_URL: http://ai-vision:8003
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-petcare_internal_dev_key}
     ports:
       - "8080:8080"
     depends_on:
@@ -154,12 +155,21 @@ services:
       RABBITMQ_PORT: 5672
       RABBITMQ_USER: ${RABBITMQ_USER:-petcare}
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-petcare123}
+      CORE_SERVICE_URL: http://backend:8080
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-petcare_internal_dev_key}
+      SEPAY_API_KEY: ${SEPAY_API_KEY:-sepay_local_dev_key}
+      BANK_ACCOUNT_NUMBER: ${BANK_ACCOUNT_NUMBER:-0123456789}
+      BANK_CODE: ${BANK_CODE:-MB}
+      BANK_ACCOUNT_NAME: ${BANK_ACCOUNT_NAME:-PETCARE SERVICE}
+      PAYMENT_PREFIX: ${PAYMENT_PREFIX:-DH}
     ports:
       - "8082:8082"
     depends_on:
       payment-postgres:
         condition: service_healthy
       rabbitmq:
+        condition: service_healthy
+      backend:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:8082/actuator/health"]
@@ -237,6 +247,8 @@ services:
       dockerfile: Dockerfile
       args:
         VITE_API_URL: ${VITE_API_URL:-http://localhost:8080/api/v1}
+        VITE_PAYMENT_URL: ${VITE_PAYMENT_URL:-http://localhost:8082/api/v1}
+        VITE_NOTIFICATION_URL: ${VITE_NOTIFICATION_URL:-http://localhost:8083/api/v1}
     container_name: petcare-web
     restart: unless-stopped
     mem_limit: 50m
@@ -247,6 +259,8 @@ services:
       - backend
     environment:
       VITE_API_URL: ${VITE_API_URL:-http://localhost:8080/api/v1}
+      VITE_PAYMENT_URL: ${VITE_PAYMENT_URL:-http://localhost:8082/api/v1}
+      VITE_NOTIFICATION_URL: ${VITE_NOTIFICATION_URL:-http://localhost:8083/api/v1}
 
   # ─── AI Services ──────────────────────────────────────────────────────────────
   ai-agent:
