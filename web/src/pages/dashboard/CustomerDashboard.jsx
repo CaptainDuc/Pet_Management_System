@@ -8,7 +8,7 @@ import {
 import { clinicApi } from '../../api/clinic';
 import VietQrPaymentModal from '../../components/VietQrPaymentModal';
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8080/api/v1';
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
 
 const BOOKING_STATUS_STYLES = {
   PENDING: 'bg-amber-50 text-amber-700 border border-amber-200',

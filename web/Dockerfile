@@ -1,9 +1,9 @@
 # Build stage
 FROM node:20-alpine AS build
 WORKDIR /app
-ARG VITE_API_URL=http://localhost:8080/api/v1
-ARG VITE_PAYMENT_URL=http://localhost:8082/api/v1
-ARG VITE_NOTIFICATION_URL=http://localhost:8083/api/v1
+ARG VITE_API_URL=http://localhost:8000/api/v1
+ARG VITE_PAYMENT_URL=http://localhost:8000/api/v1
+ARG VITE_NOTIFICATION_URL=http://localhost:8000/api/v1
 ENV VITE_API_URL=$VITE_API_URL
 ENV VITE_PAYMENT_URL=$VITE_PAYMENT_URL
 ENV VITE_NOTIFICATION_URL=$VITE_NOTIFICATION_URL
