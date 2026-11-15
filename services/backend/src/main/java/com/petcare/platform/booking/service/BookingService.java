@@ -1,5 +1,7 @@
 package com.petcare.platform.booking.service;
 
+import com.petcare.platform.invoice.repository.InvoiceRepository;
+import com.petcare.platform.invoice.domain.InvoiceStatus;
 import com.petcare.platform.booking.event.BookingEventData;
 import com.petcare.platform.common.event.RabbitMQQueues;
 import com.petcare.platform.common.outbox.OutboxService;
@@ -73,6 +75,7 @@ public class BookingService {
             BookingStatus.CONFIRMED, Set.of(BookingStatus.IN_PROGRESS, BookingStatus.CANCELLED),
             BookingStatus.IN_PROGRESS, Set.of(BookingStatus.COMPLETED, BookingStatus.CANCELLED));
 
+    private final InvoiceRepository invoiceRepository;
     private final BookingRepository bookingRepository;
     private final BookingItemRepository itemRepository;
     private final BookingStatusHistoryRepository historyRepository;
@@ -339,6 +342,12 @@ public class BookingService {
                     booking.getId(), BookingStatus.PENDING, BookingStatus.CONFIRMED,
                     actorId, null));
         }
+        invoiceRepository.findByBookingId(booking.getId()).ifPresent(invoice -> {
+            if (invoice.getStatus() != InvoiceStatus.PAID) {
+                invoice.setStatus(InvoiceStatus.PAID);
+                invoiceRepository.save(invoice);
+            }
+        });
         bookingRepository.save(booking);
         promotionService.consume(booking.getId());
         return autoConfirm;
