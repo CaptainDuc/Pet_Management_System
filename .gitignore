@@ -40,3 +40,4 @@ logs/
 web/dist/
 .github
 .agents
+.claude
