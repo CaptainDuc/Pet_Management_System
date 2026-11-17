@@ -102,7 +102,7 @@ app:
   security:
     cors:
       # Explicit origins. "*" is tolerated for local development but logs a warning.
-      allowed-origin-patterns: ${CORS_ALLOWED_ORIGIN_PATTERNS:http://localhost:*,http://127.0.0.1:*}
+      allowed-origin-patterns: ${CORS_ALLOWED_ORIGIN_PATTERNS:http://localhost:3000}
       allow-credentials: ${CORS_ALLOW_CREDENTIALS:true}
   internal:
     # Shared secret used by payment-service to fetch the authoritative amount.
