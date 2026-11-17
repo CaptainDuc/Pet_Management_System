@@ -46,7 +46,27 @@ UNIQUE (coupon_id, invoice_id)
 
 ## Implementation Status
 
-This documentation update does not claim that these tables or rules already exist. Before implementation, align the Java entities and the physical Flyway schema, then add PostgreSQL integration tests for:
+This documentation update does not claim that these tables or rules already exist.
+
+---
+
+## Flyway Baseline Migration — Payment Service
+
+See [`flyway-baseline-payment-service.md`](flyway-baseline-payment-service.md) for full details on the V4 baseline migration that combines V1+V2+V3 for fresh database deployments.
+
+### Summary
+
+| Migration | Status | Notes |
+|-----------|--------|-------|
+| V1__init_payment_schema.sql | Kept | Audit trail; checksum preserved |
+| V2__sepay_orders_and_webhook.sql.bak | Excluded | Renamed from `.sql` → ignored by Flyway |
+| V3__booking_orders_and_event_outbox.sql.bak | Excluded | Renamed from `.sql` → ignored by Flyway |
+| V4__baseline_payment_schema.sql | **New baseline** | Combines V1+V2+V3 for fresh DBs |
+
+### Deployment
+
+- **Fresh DB:** `flyway migrate` → applies V4
+- **Existing DB (V1 applied):** `flyway repair` → marks V4 as applied, then `flyway migrate` Before implementation, align the Java entities and the physical Flyway schema, then add PostgreSQL integration tests for:
 
 - Concurrent appointments for the same veterinarian.
 - Adjacent non-overlapping appointments.
