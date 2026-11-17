@@ -5,8 +5,10 @@ import com.petcare.platform.common.dto.PageResponse;
 import com.petcare.platform.staff.dto.AssignSkillsRequest;
 import com.petcare.platform.staff.dto.CreateStaffRequest;
 import com.petcare.platform.staff.dto.SetActiveRequest;
+import com.petcare.platform.staff.dto.SkillResponse;
 import com.petcare.platform.staff.dto.StaffResponse;
 import com.petcare.platform.staff.dto.StaffSkillsResponse;
+import com.petcare.platform.staff.dto.UpdateSkillRequest;
 import com.petcare.platform.staff.service.StaffService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -73,5 +75,21 @@ public class StaffController {
     @PreAuthorize("hasAuthority('staff:read')")
     public ResponseEntity<ApiResponse<StaffSkillsResponse>> listSkills(@PathVariable UUID id) {
         return ResponseEntity.ok(ApiResponse.ok(staffService.listSkills(id)));
+    }
+
+    @PutMapping("/{staffId}/skills/{skillId}")
+    @PreAuthorize("hasAuthority('staff:write')")
+    public ResponseEntity<ApiResponse<SkillResponse>> updateSkill(
+            @PathVariable UUID staffId, @PathVariable UUID skillId,
+            @Valid @RequestBody UpdateSkillRequest request) {
+        return ResponseEntity.ok(ApiResponse.ok(staffService.updateSkill(staffId, skillId, request)));
+    }
+
+    @DeleteMapping("/{staffId}/skills/{skillId}")
+    @PreAuthorize("hasAuthority('staff:write')")
+    public ResponseEntity<ApiResponse<Void>> removeSkill(
+            @PathVariable UUID staffId, @PathVariable UUID skillId) {
+        staffService.removeSkill(staffId, skillId);
+        return ResponseEntity.ok(ApiResponse.<Void>ok(null));
     }
 }
