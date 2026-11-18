@@ -43,3 +43,5 @@ web/dist/
 
 # RAG local environment
 .venv/
+ai/rag/backup.sql
+*.sql.bak

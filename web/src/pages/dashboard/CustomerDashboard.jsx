@@ -156,6 +156,7 @@ export default function CustomerDashboard({ user, token, activeTab, setActiveTab
   const [paymentBooking, setPaymentBooking] = useState(null);
   const [promotionCheck, setPromotionCheck] = useState(null);
   const [checkingPromotion, setCheckingPromotion] = useState(false);
+  const [cancellingId, setCancellingId] = useState(null);
 
   const [showAddBookingModal, setShowAddBookingModal] = useState(false);
   const [newBooking, setNewBooking] = useState({
@@ -279,6 +280,9 @@ export default function CustomerDashboard({ user, token, activeTab, setActiveTab
           .map(slot => ({ ...slot, staffId: group.staffId }))
       );
 
+      // Sort slots chronologically (08:00 -> 17:00)
+      slots.sort((a, b) => new Date(a.startTime) - new Date(b.startTime));
+
       setAvailableSlots(slots);
       setNewBooking(prev => {
         const stillAvailable = slots.find(
@@ -335,8 +339,12 @@ export default function CustomerDashboard({ user, token, activeTab, setActiveTab
       return;
     }
 
+    if (typeof setActiveTab === 'function') {
+      setActiveTab('bookings');
+    }
+
     setNewBooking({
-      petId: petId || pets[0].id,
+      petId: petId || pets[0]?.id || '',
       serviceId: services[0]?.id || '',
       date: tomorrowISODate(),
       timeSlotId: '',
@@ -365,6 +373,21 @@ export default function CustomerDashboard({ user, token, activeTab, setActiveTab
       setPromotionCheck({ valid: false, message: err.message || 'Không kiểm tra được mã giảm giá.' });
     } finally {
       setCheckingPromotion(false);
+    }
+  };
+
+  const handleCancelBooking = async (bookingId) => {
+    const reason = window.prompt('Nhập lý do hủy lịch hẹn (bắt buộc):', 'Bận việc đột xuất');
+    if (!reason || !reason.trim()) return;
+
+    setCancellingId(bookingId);
+    try {
+      await clinicApi.cancelBooking(bookingId, reason.trim(), token);
+      fetchBookings();
+    } catch (err) {
+      alert(err.message || 'Không thể hủy lịch hẹn.');
+    } finally {
+      setCancellingId(null);
     }
   };
 
@@ -767,12 +790,13 @@ export default function CustomerDashboard({ user, token, activeTab, setActiveTab
                     <th className="py-3 px-4 font-semibold">Trạng thái</th>
                     <th className="py-3 px-4 font-semibold">Thanh toán</th>
                     <th className="py-3 px-4 font-semibold">Phí ước tính</th>
+                    <th className="py-3 px-4 font-semibold text-right">Thao tác</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {bookingsLoading && (
                     <tr>
-                      <td colSpan={8} className="py-8 text-center text-slate-500">
+                      <td colSpan={9} className="py-8 text-center text-slate-500">
                         <RefreshCw className="w-4 h-4 mr-2 inline animate-spin" />
                         Đang tải lịch hẹn...
                       </td>
@@ -780,7 +804,7 @@ export default function CustomerDashboard({ user, token, activeTab, setActiveTab
                   )}
                   {!bookingsLoading && bookingRows.length === 0 && (
                     <tr>
-                      <td colSpan={8} className="py-8 text-center text-slate-500">
+                      <td colSpan={9} className="py-8 text-center text-slate-500">
                         Chưa có lịch hẹn nào. Bấm “Đặt lịch hẹn mới” để tạo lịch.
                       </td>
                     </tr>
@@ -829,6 +853,24 @@ export default function CustomerDashboard({ user, token, activeTab, setActiveTab
                             -{b.discountAmount.toLocaleString('vi-VN')} đ
                             {b.promotionCode ? ` (${b.promotionCode})` : ''}
                           </div>
+                        )}
+                      </td>
+                      <td className="py-3.5 px-4 text-right whitespace-nowrap">
+                        {b.status !== 'CANCELLED' && b.status !== 'COMPLETED' && (
+                          <button
+                            type="button"
+                            disabled={cancellingId === b.id}
+                            onClick={() => handleCancelBooking(b.id)}
+                            className="px-2.5 py-1 text-[11px] font-semibold text-rose-600 hover:text-white bg-rose-50 hover:bg-rose-600 border border-rose-200 rounded-lg transition disabled:opacity-50"
+                          >
+                            {cancellingId === b.id ? 'Đang hủy...' : 'Hủy lịch'}
+                          </button>
+                        )}
+                        {b.status === 'CANCELLED' && (
+                          <span className="text-[11px] text-slate-400 italic">Đã hủy</span>
+                        )}
+                        {b.status === 'COMPLETED' && (
+                          <span className="text-[11px] text-emerald-600 font-medium">Hoàn thành</span>
                         )}
                       </td>
                     </tr>
@@ -975,6 +1017,38 @@ export default function CustomerDashboard({ user, token, activeTab, setActiveTab
                       Hệ thống tự kiểm tra và tính lại mã khi bạn xác nhận đặt lịch.
                     </p>
                   </div>
+
+                  {/* Tóm tắt chi phí dự kiến */}
+                  {(() => {
+                    const selectedService = services.find(s => s.id === newBooking.serviceId);
+                    const originalPrice = Number(selectedService?.basePrice || 0);
+                    const discount = promotionCheck?.valid ? Number(promotionCheck.discountAmount || 0) : 0;
+                    const finalPrice = Math.max(0, originalPrice - discount);
+                    return (
+                      <div className="rounded-2xl border border-blue-200 bg-gradient-to-br from-blue-50/80 to-indigo-50/50 p-4 space-y-2">
+                        <div className="flex items-center justify-between text-xs text-slate-600">
+                          <span>Dịch vụ ({selectedService?.name || 'Chưa chọn'}):</span>
+                          <span className="font-semibold text-slate-800">{originalPrice.toLocaleString('vi-VN')} đ</span>
+                        </div>
+                        {discount > 0 && (
+                          <div className="flex items-center justify-between text-xs text-emerald-700 font-medium">
+                            <span>Mã giảm giá ({promotionCheck.code}):</span>
+                            <span>-{discount.toLocaleString('vi-VN')} đ</span>
+                          </div>
+                        )}
+                        <div className="pt-2 border-t border-blue-200/60 flex items-baseline justify-between">
+                          <div>
+                            <span className="text-xs font-bold text-slate-900 block">Số tiền cần thanh toán:</span>
+                            <span className="text-[10px] text-slate-500">Thanh toán tại quầy khi đến khám hoặc online qua VietQR</span>
+                          </div>
+                          <span className="text-lg font-black text-blue-700 tracking-tight">
+                            {finalPrice.toLocaleString('vi-VN')} <span className="text-xs font-bold">đ</span>
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
                   <div className="pt-2 flex justify-end space-x-2">
                     <button
                       type="button"

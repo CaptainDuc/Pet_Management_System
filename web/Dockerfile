@@ -1,5 +1,5 @@
 # Build stage
-FROM node:20-alpine AS build
+FROM node:20-alpine3.20 AS build
 WORKDIR /app
 ARG VITE_API_URL=http://localhost:8080/api/v1
 ARG VITE_PAYMENT_URL=http://localhost:8082/api/v1

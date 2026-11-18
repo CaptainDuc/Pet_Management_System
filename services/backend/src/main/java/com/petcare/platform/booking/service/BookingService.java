@@ -114,7 +114,7 @@ public class BookingService {
                 throw new BusinessException("Slot is in the past");
             }
             long minutes = Duration.between(slot.getStartTime(), slot.getEndTime()).toMinutes();
-            if (minutes != service.getDurationMinutes()) {
+            if (service.getDurationMinutes() > 0 && minutes < Math.min(service.getDurationMinutes(), 30)) {
                 throw new BusinessException("Slot duration does not match service duration");
             }
             if (slot.getScheduleId() == null) {

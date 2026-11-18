@@ -74,6 +74,7 @@ const ROLE_CONFIGS = {
     defaultTab: 'analytics',
     tabs: [
       { id: 'analytics', label: 'Báo cáo Doanh thu & KPI', icon: '📊' },
+      { id: 'promotions', label: 'Quản lý Mã giảm giá', icon: '🎟️' },
       { id: 'staff-mgmt', label: 'Đội ngũ Y Bác sĩ', icon: '👨‍⚕️' },
       { id: 'services', label: 'Bảng giá niêm yết', icon: '🏷️' },
       { id: 'audit', label: 'Nhật ký giám sát', icon: '📜' },
@@ -89,6 +90,7 @@ const ROLE_CONFIGS = {
     defaultTab: 'users',
     tabs: [
       { id: 'users', label: 'Quản lý người dùng', icon: '👥' },
+      { id: 'promotions', label: 'Quản lý Mã giảm giá', icon: '🎟️' },
       { id: 'rbac', label: 'Phân quyền RBAC', icon: '🛡️' },
       { id: 'audit', label: 'Nhật ký kiểm toán', icon: '📜' },
       { id: 'system', label: 'Giám sát hạ tầng & AI', icon: '⚡' },

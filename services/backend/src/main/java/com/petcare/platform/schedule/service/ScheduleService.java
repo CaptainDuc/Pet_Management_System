@@ -162,7 +162,8 @@ public class ScheduleService {
                     .filter(t -> t.getStartTime().isAfter(now))
                     .filter(t -> includeBooked || !t.isBooked())
                     .filter(t -> neededMinutes == null
-                            || Duration.between(t.getStartTime(), t.getEndTime()).toMinutes() == neededMinutes)
+                            || Duration.between(t.getStartTime(), t.getEndTime()).toMinutes() == neededMinutes
+                            || Duration.between(t.getStartTime(), t.getEndTime()).toMinutes() >= Math.min(neededMinutes, 30))
                     .map(t -> new SlotView(
                             t.getId(),
                             t.getStartTime().atZone(ZONE).toOffsetDateTime(),

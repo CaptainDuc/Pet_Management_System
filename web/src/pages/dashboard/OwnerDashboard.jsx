@@ -4,6 +4,7 @@ import {
   Calendar, CheckCircle2, Search, RefreshCw, BarChart2,
   ShieldAlert, Activity, Sparkles, Filter, ChevronRight
 } from 'lucide-react';
+import PromotionsManager from '../../components/PromotionsManager';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8080/api/v1';
 
@@ -70,6 +71,29 @@ export default function OwnerDashboard({ user, token, activeTab, setActiveTab, o
     { id: 'SRV-05', name: 'Tắm sấy, cắt móng, vệ sinh tai (Chó < 5kg)', category: 'Spa & Grooming', price: 180000, duration: '60 phút' },
     { id: 'SRV-06', name: 'Tắm sấy, cắt tỉa lông tạo kiểu (Chó 5-15kg)', category: 'Spa & Grooming', price: 280000, duration: '90 phút' }
   ]);
+  const [servicesLoading, setServicesLoading] = useState(false);
+
+  const fetchServices = async () => {
+    setServicesLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/services?page=0&size=50`);
+      const data = await res.json();
+      if (data?.data?.content && data.data.content.length > 0) {
+        setServices(data.data.content.map((s, idx) => ({
+          id: `SRV-${String(idx + 1).padStart(2, '0')}`,
+          rawId: s.id,
+          name: s.name,
+          category: s.description || 'Dịch vụ phòng khám',
+          duration: `${s.durationMinutes} phút`,
+          price: Number(s.basePrice || 0)
+        })));
+      }
+    } catch (err) {
+      console.warn('Services fetch error:', err);
+    } finally {
+      setServicesLoading(false);
+    }
+  };
 
   // Audit Logs state
   const [auditLogs, setAuditLogs] = useState([]);
@@ -134,6 +158,8 @@ export default function OwnerDashboard({ user, token, activeTab, setActiveTab, o
       fetchAnalytics();
     } else if (activeTab === 'audit') {
       fetchAudit();
+    } else if (activeTab === 'services') {
+      fetchServices();
     }
   }, [activeTab]);
 
@@ -452,6 +478,11 @@ export default function OwnerDashboard({ user, token, activeTab, setActiveTab, o
             </div>
           </div>
         </div>
+      )}
+
+      {/* TAB: QUẢN LÝ MÃ GIẢM GIÁ & KHUYẾN MÃI */}
+      {activeTab === 'promotions' && (
+        <PromotionsManager token={token} onApiLog={onApiLog} />
       )}
     </div>
   );

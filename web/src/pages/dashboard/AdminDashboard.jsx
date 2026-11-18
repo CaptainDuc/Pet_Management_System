@@ -4,6 +4,7 @@ import {
   AlertTriangle, Search, Filter, Plus, UserCheck, Key,
   ChevronRight, Database, Cpu, Activity
 } from 'lucide-react';
+import PromotionsManager from '../../components/PromotionsManager';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8080/api/v1';
 
@@ -516,6 +517,11 @@ export default function AdminDashboard({ user, token, activeTab, setActiveTab, o
             ))}
           </div>
         </div>
+      )}
+
+      {/* TAB: QUẢN LÝ MÃ GIẢM GIÁ */}
+      {activeTab === 'promotions' && (
+        <PromotionsManager token={token} onApiLog={onApiLog} />
       )}
     </div>
   );

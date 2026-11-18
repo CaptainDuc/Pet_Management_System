@@ -11,6 +11,7 @@ from typing import Optional
 
 import psycopg
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -247,7 +248,7 @@ def _search(question, species, category, top_k):
         rows = _run_search(conn, query_vector, filter_params, top_k)
 
         best_score = max((float(row.get("score") or 0.0) for row in rows), default=0.0)
-        if best_score < RETRANSLATE_THRESHOLD:
+        if rows and best_score < RETRANSLATE_THRESHOLD:
             translated = _translate_for_search(question)
             if translated and translated.lower() != question.lower():
                 try:
@@ -373,7 +374,7 @@ def health():
     return info
 
 
-@app.post("/query")
+@app.post("/query", response_class=JSONResponse)
 def query_rag(payload: QueryRequest):
     question = payload.question.strip()
     if not question:
@@ -389,16 +390,41 @@ def query_rag(payload: QueryRequest):
         raise HTTPException(status_code=502, detail=f"Lỗi truy xuất tri thức: {error}")
 
     if not rows:
-        return {
-            "answer": "Mình chưa tìm thấy tài liệu phù hợp trong cơ sở tri thức. "
-            "Bạn nên đưa thú cưng đến bác sĩ thú y để được kiểm tra trực tiếp.",
-            "sources": [],
-            "confidence": 0.0,
-            "provider": "groq",
-            "model": GROQ_MODEL,
-            "embeddingModel": config.model,
-            "latencyMs": int((time.time() - started) * 1000),
-        }
+        context = (
+            "Chưa có tài liệu phòng khám cụ thể trong cơ sở tri thức cho câu hỏi này. "
+            "Hãy đóng vai trò trợ lý AI thú y PetCare, tư vấn ngắn gọn, khoa học "
+            "dựa trên kiến thức y tế thú y chuẩn mực và hướng dẫn chủ nuôi cách chăm sóc sơ cứu, "
+            "nhắc nhở mang thú cưng đi khám nếu có dấu hiệu nguy hiểm."
+        )
+        try:
+            answer, model_used = _ask_groq(
+                question,
+                context,
+                role=payload.role,
+                pets=payload.pets,
+                search_query=search_query,
+            )
+            return {
+                "answer": answer,
+                "sources": [],
+                "confidence": 0.0,
+                "provider": "groq",
+                "model": model_used,
+                "embeddingModel": config.model,
+                "latencyMs": int((time.time() - started) * 1000),
+            }
+        except Exception as error:  # noqa: BLE001
+            logger.warning("Gọi Groq fallback thất bại: %s", error)
+            return {
+                "answer": "Mình chưa tìm thấy tài liệu phù hợp trong cơ sở tri thức. "
+                "Bạn nên đưa thú cưng đến bác sĩ thú y để được kiểm tra trực tiếp.",
+                "sources": [],
+                "confidence": 0.0,
+                "provider": "groq",
+                "model": GROQ_MODEL,
+                "embeddingModel": config.model,
+                "latencyMs": int((time.time() - started) * 1000),
+            }
 
     context = _build_context(rows)
     confidence = max(float(row.get("score") or 0.0) for row in rows)
