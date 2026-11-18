@@ -40,3 +40,6 @@ logs/
 web/dist/
 .github
 .agents
+
+# RAG local environment
+.venv/

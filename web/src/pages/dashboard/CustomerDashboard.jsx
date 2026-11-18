@@ -7,6 +7,8 @@ import {
 } from 'lucide-react';
 import { clinicApi } from '../../api/clinic';
 import VietQrPaymentModal from '../../components/VietQrPaymentModal';
+import AiBookingForm from '../../components/AiBookingForm';
+import AiMessageText from '../../components/AiMessageText';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8080/api/v1';
 
@@ -180,7 +182,7 @@ export default function CustomerDashboard({ user, token, activeTab, setActiveTab
   const [aiMessages, setAiMessages] = useState([
     {
       sender: 'ai',
-      text: 'Xin chào bạn! Tôi là Trợ lý AI Bác sĩ Thú y PetCare. Bạn đang quan sát thấy thú cưng có triệu chứng gì bất thường, hoặc cần tư vấn dinh dưỡng và chăm sóc không?'
+      text: 'Xin chào bạn! Tôi là Trợ lý AI Bác sĩ Thú y PetCare. Bạn có thể hỏi về triệu chứng, dinh dưỡng, chăm sóc hoặc yêu cầu đặt lịch khám cho thú cưng.'
     }
   ]);
   const [aiInput, setAiInput] = useState('');
@@ -450,18 +452,16 @@ export default function CustomerDashboard({ user, token, activeTab, setActiveTab
       const data = await res.json();
       if (onApiLog) onApiLog({ status: res.status, data });
 
-      let replyText = '';
-      if (data?.tip) {
-        replyText = data.tip;
-      } else if (data?.data?.tip) {
-        replyText = data.data.tip;
-      } else if (data?.response) {
-        replyText = data.response;
-      } else {
-        replyText = `Cảm ơn bạn đã hỏi về "${q}". Đối với triệu chứng này, bạn cần theo dõi sát thân nhiệt và thói quen uống nước của thú cưng. Nếu tình trạng nôn hoặc bỏ ăn kéo dài trên 24 giờ, hãy mang bé đến phòng khám PetCare gần nhất để được làm xét nghiệm máu và siêu âm kịp thời!`;
-      }
+      let replyText =
+        data?.answer ||
+        data?.data?.answer ||
+        data?.tip ||
+        data?.data?.tip ||
+        data?.response ||
+        `Cảm ơn bạn đã hỏi về "${q}". Đối với triệu chứng này, bạn cần theo dõi sát thân nhiệt và thói quen uống nước của thú cưng. Nếu tình trạng nôn hoặc bỏ ăn kéo dài trên 24 giờ, hãy mang bé đến phòng khám PetCare gần nhất để được làm xét nghiệm máu và siêu âm kịp thời!`;
 
-      setAiMessages(prev => [...prev, { sender: 'ai', text: replyText }]);
+      const bookingForm = data?.bookingForm || data?.data?.bookingForm;
+      setAiMessages(prev => [...prev, { sender: 'ai', text: replyText, bookingForm }]);
     } catch (err) {
       setAiMessages(prev => [
         ...prev,
@@ -1204,24 +1204,36 @@ export default function CustomerDashboard({ user, token, activeTab, setActiveTab
             {/* Chat Messages */}
             <div className="flex-1 p-4 overflow-y-auto space-y-3.5 text-xs">
               {aiMessages.map((msg, idx) => (
-                <div
-                  key={idx}
-                  className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
-                >
-                  <div
-                    className={`max-w-[85%] rounded-2xl p-3.5 leading-relaxed shadow-xs ${msg.sender === 'user'
-                      ? 'bg-blue-600 text-white rounded-br-xs'
-                      : 'bg-slate-100 text-slate-800 rounded-bl-xs border border-slate-200/80'
-                      }`}
-                  >
-                    {msg.sender === 'ai' && (
-                      <div className="flex items-center space-x-1.5 text-blue-600 font-semibold mb-1">
-                        <Sparkles className="w-3.5 h-3.5" />
-                        <span>PetCare AI Vet</span>
-                      </div>
-                    )}
-                    <p className="whitespace-pre-wrap">{msg.text}</p>
+                <div key={idx} className="space-y-1.5">
+                  <div className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
+                    <div
+                      className={`max-w-[85%] rounded-2xl p-3.5 leading-relaxed shadow-xs ${msg.sender === 'user'
+                        ? 'bg-blue-600 text-white rounded-br-xs'
+                        : 'bg-slate-100 text-slate-800 rounded-bl-xs border border-slate-200/80'
+                        }`}
+                    >
+                      {msg.sender === 'ai' && (
+                        <div className="flex items-center space-x-1.5 text-blue-600 font-semibold mb-1">
+                          <Sparkles className="w-3.5 h-3.5" />
+                          <span>PetCare AI Vet</span>
+                        </div>
+                      )}
+                      {msg.sender === 'ai' ? (
+                        <AiMessageText text={msg.text} />
+                      ) : (
+                        <p className="whitespace-pre-wrap">{msg.text}</p>
+                      )}
+                    </div>
                   </div>
+                  {msg.bookingForm && (
+                    <AiBookingForm
+                      form={msg.bookingForm}
+                      pets={pets}
+                      services={services}
+                      token={token}
+                      onBooked={fetchBookings}
+                    />
+                  )}
                 </div>
               ))}
               {aiLoading && (

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import AdminConsole from './AdminConsole';
 import StaffPortal from './StaffPortal';
+import PublicAiChat from './components/PublicAiChat';
 import {
   ArrowRight,
   Award,
@@ -183,6 +184,14 @@ function LandingPage() {
           </nav>
 
           <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => window.dispatchEvent(new Event('open-public-ai-chat'))}
+              className="hidden items-center gap-2 rounded-full border border-brand-blue/20 bg-white px-4 py-2.5 text-sm font-bold text-brand-blue shadow-sm transition hover:-translate-y-0.5 hover:border-brand-blue hover:bg-sky-50 sm:inline-flex"
+            >
+              <Sparkles className="h-4 w-4" />
+              Hỏi AI
+            </button>
             <a
               href="/login"
               className="hidden items-center gap-2 rounded-full bg-brand-navy px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-brand-navy/20 transition hover:-translate-y-0.5 hover:bg-brand-blue sm:inline-flex"
@@ -229,6 +238,17 @@ function LandingPage() {
                 <Users className="h-4 w-4" />
                 Đăng nhập
               </a>
+              <button
+                type="button"
+                onClick={() => {
+                  setMenuOpen(false);
+                  window.dispatchEvent(new Event('open-public-ai-chat'));
+                }}
+                className="flex items-center justify-center gap-2 rounded-xl border border-brand-blue/20 bg-sky-50 px-4 py-3 text-sm font-bold text-brand-blue"
+              >
+                <Sparkles className="h-4 w-4" />
+                Chat với AI thú y
+              </button>
             </div>
           </div>
         )}
@@ -905,6 +925,8 @@ function LandingPage() {
       >
         <Phone className="h-6 w-6" />
       </a>
+
+      <PublicAiChat />
     </div>
   );
 }
