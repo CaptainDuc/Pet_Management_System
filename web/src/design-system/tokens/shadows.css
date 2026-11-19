@@ -1,0 +1,83 @@
+/**
+ * PetCare Design System — Shadow Tokens (CSS Custom Properties)
+ * Auto-generated from shadows.js - do not edit directly
+ * Brand: Pet Service (Pet Service)
+ */
+
+:root {
+  /* Base elevation levels */
+  --shadow-none: none;
+  --shadow-xs: 0 1px 2px 0 rgba(7, 11, 20, 0.05);
+  --shadow-sm: 0 1px 3px 0 rgba(7, 11, 20, 0.1), 0 1px 2px -1px rgba(7, 11, 20, 0.1);
+  --shadow-md: 0 4px 6px -1px rgba(7, 11, 20, 0.1), 0 2px 4px -2px rgba(7, 11, 20, 0.1);
+  --shadow-lg: 0 10px 15px -3px rgba(7, 11, 20, 0.1), 0 4px 6px -4px rgba(7, 11, 20, 0.1);
+  --shadow-xl: 0 20px 25px -5px rgba(7, 11, 20, 0.1), 0 8px 10px -6px rgba(7, 11, 20, 0.1);
+  --shadow-2xl: 0 25px 50px -12px rgba(7, 11, 20, 0.25);
+  --shadow-inner: inset 0 2px 4px 0 rgba(7, 11, 20, 0.05);
+
+  /* Brand-colored shadows - using landing page brand colors */
+  --shadow-brand-sm: 0 2px 8px -2px rgba(23, 29, 63, 0.15);
+  --shadow-brand-md: 0 8px 20px -4px rgba(23, 29, 63, 0.2);
+  --shadow-brand-lg: 0 20px 40px -8px rgba(23, 29, 63, 0.25);
+  --shadow-brand-xl: 0 25px 60px -15px rgba(23, 29, 63, 0.35);
+  --shadow-brand-glow: 0 0 30px rgba(37, 99, 235, 0.25);
+  --shadow-brand-glow-peach: 0 0 30px rgba(255, 188, 125, 0.3);
+  --shadow-brand-glow-cyan: 0 0 30px rgba(6, 182, 212, 0.25);
+  --shadow-brand-glow-green: 0 0 30px rgba(35, 164, 85, 0.25);
+
+  /* Colored shadows - Primary (Brand Blue) */
+  --shadow-colored-primary-sm: 0 2px 8px -2px rgba(37, 99, 235, 0.25);
+  --shadow-colored-primary-md: 0 4px 12px -2px rgba(37, 99, 235, 0.3);
+  --shadow-colored-primary-lg: 0 8px 24px -4px rgba(37, 99, 235, 0.35);
+
+  /* Colored shadows - Success (Brand Green) */
+  --shadow-colored-success-sm: 0 2px 8px -2px rgba(35, 164, 85, 0.25);
+  --shadow-colored-success-md: 0 4px 12px -2px rgba(35, 164, 85, 0.3);
+  --shadow-colored-success-lg: 0 8px 24px -4px rgba(35, 164, 85, 0.35);
+
+  /* Colored shadows - Warning (Brand Peach) */
+  --shadow-colored-warning-sm: 0 2px 8px -2px rgba(255, 188, 125, 0.3);
+  --shadow-colored-warning-md: 0 4px 12px -2px rgba(255, 188, 125, 0.35);
+  --shadow-colored-warning-lg: 0 8px 24px -4px rgba(255, 188, 125, 0.4);
+
+  /* Colored shadows - Error */
+  --shadow-colored-error-sm: 0 2px 8px -2px rgba(220, 38, 38, 0.25);
+  --shadow-colored-error-md: 0 4px 12px -2px rgba(220, 38, 38, 0.3);
+  --shadow-colored-error-lg: 0 8px 24px -4px rgba(220, 38, 38, 0.35);
+
+  /* Colored shadows - Info (Brand Cyan) */
+  --shadow-colored-info-sm: 0 2px 8px -2px rgba(6, 182, 212, 0.25);
+  --shadow-colored-info-md: 0 4px 12px -2px rgba(6, 182, 212, 0.3);
+  --shadow-colored-info-lg: 0 8px 24px -4px rgba(6, 182, 212, 0.35);
+
+  /* Focus rings */
+  --shadow-focus: 0 0 0 3px rgba(37, 99, 235, 0.2);
+  --shadow-focus-primary: 0 0 0 3px rgba(37, 99, 235, 0.2);
+  --shadow-focus-error: 0 0 0 3px rgba(220, 38, 38, 0.2);
+  --shadow-focus-success: 0 0 0 3px rgba(35, 164, 85, 0.2);
+  --shadow-focus-info: 0 0 0 3px rgba(6, 182, 212, 0.2);
+  --shadow-focus-warning: 0 0 0 3px rgba(255, 188, 125, 0.2);
+
+  /* Component-specific shadows */
+  --shadow-card: 0 1px 3px 0 rgba(7, 11, 20, 0.08), 0 1px 2px -1px rgba(7, 11, 20, 0.08);
+  --shadow-card-hover: 0 10px 25px -5px rgba(7, 11, 20, 0.1), 0 8px 10px -6px rgba(7, 11, 20, 0.1);
+  --shadow-card-elevated: 0 20px 40px -12px rgba(7, 11, 20, 0.15);
+
+  --shadow-modal-overlay: 0 25px 50px -12px rgba(7, 11, 20, 0.5);
+  --shadow-modal-content: 0 20px 60px -15px rgba(7, 11, 20, 0.35);
+
+  --shadow-dropdown: 0 10px 15px -3px rgba(7, 11, 20, 0.1), 0 4px 6px -4px rgba(7, 11, 20, 0.1);
+
+  --shadow-tooltip: 0 4px 12px -2px rgba(7, 11, 20, 0.15);
+
+  /* Sidebar shadow */
+  --shadow-sidebar: 0 20px 40px -12px rgba(7, 11, 20, 0.25);
+
+  /* Semantic elevation */
+  --elevation-level0: none;
+  --elevation-level1: 0 1px 3px 0 rgba(7, 11, 20, 0.1), 0 1px 2px -1px rgba(7, 11, 20, 0.1);
+  --elevation-level2: 0 4px 6px -1px rgba(7, 11, 20, 0.1), 0 2px 4px -2px rgba(7, 11, 20, 0.1);
+  --elevation-level3: 0 10px 15px -3px rgba(7, 11, 20, 0.1), 0 4px 6px -4px rgba(7, 11, 20, 0.1);
+  --elevation-level4: 0 20px 25px -5px rgba(7, 11, 20, 0.1), 0 8px 10px -6px rgba(7, 11, 20, 0.1);
+  --elevation-level5: 0 25px 50px -12px rgba(7, 11, 20, 0.25);
+}

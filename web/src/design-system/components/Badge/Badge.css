@@ -1,0 +1,289 @@
+/**
+ * PetCare Design System — Badge Styles
+ * Uses design tokens from tokens/
+ * Replaces: Status badges, Role badges, Tags, Notification counters
+ */
+
+@import '@tokens/colors.css';
+@import '@tokens/spacing.css';
+@import '@tokens/typography.css';
+@import '@tokens/shadows.css';
+@import '@tokens/borderRadius.css';
+@import '@tokens/transitions.css';
+
+/* Base badge */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1.5);
+  font-family: var(--font-family-sans);
+  font-weight: var(--font-weight-semibold);
+  white-space: nowrap;
+  border-radius: var(--radius-badge-md);
+  transition: var(--transition-badge);
+  box-sizing: border-box;
+  line-height: 1;
+}
+
+/* Sizes */
+.badge--xs {
+  height: 18px;
+  padding: 0 var(--space-1.5);
+  font-size: var(--font-size-2xs);
+  gap: var(--space-1);
+}
+
+.badge--sm {
+  height: 22px;
+  padding: 0 var(--space-2);
+  font-size: var(--font-size-xs);
+  gap: var(--space-1);
+}
+
+.badge--md {
+  height: 26px;
+  padding: 0 var(--space-2.5);
+  font-size: var(--font-size-sm);
+  gap: var(--space-1.5);
+}
+
+.badge--lg {
+  height: 32px;
+  padding: 0 var(--space-3);
+  font-size: var(--font-size-base);
+  gap: var(--space-2);
+}
+
+/* Variants - Solid */
+.badge--default {
+  background: var(--color-badge-default-bg);
+  color: var(--color-badge-default-fg);
+}
+
+.badge--primary {
+  background: var(--color-badge-primary-bg);
+  color: var(--color-badge-primary-fg);
+}
+
+.badge--secondary {
+  background: var(--color-badge-secondary-bg);
+  color: var(--color-badge-secondary-fg);
+}
+
+.badge--success {
+  background: var(--color-badge-success-bg);
+  color: var(--color-badge-success-fg);
+}
+
+.badge--warning {
+  background: var(--color-badge-warning-bg);
+  color: var(--color-badge-warning-fg);
+}
+
+.badge--error {
+  background: var(--color-badge-error-bg);
+  color: var(--color-badge-error-fg);
+}
+
+.badge--info {
+  background: var(--color-badge-info-bg);
+  color: var(--color-badge-info-fg);
+}
+
+/* Variants - Outline */
+.badge--outline {
+  background: transparent;
+  border: 1px solid var(--color-border-primary);
+  color: var(--color-fg-secondary);
+}
+
+.badge--outline.badge--primary {
+  border-color: var(--color-interactive-primary-main);
+  color: var(--color-interactive-primary-main);
+}
+
+.badge--outline.badge--success {
+  border-color: var(--color-status-success-main);
+  color: var(--color-status-success-main);
+}
+
+.badge--outline.badge--warning {
+  border-color: var(--color-status-warning-main);
+  color: var(--color-status-warning-text);
+}
+
+.badge--outline.badge--error {
+  border-color: var(--color-status-error-main);
+  color: var(--color-status-error-main);
+}
+
+.badge--outline.badge--info {
+  border-color: var(--color-interactive-info-main);
+  color: var(--color-interactive-info-main);
+}
+
+/* Variants - Ghost */
+.badge--ghost {
+  background: transparent;
+  color: var(--color-fg-secondary);
+}
+
+.badge--ghost.badge--primary {
+  color: var(--color-interactive-primary-main);
+}
+
+.badge--ghost.badge--success {
+  color: var(--color-status-success-main);
+}
+
+.badge--ghost.badge--warning {
+  color: var(--color-status-warning-text);
+}
+
+.badge--ghost.badge--error {
+  color: var(--color-status-error-main);
+}
+
+.badge--ghost:hover {
+  background: var(--color-interactive-ghost-hover);
+}
+
+/* Dot indicator */
+.badge__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: currentColor;
+  flex-shrink: 0;
+}
+
+.badge--xs .badge__dot {
+  width: 4px;
+  height: 4px;
+}
+
+.badge--sm .badge__dot {
+  width: 5px;
+  height: 5px;
+}
+
+.badge--lg .badge__dot {
+  width: 8px;
+  height: 8px;
+}
+
+/* Removable */
+.badge--removable {
+  padding-right: var(--space-1);
+  gap: var(--space-1);
+}
+
+.badge__remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: var(--radius-full);
+  background: transparent;
+  border: none;
+  color: inherit;
+  opacity: 0.6;
+  cursor: pointer;
+  transition: var(--transition-button);
+  flex-shrink: 0;
+  line-height: 0;
+  margin-left: var(--space-0.5);
+}
+
+.badge__remove:hover {
+  opacity: 1;
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.badge__remove:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+}
+
+/* Status-specific semantic variants */
+
+/* Appointment statuses */
+.badge--appointment-scheduled { background: var(--color-badge-info-bg); color: var(--color-badge-info-fg); }
+.badge--appointment-confirmed { background: var(--color-badge-success-bg); color: var(--color-badge-success-fg); }
+.badge--appointment-in-progress { background: var(--color-badge-primary-bg); color: var(--color-badge-primary-fg); }
+.badge--appointment-completed { background: var(--color-badge-secondary-bg); color: var(--color-badge-secondary-fg); }
+.badge--appointment-cancelled { background: var(--color-badge-error-bg); color: var(--color-badge-error-fg); }
+.badge--appointment-no-show { background: var(--color-badge-warning-bg); color: var(--color-badge-warning-fg); }
+
+/* Payment statuses */
+.badge--payment-pending { background: var(--color-badge-warning-bg); color: var(--color-badge-warning-fg); }
+.badge--payment-processing { background: var(--color-badge-info-bg); color: var(--color-badge-info-fg); }
+.badge--payment-completed { background: var(--color-badge-success-bg); color: var(--color-badge-success-fg); }
+.badge--payment-failed { background: var(--color-badge-error-bg); color: var(--color-badge-error-fg); }
+.badge--payment-refunded { background: var(--color-badge-secondary-bg); color: var(--color-badge-secondary-fg); }
+.badge--payment-partially-refunded { background: var(--color-badge-info-bg); color: var(--color-badge-info-fg); }
+
+/* Order statuses */
+.badge--order-pending { background: var(--color-badge-warning-bg); color: var(--color-badge-warning-fg); }
+.badge--order-confirmed { background: var(--color-badge-info-bg); color: var(--color-badge-info-fg); }
+.badge--order-preparing { background: var(--color-badge-primary-bg); color: var(--color-badge-primary-fg); }
+.badge--order-ready { background: var(--color-badge-success-bg); color: var(--color-badge-success-fg); }
+.badge--order-delivered { background: var(--color-badge-secondary-bg); color: var(--color-badge-secondary-fg); }
+.badge--order-cancelled { background: var(--color-badge-error-bg); color: var(--color-badge-error-fg); }
+
+/* Role badges */
+.badge--role-owner { background: linear-gradient(135deg, #f59e0b, #d97706); color: white; }
+.badge--role-veterinarian { background: var(--color-badge-primary-bg); color: var(--color-badge-primary-fg); }
+.badge--role-staff { background: var(--color-badge-info-bg); color: var(--color-badge-info-fg); }
+.badge--role-admin { background: var(--color-badge-secondary-bg); color: var(--color-badge-secondary-fg); }
+.badge--role-customer { background: var(--color-badge-default-bg); color: var(--color-badge-default-fg); }
+
+/* Notification counter badge */
+.badge--counter {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 var(--space-1.5);
+  border-radius: var(--radius-full);
+  justify-content: center;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+}
+
+.badge--counter.badge--xs {
+  min-width: 16px;
+  height: 16px;
+  padding: 0 var(--space-1);
+  font-size: var(--font-size-2xs);
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .badge {
+    transition-duration: 0.01ms !important;
+  }
+
+  .badge__remove {
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* High contrast mode */
+@media (prefers-contrast: high) {
+  .badge {
+    border: 2px solid currentColor;
+  }
+
+  .badge--outline {
+    border-width: 2px;
+  }
+
+  .badge--ghost {
+    border: 2px solid transparent;
+  }
+
+  .badge__remove:hover {
+    background: currentColor;
+    color: var(--color-bg-primary);
+  }
+}

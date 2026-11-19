@@ -1,0 +1,172 @@
+/**
+ * PetCare Design System — Avatar Styles
+ * Uses design tokens from tokens/
+ * Replaces: User avatars, Pet avatars, Staff avatars, Comment avatars
+ */
+
+@import '@tokens/colors.css';
+@import '@tokens/spacing.css';
+@import '@tokens/typography.css';
+@import '@tokens/shadows.css';
+@import '@tokens/borderRadius.css';
+@import '@tokens/transitions.css';
+
+/* Base avatar */
+.avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  flex-shrink: 0;
+  overflow: hidden;
+  vertical-align: middle;
+  box-sizing: border-box;
+}
+
+/* Sizes */
+.avatar--xs { width: 24px; height: 24px; font-size: var(--font-size-2xs); }
+.avatar--sm { width: 32px; height: 32px; font-size: var(--font-size-xs); }
+.avatar--md { width: 40px; height: 40px; font-size: var(--font-size-sm); }
+.avatar--lg { width: 48px; height: 48px; font-size: var(--font-size-base); }
+.avatar--xl { width: 64px; height: 64px; font-size: var(--font-size-lg); }
+.avatar--2xl { width: 96px; height: 96px; font-size: var(--font-size-xl); }
+
+/* Shapes */
+.avatar--circle { border-radius: var(--radius-full); }
+.avatar--square { border-radius: var(--radius-none); }
+.avatar--rounded { border-radius: var(--radius-avatar-md); }
+
+/* Image */
+.avatar__image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* Fallback */
+.avatar__fallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  font-family: var(--font-family-display);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-fg-inverse);
+  line-height: 1;
+  background: var(--color-avatar-default);
+}
+
+/* Loading state */
+.avatar--loading .avatar__image {
+  opacity: 0;
+}
+
+.avatar__loading {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    var(--color-bg-secondary) 25%,
+    var(--color-bg-tertiary) 50%,
+    var(--color-bg-secondary) 75%
+  );
+  background-size: 200% 100%;
+  animation: var(--animation-shimmer);
+}
+
+/* Clickable */
+.avatar--clickable {
+  cursor: pointer;
+}
+
+.avatar--clickable:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+}
+
+/* Status indicator */
+.avatar__status {
+  position: absolute;
+  display: block;
+  border: 2px solid var(--color-bg-primary);
+  border-radius: var(--radius-full);
+  box-shadow: var(--shadow-sm);
+}
+
+.avatar--xs .avatar__status { width: 8px; height: 8px; }
+.avatar--sm .avatar__status { width: 10px; height: 10px; }
+.avatar--md .avatar__status { width: 12px; height: 12px; }
+.avatar--lg .avatar__status { width: 14px; height: 14px; }
+.avatar--xl .avatar__status { width: 16px; height: 16px; }
+.avatar--2xl .avatar__status { width: 20px; height: 20px; }
+
+/* Status colors */
+.avatar__status--online { background: var(--color-status-success-main); }
+.avatar__status--offline { background: var(--color-fg-disabled); }
+.avatar__status--busy { background: var(--color-status-error-main); }
+.avatar__status--away { background: var(--color-status-warning-main); }
+
+/* Status positions */
+.avatar__status--bottom-right { bottom: 0; right: 0; }
+.avatar__status--bottom-left { bottom: 0; left: 0; }
+.avatar__status--top-right { top: 0; right: 0; }
+.avatar__status--top-left { top: 0; left: 0; }
+
+/* Avatar Group */
+.avatar-group {
+  display: inline-flex;
+  align-items: center;
+}
+
+.avatar-group__item {
+  margin-left: calc(var(--space-2) * -1);
+  border: 2px solid var(--color-bg-primary);
+  transition: var(--transition-transform);
+  position: relative;
+}
+
+.avatar-group__item:first-child {
+  margin-left: 0;
+}
+
+.avatar-group__item:hover {
+  transform: translateY(-2px);
+  z-index: 10 !important;
+}
+
+.avatar-group__more {
+  background: var(--color-bg-secondary);
+  color: var(--color-fg-secondary);
+  font-weight: var(--font-weight-semibold);
+}
+
+.avatar-group__more .avatar__fallback {
+  background: transparent;
+  color: inherit;
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .avatar__loading,
+  .avatar-group__item {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
+
+/* High contrast mode */
+@media (prefers-contrast: high) {
+  .avatar {
+    border: 2px solid var(--color-fg-primary);
+  }
+
+  .avatar__status {
+    border-width: 2px;
+  }
+
+  .avatar-group__item {
+    border-width: 2px;
+  }
+}

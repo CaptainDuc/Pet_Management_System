@@ -1,0 +1,154 @@
+/**
+ * PetCare Design System — Tooltip Styles
+ * Uses design tokens from tokens/
+ * Replaces: Icon tooltips, Form hints, Action hints, Data point tooltips
+ */
+
+@import '@tokens/colors.css';
+@import '@tokens/spacing.css';
+@import '@tokens/typography.css';
+@import '@tokens/shadows.css';
+@import '@tokens/borderRadius.css';
+@import '@tokens/transitions.css';
+
+/* Base tooltip */
+.tooltip {
+  position: absolute;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transform: scale(0.9);
+  transition: var(--transition-tooltip);
+  will-change: transform, opacity;
+}
+
+.tooltip--open {
+  opacity: 1;
+  visibility: visible;
+  transform: scale(1);
+}
+
+/* Content */
+.tooltip__content {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-1.5) var(--space-2.5);
+  font-family: var(--font-family-sans);
+  font-weight: var(--font-weight-medium);
+  white-space: nowrap;
+  border-radius: var(--radius-tooltip-md);
+  box-shadow: var(--shadow-tooltip);
+  line-height: 1.4;
+}
+
+/* Sizes */
+.tooltip--sm .tooltip__content {
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--font-size-xs);
+}
+
+.tooltip--md .tooltip__content {
+  padding: var(--space-1.5) var(--space-2.5);
+  font-size: var(--font-size-sm);
+}
+
+.tooltip--lg .tooltip__content {
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--font-size-base);
+}
+
+/* Variants */
+.tooltip--default .tooltip__content {
+  background: var(--color-tooltip-bg);
+  color: var(--color-tooltip-fg);
+}
+
+.tooltip--info .tooltip__content {
+  background: var(--color-tooltip-info-bg);
+  color: var(--color-tooltip-info-fg);
+}
+
+.tooltip--warning .tooltip__content {
+  background: var(--color-tooltip-warning-bg);
+  color: var(--color-tooltip-warning-fg);
+}
+
+.tooltip--error .tooltip__content {
+  background: var(--color-tooltip-error-bg);
+  color: var(--color-tooltip-error-fg);
+}
+
+.tooltip--success .tooltip__content {
+  background: var(--color-tooltip-success-bg);
+  color: var(--color-tooltip-success-fg);
+}
+
+/* Arrow */
+.tooltip__arrow {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  transform-origin: center;
+  pointer-events: none;
+}
+
+.tooltip--default .tooltip__arrow { background: var(--color-tooltip-bg); }
+.tooltip--info .tooltip__arrow { background: var(--color-tooltip-info-bg); }
+.tooltip--warning .tooltip__arrow { background: var(--color-tooltip-warning-bg); }
+.tooltip--error .tooltip__arrow { background: var(--color-tooltip-error-bg); }
+.tooltip--success .tooltip__arrow { background: var(--color-tooltip-success-bg); }
+
+/* Position adjustments for arrow centering on start/end variants */
+.tooltip--top-start .tooltip__arrow,
+.tooltip--top-end .tooltip__arrow,
+.tooltip--bottom-start .tooltip__arrow,
+.tooltip--bottom-end .tooltip__arrow {
+  left: auto;
+  right: auto;
+}
+
+.tooltip--left-start .tooltip__arrow,
+.tooltip--left-end .tooltip__arrow,
+.tooltip--right-start .tooltip__arrow,
+.tooltip--right-end .tooltip__arrow {
+  top: auto;
+  bottom: auto;
+}
+
+/* Multiline content support */
+.tooltip__content[data-multiline="true"] {
+  white-space: normal;
+  max-width: 280px;
+  text-align: center;
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .tooltip {
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* High contrast mode */
+@media (prefers-contrast: high) {
+  .tooltip__content {
+    border: 2px solid currentColor;
+  }
+
+  .tooltip__arrow {
+    border: 2px solid currentColor;
+    background: var(--color-bg-primary);
+  }
+}
+
+/* Print */
+@media print {
+  .tooltip {
+    display: none;
+  }
+}

@@ -7,35 +7,22 @@ import {
 } from 'lucide-react';
 import { clinicApi } from '../../api/clinic';
 import VietQrPaymentModal from '../../components/VietQrPaymentModal';
+import { Card, Input, Button, Badge, Table, Modal, Avatar, Select } from '../../design-system/components';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
 
-const BOOKING_STATUS_STYLES = {
-  PENDING: 'bg-amber-50 text-amber-700 border border-amber-200',
-  CONFIRMED: 'bg-blue-50 text-blue-700 border border-blue-200',
-  IN_PROGRESS: 'bg-indigo-50 text-indigo-700 border border-indigo-200',
-  COMPLETED: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
-  CANCELLED: 'bg-rose-50 text-rose-700 border border-rose-200',
+const BOOKING_STATUS_CONFIG = {
+  PENDING: { label: 'Chờ duyệt', variant: 'warning' },
+  CONFIRMED: { label: 'Đã xác nhận', variant: 'info' },
+  IN_PROGRESS: { label: 'Đang khám', variant: 'info' },
+  COMPLETED: { label: 'Đã hoàn tất', variant: 'success' },
+  CANCELLED: { label: 'Đã hủy', variant: 'error' },
 };
 
-const BOOKING_STATUS_LABELS = {
-  PENDING: 'Chờ duyệt',
-  CONFIRMED: 'Đã xác nhận',
-  IN_PROGRESS: 'Đang khám',
-  COMPLETED: 'Đã hoàn tất',
-  CANCELLED: 'Đã hủy',
-};
-
-const PAYMENT_STATUS_STYLES = {
-  UNPAID: 'bg-rose-50 text-rose-700 border border-rose-200',
-  PAID: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
-  REFUNDED: 'bg-slate-100 text-slate-600 border border-slate-200',
-};
-
-const PAYMENT_STATUS_LABELS = {
-  UNPAID: 'Chưa thanh toán',
-  PAID: 'Đã thanh toán',
-  REFUNDED: 'Đã hoàn tiền',
+const PAYMENT_STATUS_CONFIG = {
+  UNPAID: { label: 'Chưa thanh toán', variant: 'error' },
+  PAID: { label: 'Đã thanh toán', variant: 'success' },
+  REFUNDED: { label: 'Đã hoàn tiền', variant: 'ghost' },
 };
 
 const FALLBACK_DOG_AVATAR = 'https://images.unsplash.com/photo-1552053831-71594a27632d?w=400&auto=format&fit=crop&q=80';
@@ -493,80 +480,76 @@ export default function CustomerDashboard({ user, token, activeTab, setActiveTab
       {/* TAB 1: THÚ CƯNG CỦA TÔI */}
       {activeTab === 'pets' && (
         <div className="space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
+          <Card variant="outlined" padding="lg" className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <div className="flex items-center space-x-2">
-                <span className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
-                  🐾
-                </span>
-                <h2 className="text-lg font-bold text-slate-900">Thú cưng của tôi</h2>
-              </div>
-              <p className="text-xs text-slate-500 mt-1">
+              <Card.Title className="flex items-center space-x-2 text-base font-bold text-[var(--color-fg-primary)]">
+                <span className="w-8 h-8 rounded-xl bg-[var(--color-role-customer-bg)] text-[var(--color-role-customer-text)] flex items-center justify-center font-bold">🐾</span>
+                <span>Thú cưng của tôi</span>
+              </Card.Title>
+              <Card.Description className="text-xs text-[var(--color-fg-tertiary)] mt-1">
                 Quản lý hồ sơ sức khỏe, giống loài, cân nặng và sổ tiêm phòng của các bé
-              </p>
+              </Card.Description>
             </div>
-            <button
+            <Button
+              variant="primary"
+              size="sm"
+              leftIcon={<Plus className="w-4 h-4" />}
               onClick={() => setShowAddPetModal(true)}
-              className="inline-flex items-center space-x-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold shadow-sm transition active:scale-95"
             >
-              <Plus className="w-4 h-4" />
-              <span>Thêm thú cưng mới</span>
-            </button>
-          </div>
+              Thêm thú cưng mới
+            </Button>
+          </Card>
 
           {petError && (
-            <div className="flex items-center space-x-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-700">
-              <AlertCircle className="w-4 h-4 flex-shrink-0" />
-              <span>{petError}</span>
-            </div>
+            <Card variant="outlined" padding="md" className="bg-rose-50 border-rose-200">
+              <div className="flex items-center space-x-2 text-xs text-rose-700">
+                <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                <span>{petError}</span>
+              </div>
+            </Card>
           )}
 
           {petsLoading && (
-            <div className="flex items-center justify-center rounded-2xl border border-slate-200 bg-white p-8 text-xs text-slate-500">
+            <Card variant="outlined" padding="lg" className="flex items-center justify-center text-slate-500">
               <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-              Đang tải hồ sơ thú cưng...
-            </div>
+              <span>Đang tải hồ sơ thú cưng...</span>
+            </Card>
           )}
 
           {!petsLoading && pets.length === 0 && (
-            <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center">
+            <Card variant="outlined" padding="xl" className="border-dashed border-slate-300 text-center">
               <div className="text-3xl">🐾</div>
               <p className="mt-2 text-sm font-semibold text-slate-800">Chưa có hồ sơ thú cưng</p>
-              <p className="mt-1 text-xs text-slate-500">Bấm “Thêm thú cưng mới” để tạo hồ sơ đầu tiên.</p>
-            </div>
+              <p className="mt-1 text-xs text-slate-500">Bấm "Thêm thú cưng mới" để tạo hồ sơ đầu tiên.</p>
+            </Card>
           )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             {pets.map(pet => (
-              <div
+              <Card
                 key={pet.id}
-                className="bg-white border border-slate-200 hover:border-blue-400 rounded-2xl p-5 shadow-xs transition duration-200 flex flex-col justify-between"
+                variant="outlined"
+                padding="lg"
+                className="hover:border-blue-400 transition duration-200 flex flex-col justify-between"
               >
                 <div>
                   <div className="flex items-start space-x-4">
-                    <img
+                    <Avatar
+                      size="2xl"
+                      shape="rounded"
                       src={pet.avatarUrl}
-                      alt={pet.name}
-                      className="w-20 h-20 rounded-2xl object-cover border border-slate-200 shadow-xs flex-shrink-0"
+                      name={pet.name}
                     />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between">
                         <h3 className="text-base font-bold text-slate-900 truncate">{pet.name}</h3>
-                        <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                          {pet.status}
-                        </span>
+                        <Badge variant="success" size="xs">{pet.status}</Badge>
                       </div>
                       <p className="text-xs text-slate-500 mt-0.5">{pet.breed}</p>
                       <div className="flex flex-wrap gap-2 mt-2">
-                        <span className="text-[11px] px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 font-medium">
-                          {pet.species} • {pet.gender}
-                        </span>
-                        <span className="text-[11px] px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 font-medium">
-                          {pet.age}
-                        </span>
-                        <span className="text-[11px] px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 font-medium">
-                          ⚖️ {pet.weight}
-                        </span>
+                        <Badge variant="ghost" size="xs">{pet.species} • {pet.gender}</Badge>
+                        <Badge variant="ghost" size="xs">{pet.age}</Badge>
+                        <Badge variant="ghost" size="xs">⚖️ {pet.weight}</Badge>
                       </div>
                     </div>
                   </div>
@@ -584,417 +567,350 @@ export default function CustomerDashboard({ user, token, activeTab, setActiveTab
                 </div>
 
                 <div className="mt-5 pt-3 border-t border-slate-100 flex items-center space-x-2">
-                  <button
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="flex-1"
                     onClick={() => openBookingModal(pet.id)}
-                    className="flex-1 py-2 text-xs font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-xl transition text-center"
                   >
                     Đặt lịch khám cho bé
-                  </button>
-                  <button
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
                     onClick={() => setActiveTab('bookings')}
-                    className="px-3 py-2 text-xs font-medium text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-xl transition"
                   >
                     Xem lịch
-                  </button>
+                  </Button>
                 </div>
-              </div>
+              </Card>
             ))}
           </div>
 
           {/* Modal Thêm thú cưng */}
-          {showAddPetModal && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs animate-fadeIn">
-              <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-200 space-y-4">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                  <h3 className="font-bold text-slate-900 text-base">Thêm hồ sơ thú cưng mới</h3>
-                  <button
-                    onClick={() => setShowAddPetModal(false)}
-                    className="p-1 text-slate-400 hover:text-slate-600 rounded-lg"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-                <form onSubmit={handleAddPet} className="space-y-3.5 text-xs">
-                  {petError && (
-                    <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-rose-700">
-                      {petError}
-                    </div>
-                  )}
-                  <div>
-                    <label className="font-semibold text-slate-700 block mb-1">Tên thú cưng *</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="Ví dụ: Bông, Lucky, Ken..."
-                      value={newPet.name}
-                      onChange={e => setNewPet({ ...newPet, name: e.target.value })}
-                      className="w-full h-9 px-3 border border-slate-200 rounded-xl focus:border-blue-500 focus:outline-none"
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="font-semibold text-slate-700 block mb-1">Loài</label>
-                      <select
-                        value={newPet.species}
-                        onChange={e => setNewPet({ ...newPet, species: e.target.value })}
-                        className="w-full h-9 px-3 border border-slate-200 rounded-xl focus:border-blue-500 focus:outline-none"
-                      >
-                        <option value="Chó">Chó</option>
-                        <option value="Mèo">Mèo</option>
-                        <option value="Chim">Chim cảnh</option>
-                        <option value="Thỏ / Hamster">Thỏ / Hamster</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="font-semibold text-slate-700 block mb-1">Giới tính</label>
-                      <select
-                        value={newPet.gender}
-                        onChange={e => setNewPet({ ...newPet, gender: e.target.value })}
-                        className="w-full h-9 px-3 border border-slate-200 rounded-xl focus:border-blue-500 focus:outline-none"
-                      >
-                        <option value="Đực">Đực</option>
-                        <option value="Cái">Cái</option>
-                      </select>
-                    </div>
-                  </div>
-                  <div>
-                    <label className="font-semibold text-slate-700 block mb-1">Giống loài</label>
-                    <input
-                      type="text"
-                      placeholder="Ví dụ: Poodle, Corgi, Mèo Ba Tư..."
-                      value={newPet.breed}
-                      onChange={e => setNewPet({ ...newPet, breed: e.target.value })}
-                      className="w-full h-9 px-3 border border-slate-200 rounded-xl focus:border-blue-500 focus:outline-none"
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="font-semibold text-slate-700 block mb-1">Ngày sinh</label>
-                      <input
-                        type="date"
-                        max={today}
-                        value={newPet.dateOfBirth}
-                        onChange={e => setNewPet({ ...newPet, dateOfBirth: e.target.value })}
-                        className="w-full h-9 px-3 border border-slate-200 rounded-xl focus:border-blue-500 focus:outline-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="font-semibold text-slate-700 block mb-1">Cân nặng (kg)</label>
-                      <input
-                        type="number"
-                        step="0.1"
-                        placeholder="Ví dụ: 4.5"
-                        value={newPet.weight}
-                        onChange={e => setNewPet({ ...newPet, weight: e.target.value })}
-                        className="w-full h-9 px-3 border border-slate-200 rounded-xl focus:border-blue-500 focus:outline-none"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="font-semibold text-slate-700 block mb-1">Tiền sử dị ứng / Lưu ý</label>
-                    <input
-                      type="text"
-                      placeholder="Không dị ứng, dị ứng hải sản..."
-                      value={newPet.allergies}
-                      onChange={e => setNewPet({ ...newPet, allergies: e.target.value })}
-                      className="w-full h-9 px-3 border border-slate-200 rounded-xl focus:border-blue-500 focus:outline-none"
-                    />
-                  </div>
-                  <div className="pt-2 flex justify-end space-x-2">
-                    <button
-                      type="button"
-                      onClick={() => setShowAddPetModal(false)}
-                      className="px-4 py-2 border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 font-medium"
-                    >
-                      Hủy bỏ
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={savingPet}
-                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed text-white rounded-xl font-semibold shadow-xs"
-                    >
-                      {savingPet ? 'Đang lưu...' : 'Lưu hồ sơ'}
-                    </button>
-                  </div>
-                </form>
+          <Modal
+            open={showAddPetModal}
+            onClose={() => setShowAddPetModal(false)}
+            title="Thêm hồ sơ thú cưng mới"
+            size="md"
+          >
+            <form onSubmit={handleAddPet} className="space-y-3.5 text-xs">
+              {petError && (
+                <Card variant="outlined" padding="sm" className="bg-rose-50 border-rose-200 text-rose-700 text-xs">
+                  {petError}
+                </Card>
+              )}
+              <Input
+                label="Tên thú cưng *"
+                required
+                placeholder="Ví dụ: Bông, Lucky, Ken..."
+                value={newPet.name}
+                onChange={e => setNewPet({ ...newPet, name: e.target.value })}
+              />
+              <div className="grid grid-cols-2 gap-3">
+                <Select
+                  label="Loài"
+                  value={newPet.species}
+                  onChange={e => setNewPet({ ...newPet, species: e.target.value })}
+                  options={[
+                    { value: 'Chó', label: 'Chó' },
+                    { value: 'Mèo', label: 'Mèo' },
+                    { value: 'Chim', label: 'Chim cảnh' },
+                    { value: 'Thỏ / Hamster', label: 'Thỏ / Hamster' },
+                  ]}
+                />
+                <Select
+                  label="Giới tính"
+                  value={newPet.gender}
+                  onChange={e => setNewPet({ ...newPet, gender: e.target.value })}
+                  options={[
+                    { value: 'Đực', label: 'Đực' },
+                    { value: 'Cái', label: 'Cái' },
+                  ]}
+                />
               </div>
-            </div>
-          )}
+              <Input
+                label="Giống loài"
+                placeholder="Ví dụ: Poodle, Corgi, Mèo Ba Tư..."
+                value={newPet.breed}
+                onChange={e => setNewPet({ ...newPet, breed: e.target.value })}
+              />
+              <div className="grid grid-cols-2 gap-3">
+                <Input
+                  label="Ngày sinh"
+                  type="date"
+                  max={today}
+                  value={newPet.dateOfBirth}
+                  onChange={e => setNewPet({ ...newPet, dateOfBirth: e.target.value })}
+                />
+                <Input
+                  label="Cân nặng (kg)"
+                  type="number"
+                  step="0.1"
+                  placeholder="Ví dụ: 4.5"
+                  value={newPet.weight}
+                  onChange={e => setNewPet({ ...newPet, weight: e.target.value })}
+                />
+              </div>
+              <Input
+                label="Tiền sử dị ứng / Lưu ý"
+                placeholder="Không dị ứng, dị ứng hải sản..."
+                value={newPet.allergies}
+                onChange={e => setNewPet({ ...newPet, allergies: e.target.value })}
+              />
+              <div className="pt-2 flex justify-end space-x-2">
+                <Button
+                  variant="outline"
+                  size="md"
+                  type="button"
+                  onClick={() => setShowAddPetModal(false)}
+                >
+                  Hủy bỏ
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={savingPet}
+                  loading={savingPet}
+                >
+                  Lưu hồ sơ
+                </Button>
+              </div>
+            </form>
+          </Modal>
         </div>
       )}
 
       {/* TAB 2: ĐẶT LỊCH HẸN */}
       {activeTab === 'bookings' && (
         <div className="space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
+          <Card variant="outlined" padding="lg" className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <div className="flex items-center space-x-2">
-                <span className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold">
-                  📅
-                </span>
-                <h2 className="text-lg font-bold text-slate-900">Lịch hẹn phòng khám</h2>
-              </div>
-              <p className="text-xs text-slate-500 mt-1">
+              <Card.Title className="flex items-center space-x-2 text-base font-bold text-[var(--color-fg-primary)]">
+                <span className="w-8 h-8 rounded-xl bg-[var(--color-role-customer-bg)] text-[var(--color-role-customer-text)] flex items-center justify-center font-bold">📅</span>
+                <span>Lịch hẹn phòng khám</span>
+              </Card.Title>
+              <Card.Description className="text-xs text-[var(--color-fg-tertiary)] mt-1">
                 Theo dõi lịch khám, lịch tiêm phòng, dịch vụ spa và đăng ký ca khám mới
-              </p>
+              </Card.Description>
             </div>
-            <button
+            <Button
+              variant="primary"
+              size="sm"
+              leftIcon={<Plus className="w-4 h-4" />}
               onClick={() => openBookingModal()}
-              className="inline-flex items-center space-x-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold shadow-sm transition active:scale-95"
             >
-              <Plus className="w-4 h-4" />
-              <span>Đặt lịch hẹn mới</span>
-            </button>
-          </div>
+              Đặt lịch hẹn mới
+            </Button>
+          </Card>
 
           {bookingError && (
-            <div className="flex items-center space-x-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-700">
-              <AlertCircle className="w-4 h-4 flex-shrink-0" />
-              <span>{bookingError}</span>
-            </div>
+            <Card variant="outlined" padding="md" className="bg-rose-50 border-rose-200">
+              <div className="flex items-center space-x-2 text-xs text-rose-700">
+                <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                <span>{bookingError}</span>
+              </div>
+            </Card>
           )}
 
-          <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="border-b border-slate-200 bg-slate-50/70 text-slate-600">
-                    <th className="py-3 px-4 font-semibold">Mã lịch</th>
-                    <th className="py-3 px-4 font-semibold">Thú cưng</th>
-                    <th className="py-3 px-4 font-semibold">Dịch vụ</th>
-                    <th className="py-3 px-4 font-semibold">Thời gian</th>
-                    <th className="py-3 px-4 font-semibold">Bác sĩ phụ trách</th>
-                    <th className="py-3 px-4 font-semibold">Trạng thái</th>
-                    <th className="py-3 px-4 font-semibold">Thanh toán</th>
-                    <th className="py-3 px-4 font-semibold">Phí ước tính</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {bookingsLoading && (
-                    <tr>
-                      <td colSpan={8} className="py-8 text-center text-slate-500">
-                        <RefreshCw className="w-4 h-4 mr-2 inline animate-spin" />
-                        Đang tải lịch hẹn...
-                      </td>
-                    </tr>
+          <Table
+            columns={[
+              { key: 'code', header: 'Mã lịch', width: '100px' },
+              { key: 'petName', header: 'Thú cưng', width: '120px' },
+              { key: 'service', header: 'Dịch vụ', minWidth: '200px' },
+              { key: 'time', header: 'Thời gian', width: '140px' },
+              { key: 'doctor', header: 'Bác sĩ', width: '140px' },
+              { key: 'status', header: 'Trạng thái', width: '120px' },
+              { key: 'paymentStatus', header: 'Thanh toán', width: '140px' },
+              { key: 'price', header: 'Phí ước tính', width: '140px' },
+            ]}
+            data={bookingRows}
+            keyField="id"
+            loading={bookingsLoading}
+            emptyMessage='Chưa có lịch hẹn nào. Bấm "Đặt lịch hẹn mới" để tạo lịch.'
+            striped
+            hoverable
+            className="table-wrapper"
+            renderRow={(row) => (
+              <tr className="hover:bg-slate-50/80 transition-colors">
+                <td className="py-3.5 px-4 font-mono font-semibold text-blue-600">{row.code}</td>
+                <td className="py-3.5 px-4 font-medium text-slate-900">{row.petName}</td>
+                <td className="py-3.5 px-4 text-slate-700">
+                  <div>{row.service}</div>
+                  {row.staffNote && (
+                    <div className="mt-1 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1">
+                      Lễ tân: {row.staffNote}
+                    </div>
                   )}
-                  {!bookingsLoading && bookingRows.length === 0 && (
-                    <tr>
-                      <td colSpan={8} className="py-8 text-center text-slate-500">
-                        Chưa có lịch hẹn nào. Bấm “Đặt lịch hẹn mới” để tạo lịch.
-                      </td>
-                    </tr>
+                </td>
+                <td className="py-3.5 px-4 text-slate-600">
+                  <div className="font-medium text-slate-800">{row.time}</div>
+                  <div className="text-[11px] text-slate-400">{row.date}</div>
+                </td>
+                <td className="py-3.5 px-4 text-slate-600">{row.doctor}</td>
+                <td className="py-3.5 px-4">
+                  <Badge
+                    variant={BOOKING_STATUS_CONFIG[row.status]?.variant || 'warning'}
+                    size="xs"
+                  >
+                    {BOOKING_STATUS_CONFIG[row.status]?.label || row.status}
+                  </Badge>
+                </td>
+                <td className="py-3.5 px-4">
+                  <div className="flex flex-col gap-1.5">
+                    <Badge
+                      variant={PAYMENT_STATUS_CONFIG[row.paymentStatus]?.variant || 'error'}
+                      size="xs"
+                    >
+                      {PAYMENT_STATUS_CONFIG[row.paymentStatus]?.label || row.paymentStatus}
+                    </Badge>
+                    {row.paymentStatus !== 'PAID' && row.status !== 'CANCELLED' && (
+                      <Button
+                        variant="primary"
+                        size="xs"
+                        className="w-full"
+                        leftIcon={<QrCode className="w-3 h-3" />}
+                        onClick={() => setPaymentBooking({ id: row.id, code: row.code, amount: row.rawAmount })}
+                      >
+                        Thanh toán online
+                      </Button>
+                    )}
+                  </div>
+                </td>
+                <td className="py-3.5 px-4 font-semibold text-slate-900">
+                  <div>{row.price}</div>
+                  {row.discountAmount > 0 && (
+                    <div className="text-[11px] font-medium text-emerald-600">
+                      -{row.discountAmount.toLocaleString('vi-VN')} đ
+                      {row.promotionCode ? ` (${row.promotionCode})` : ''}
+                    </div>
                   )}
-                  {!bookingsLoading && bookingRows.map(b => (
-                    <tr key={b.id} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="py-3.5 px-4 font-mono font-semibold text-blue-600">{b.code}</td>
-                      <td className="py-3.5 px-4 font-medium text-slate-900">{b.petName}</td>
-                      <td className="py-3.5 px-4 text-slate-700">
-                        <div>{b.service}</div>
-                        {b.staffNote && (
-                          <div className="mt-1 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1">
-                            Lễ tân: {b.staffNote}
-                          </div>
-                        )}
-                      </td>
-                      <td className="py-3.5 px-4 text-slate-600">
-                        <div className="font-medium text-slate-800">{b.time}</div>
-                        <div className="text-[11px] text-slate-400">{b.date}</div>
-                      </td>
-                      <td className="py-3.5 px-4 text-slate-600">{b.doctor}</td>
-                      <td className="py-3.5 px-4">
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${BOOKING_STATUS_STYLES[b.status] || BOOKING_STATUS_STYLES.PENDING}`}>
-                          {BOOKING_STATUS_LABELS[b.status] || b.status}
-                        </span>
-                      </td>
-                      <td className="py-3.5 px-4">
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${PAYMENT_STATUS_STYLES[b.paymentStatus] || PAYMENT_STATUS_STYLES.UNPAID}`}>
-                          {PAYMENT_STATUS_LABELS[b.paymentStatus] || b.paymentStatus}
-                        </span>
-                        {b.paymentStatus !== 'PAID' && b.status !== 'CANCELLED' && (
-                          <button
-                            type="button"
-                            onClick={() => setPaymentBooking({ id: b.id, code: b.code, amount: b.rawAmount })}
-                            className="mt-1.5 w-full inline-flex items-center justify-center space-x-1 px-2 py-1 rounded-lg bg-sky-600 hover:bg-sky-700 text-white text-[10px] font-semibold transition"
-                          >
-                            <QrCode className="w-3 h-3" />
-                            <span>Thanh toán online</span>
-                          </button>
-                        )}
-                      </td>
-                      <td className="py-3.5 px-4 font-semibold text-slate-900">
-                        <div>{b.price}</div>
-                        {b.discountAmount > 0 && (
-                          <div className="text-[11px] font-medium text-emerald-600">
-                            -{b.discountAmount.toLocaleString('vi-VN')} đ
-                            {b.promotionCode ? ` (${b.promotionCode})` : ''}
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+                </td>
+              </tr>
+            )}
+          />
 
           {/* Modal Đặt lịch hẹn mới */}
-          {showAddBookingModal && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs animate-fadeIn">
-              <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl border border-slate-200 space-y-4">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                  <h3 className="font-bold text-slate-900 text-base">Đặt lịch hẹn khám / Spa</h3>
-                  <button
-                    onClick={() => setShowAddBookingModal(false)}
-                    className="p-1 text-slate-400 hover:text-slate-600 rounded-lg"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-                <form onSubmit={handleAddBooking} className="space-y-3.5 text-xs">
-                  {bookingError && (
-                    <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-rose-700">
-                      {bookingError}
-                    </div>
-                  )}
-                  <div>
-                    <label className="font-semibold text-slate-700 block mb-1">Chọn thú cưng *</label>
-                    <select
-                      value={newBooking.petId}
-                      onChange={e => setNewBooking({ ...newBooking, petId: e.target.value })}
-                      required
-                      className="w-full h-9 px-3 border border-slate-200 rounded-xl focus:border-blue-500 focus:outline-none"
-                    >
-                      {pets.map(p => (
-                        <option key={p.id} value={p.id}>{p.name} ({p.species})</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="font-semibold text-slate-700 block mb-1">Dịch vụ yêu cầu *</label>
-                    <select
-                      value={newBooking.serviceId}
-                      onChange={e => {
-                        setNewBooking({ ...newBooking, serviceId: e.target.value });
-                        setPromotionCheck(null);
-                      }}
-                      required
-                      className="w-full h-9 px-3 border border-slate-200 rounded-xl focus:border-blue-500 focus:outline-none"
-                    >
-                      {services.length === 0 && <option value="">Chưa có dịch vụ</option>}
-                      {services.map(service => (
-                        <option key={service.id} value={service.id}>
-                          {service.name} ({service.durationMinutes} phút)
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="font-semibold text-slate-700 block mb-1">Ngày hẹn *</label>
-                      <input
-                        type="date"
-                        required
-                        min={today}
-                        value={newBooking.date}
-                        onChange={e => setNewBooking({ ...newBooking, date: e.target.value })}
-                        className="w-full h-9 px-3 border border-slate-200 rounded-xl focus:border-blue-500 focus:outline-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="font-semibold text-slate-700 block mb-1">Khung giờ trống *</label>
-                      <select
-                        value={newBooking.timeSlotId}
-                        onChange={e => {
-                          const slot = availableSlots.find(item => item.slotId === e.target.value);
-                          setNewBooking({
-                            ...newBooking,
-                            timeSlotId: e.target.value,
-                            staffId: slot?.staffId || '',
-                          });
-                        }}
-                        required
-                        disabled={slotsLoading || availableSlots.length === 0}
-                        className="w-full h-9 px-3 border border-slate-200 rounded-xl focus:border-blue-500 focus:outline-none disabled:bg-slate-100 disabled:text-slate-400"
-                      >
-                        <option value="">
-                          {slotsLoading
-                            ? 'Đang tải khung giờ...'
-                            : availableSlots.length === 0
-                              ? 'Không có khung giờ trống'
-                              : 'Chọn khung giờ'}
-                        </option>
-                        {availableSlots.map(slot => (
-                          <option key={slot.slotId} value={slot.slotId}>
-                            {formatSlotTime(slot.startTime)} - {formatSlotTime(slot.endTime)}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                  <div>
-                    <label className="font-semibold text-slate-700 block mb-1">Ghi chú triệu chứng ban đầu</label>
-                    <textarea
-                      rows={2}
-                      placeholder="Mô tả nếu bé có dấu hiệu biếng ăn, sốt, ngứa da..."
-                      value={newBooking.note}
-                      onChange={e => setNewBooking({ ...newBooking, note: e.target.value })}
-                      className="w-full p-2.5 border border-slate-200 rounded-xl focus:border-blue-500 focus:outline-none"
-                    />
-                  </div>
-                  <div className="rounded-xl border border-emerald-100 bg-emerald-50/60 p-3 space-y-2">
-                    <label className="font-semibold text-slate-700 block">Mã giảm giá (không bắt buộc)</label>
-                    <div className="flex space-x-2">
-                      <input
-                        type="text"
-                        value={newBooking.promotionCode}
-                        onChange={e => {
-                          setNewBooking({ ...newBooking, promotionCode: e.target.value });
-                          setPromotionCheck(null);
-                        }}
-                        placeholder="VD: WELCOME10"
-                        className="flex-1 h-9 px-3 border border-slate-200 rounded-xl focus:border-blue-500 focus:outline-none uppercase"
-                      />
-                      <button
-                        type="button"
-                        onClick={handleCheckPromotion}
-                        disabled={checkingPromotion || !newBooking.promotionCode.trim()}
-                        className="px-3 h-9 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-xl font-semibold"
-                      >
-                        {checkingPromotion ? 'Đang kiểm tra...' : 'Áp dụng'}
-                      </button>
-                    </div>
-                    {promotionCheck && (
-                      <p className={`text-[11px] ${promotionCheck.valid ? 'text-emerald-700' : 'text-rose-600'}`}>
-                        {promotionCheck.valid
-                          ? `Giảm ${Number(promotionCheck.discountAmount || 0).toLocaleString('vi-VN')} đ, còn ${Number(promotionCheck.finalAmount || 0).toLocaleString('vi-VN')} đ`
-                          : promotionCheck.message}
-                      </p>
-                    )}
-                    <p className="text-[10px] text-slate-400">
-                      Hệ thống tự kiểm tra và tính lại mã khi bạn xác nhận đặt lịch.
-                    </p>
-                  </div>
-                  <div className="pt-2 flex justify-end space-x-2">
-                    <button
-                      type="button"
-                      onClick={() => setShowAddBookingModal(false)}
-                      className="px-4 py-2 border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 font-medium"
-                    >
-                      Đóng
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={savingBooking || slotsLoading || !newBooking.timeSlotId}
-                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed text-white rounded-xl font-semibold shadow-xs"
-                    >
-                      {savingBooking ? 'Đang đặt lịch...' : 'Xác nhận đặt lịch'}
-                    </button>
-                  </div>
-                </form>
+          <Modal
+            open={showAddBookingModal}
+            onClose={() => setShowAddBookingModal(false)}
+            title="Đặt lịch hẹn khám / Spa"
+            size="lg"
+          >
+            <form onSubmit={handleAddBooking} className="space-y-3.5 text-xs">
+              {bookingError && (
+                <Card variant="outlined" padding="sm" className="bg-rose-50 border-rose-200 text-rose-700 text-xs">
+                  {bookingError}
+                </Card>
+              )}
+              <Select
+                label="Chọn thú cưng *"
+                required
+                value={newBooking.petId}
+                onChange={e => setNewBooking({ ...newBooking, petId: e.target.value })}
+                options={pets.map(p => ({ value: p.id, label: `${p.name} (${p.species})` }))}
+                placeholder="Chọn thú cưng"
+              />
+              <Select
+                label="Dịch vụ yêu cầu *"
+                required
+                value={newBooking.serviceId}
+                onChange={e => {
+                  setNewBooking({ ...newBooking, serviceId: e.target.value });
+                  setPromotionCheck(null);
+                }}
+                options={services.map(s => ({ value: s.id, label: `${s.name} (${s.durationMinutes} phút)` }))}
+                placeholder="Chọn dịch vụ"
+                disabled={services.length === 0}
+              />
+              <div className="grid grid-cols-2 gap-3">
+                <Input
+                  label="Ngày hẹn *"
+                  type="date"
+                  required
+                  min={today}
+                  value={newBooking.date}
+                  onChange={e => setNewBooking({ ...newBooking, date: e.target.value })}
+                />
+                <Select
+                  label="Khung giờ trống *"
+                  required
+                  value={newBooking.timeSlotId}
+                  onChange={e => {
+                    const slot = availableSlots.find(item => item.slotId === e.target.value);
+                    setNewBooking({
+                      ...newBooking,
+                      timeSlotId: e.target.value,
+                      staffId: slot?.staffId || '',
+                    });
+                  }}
+                  options={availableSlots.map(slot => ({
+                    value: slot.slotId,
+                    label: `${formatSlotTime(slot.startTime)} - ${formatSlotTime(slot.endTime)}`,
+                  }))}
+                  placeholder={slotsLoading ? 'Đang tải khung giờ...' : availableSlots.length === 0 ? 'Không có khung giờ trống' : 'Chọn khung giờ'}
+                  disabled={slotsLoading || availableSlots.length === 0}
+                />
               </div>
-            </div>
-          )}
+              <Input
+                label="Ghi chú triệu chứng ban đầu"
+                as="textarea"
+                rows={2}
+                placeholder="Mô tả nếu bé có dấu hiệu biếng ăn, sốt, ngứa da..."
+                value={newBooking.note}
+                onChange={e => setNewBooking({ ...newBooking, note: e.target.value })}
+              />
+              <div className="rounded-xl border border-emerald-100 bg-emerald-50/60 p-3 space-y-2">
+                <label className="font-semibold text-slate-700 block">Mã giảm giá (không bắt buộc)</label>
+                <div className="flex space-x-2">
+                  <Input
+                    value={newBooking.promotionCode}
+                    onChange={e => {
+                      setNewBooking({ ...newBooking, promotionCode: e.target.value });
+                      setPromotionCheck(null);
+                    }}
+                    placeholder="VD: WELCOME10"
+                    className="flex-1 uppercase"
+                  />
+                  <Button
+                    type="button"
+                    variant="primary"
+                    size="md"
+                    onClick={handleCheckPromotion}
+                    disabled={checkingPromotion || !newBooking.promotionCode.trim()}
+                    loading={checkingPromotion}
+                  >
+                    Áp dụng
+                  </Button>
+                </div>
+                {promotionCheck && (
+                  <p className={`text-[11px] ${promotionCheck.valid ? 'text-emerald-700' : 'text-rose-600'}`}>
+                    {promotionCheck.valid
+                      ? `Giảm ${Number(promotionCheck.discountAmount || 0).toLocaleString('vi-VN')} đ, còn ${Number(promotionCheck.finalAmount || 0).toLocaleString('vi-VN')} đ`
+                      : promotionCheck.message}
+                  </p>
+                )}
+                <p className="text-[10px] text-slate-400">
+                  Hệ thống tự kiểm tra và tính lại mã khi bạn xác nhận đặt lịch.
+                </p>
+              </div>
+              <div className="pt-2 flex justify-end space-x-2">
+                <Button
+                  variant="outline"
+                  type="button"
+                  onClick={() => setShowAddBookingModal(false)}
+                >
+                  Đóng
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={savingBooking || slotsLoading || !newBooking.timeSlotId}
+                  loading={savingBooking}
+                >
+                  Xác nhận đặt lịch
+                </Button>
+              </div>
+            </form>
+          </Modal>
 
           <VietQrPaymentModal
             open={Boolean(paymentBooking)}
@@ -1011,31 +927,30 @@ export default function CustomerDashboard({ user, token, activeTab, setActiveTab
       {/* TAB 3: TÍCH ĐIỂM & HẠNG THÀNH VIÊN */}
       {activeTab === 'loyalty' && (
         <div className="space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
+          <Card variant="outlined" padding="lg" className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <div className="flex items-center space-x-2">
-                <span className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold">
-                  ⭐
-                </span>
-                <h2 className="text-lg font-bold text-slate-900">Điểm thưởng & Hạng thẻ VIP</h2>
-              </div>
-              <p className="text-xs text-slate-500 mt-1">
+              <Card.Title className="flex items-center space-x-2 text-base font-bold text-[var(--color-fg-primary)]">
+                <span className="w-8 h-8 rounded-xl bg-[var(--color-role-customer-bg)] text-[var(--color-role-customer-text)] flex items-center justify-center font-bold">⭐</span>
+                <span>Điểm thưởng & Hạng thẻ VIP</span>
+              </Card.Title>
+              <Card.Description className="text-xs text-[var(--color-fg-tertiary)] mt-1">
                 Tích lũy 1 điểm cho mỗi 10.000 đ chi tiêu tại PetCare để nâng hạng thẻ và nhận voucher quà tặng
-              </p>
+              </Card.Description>
             </div>
-            <button
+            <Button
+              variant="ghost"
+              size="sm"
+              leftIcon={<RefreshCw className={`w-3.5 h-3.5 ${loyaltyLoading ? 'animate-spin' : ''}`} />}
               onClick={fetchLoyalty}
-              className="inline-flex items-center space-x-2 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-medium transition"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${loyaltyLoading ? 'animate-spin' : ''}`} />
-              <span>Cập nhật điểm</span>
-            </button>
-          </div>
+              Cập nhật điểm
+            </Button>
+          </Card>
 
           {/* Membership Card Preview */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="md:col-span-1">
-              <div className="relative rounded-2xl p-6 text-white shadow-xl bg-gradient-to-br from-amber-500 via-amber-600 to-yellow-600 overflow-hidden border border-amber-400/40">
+              <Card variant="filled" padding="lg" className="relative overflow-hidden bg-[var(--gradient-peach)] text-white shadow-[var(--shadow-card-lg)] border border-[var(--color-role-customer-border)]/40">
                 <div className="absolute top-0 right-0 w-36 h-36 bg-white/10 rounded-full blur-2xl pointer-events-none" />
                 <div className="flex justify-between items-start">
                   <div>
@@ -1060,29 +975,37 @@ export default function CustomerDashboard({ user, token, activeTab, setActiveTab
                     <span className="font-semibold">{loyaltyData.lifetimePoints.toLocaleString()} đ</span>
                   </div>
                 </div>
-              </div>
+              </Card>
             </div>
 
-            <div className="md:col-span-2 bg-white border border-slate-200 rounded-2xl p-6 shadow-xs flex flex-col justify-between">
+            <Card variant="outlined" padding="lg" className="md:col-span-2 flex flex-col justify-between">
               <div>
                 <h4 className="text-sm font-bold text-slate-900 mb-2">Quyền lợi Hạng thẻ {loyaltyData.tier}</h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                  <div className="flex items-center space-x-2.5 p-3 rounded-xl bg-slate-50 border border-slate-100">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-                    <span className="text-slate-700">Giảm 10% tất cả dịch vụ tắm & spa</span>
-                  </div>
-                  <div className="flex items-center space-x-2.5 p-3 rounded-xl bg-slate-50 border border-slate-100">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-                    <span className="text-slate-700">Miễn phí 1 lần khám tổng quát hàng quý</span>
-                  </div>
-                  <div className="flex items-center space-x-2.5 p-3 rounded-xl bg-slate-50 border border-slate-100">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-                    <span className="text-slate-700">Ưu tiên đặt chỗ vào các dịp Lễ, Tết</span>
-                  </div>
-                  <div className="flex items-center space-x-2.5 p-3 rounded-xl bg-slate-50 border border-slate-100">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-                    <span className="text-slate-700">Hỗ trợ hotline bác sĩ thú y 24/7</span>
-                  </div>
+                  <Card variant="outlined" padding="md" className="bg-slate-50 border-slate-100">
+                    <div className="flex items-center space-x-2.5">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                      <span className="text-slate-700">Giảm 10% tất cả dịch vụ tắm & spa</span>
+                    </div>
+                  </Card>
+                  <Card variant="outlined" padding="md" className="bg-slate-50 border-slate-100">
+                    <div className="flex items-center space-x-2.5">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                      <span className="text-slate-700">Miễn phí 1 lần khám tổng quát hàng quý</span>
+                    </div>
+                  </Card>
+                  <Card variant="outlined" padding="md" className="bg-slate-50 border-slate-100">
+                    <div className="flex items-center space-x-2.5">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                      <span className="text-slate-700">Ưu tiên đặt chỗ vào các dịp Lễ, Tết</span>
+                    </div>
+                  </Card>
+                  <Card variant="outlined" padding="md" className="bg-slate-50 border-slate-100">
+                    <div className="flex items-center space-x-2.5">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                      <span className="text-slate-700">Hỗ trợ hotline bác sĩ thú y 24/7</span>
+                    </div>
+                  </Card>
                 </div>
               </div>
 
@@ -1091,114 +1014,111 @@ export default function CustomerDashboard({ user, token, activeTab, setActiveTab
                   <span>Tiến trình nâng hạng DIAMOND:</span>
                   <span>{loyaltyData.points} / {loyaltyData.nextTierPoints} điểm</span>
                 </div>
-                <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
+                <div className="w-full bg-[var(--color-neutral-100)] rounded-full h-2.5 overflow-hidden">
                   <div
-                    className="bg-amber-500 h-2.5 rounded-full transition-all duration-500"
+                    className="bg-[var(--color-role-customer-main)] h-2.5 rounded-full transition-all duration-500"
                     style={{ width: `${Math.min(100, (loyaltyData.points / loyaltyData.nextTierPoints) * 100)}%` }}
                   />
                 </div>
               </div>
-            </div>
+            </Card>
           </div>
 
           {/* Vouchers Store */}
-          <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-4">
+          <Card variant="outlined" padding="lg" className="space-y-4">
             <h4 className="text-sm font-bold text-slate-900">Đổi điểm lấy mã giảm giá dịch vụ</h4>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="border border-slate-200 rounded-xl p-4 flex flex-col justify-between hover:border-blue-400 transition">
+              <Card variant="outlined" padding="lg" className="flex flex-col justify-between hover:border-blue-400 transition">
                 <div>
-                  <span className="text-[10px] font-bold text-blue-600 uppercase tracking-wide">Voucher Spa</span>
+                  <Badge variant="info" size="xs" className="mb-2">Voucher Spa</Badge>
                   <h5 className="font-bold text-slate-900 text-sm mt-1">Giảm 50.000 đ dịch vụ Spa</h5>
                   <p className="text-xs text-slate-500 mt-1">Áp dụng cho dịch vụ tắm sấy và cắt tỉa lông</p>
                 </div>
                 <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
-                  <span className="font-bold text-amber-600 text-xs">500 điểm</span>
-                  <button
-                    onClick={() => handleRedeemVoucher('Voucher Giảm 50k Spa', 500)}
-                    className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold shadow-xs"
-                  >
+                  <Badge variant="warning" size="xs">500 điểm</Badge>
+                  <Button size="sm" onClick={() => handleRedeemVoucher('Voucher Giảm 50k Spa', 500)}>
                     Đổi mã
-                  </button>
+                  </Button>
                 </div>
-              </div>
+              </Card>
 
-              <div className="border border-slate-200 rounded-xl p-4 flex flex-col justify-between hover:border-blue-400 transition">
+              <Card variant="outlined" padding="lg" className="flex flex-col justify-between hover:border-blue-400 transition">
                 <div>
-                  <span className="text-[10px] font-bold text-purple-600 uppercase tracking-wide">Voucher Khám</span>
+                  <Badge variant="primary" size="xs" className="mb-2">Voucher Khám</Badge>
                   <h5 className="font-bold text-slate-900 text-sm mt-1">Khám tổng quát miễn phí</h5>
                   <p className="text-xs text-slate-500 mt-1">Áp dụng cho 1 thú cưng tại bất kỳ chi nhánh nào</p>
                 </div>
                 <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
-                  <span className="font-bold text-amber-600 text-xs">1.000 điểm</span>
-                  <button
-                    onClick={() => handleRedeemVoucher('Voucher Khám miễn phí', 1000)}
-                    className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold shadow-xs"
-                  >
+                  <Badge variant="warning" size="xs">1.000 điểm</Badge>
+                  <Button size="sm" onClick={() => handleRedeemVoucher('Voucher Khám miễn phí', 1000)}>
                     Đổi mã
-                  </button>
+                  </Button>
                 </div>
-              </div>
+              </Card>
 
-              <div className="border border-slate-200 rounded-xl p-4 flex flex-col justify-between hover:border-blue-400 transition">
+              <Card variant="outlined" padding="lg" className="flex flex-col justify-between hover:border-blue-400 transition">
                 <div>
-                  <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-wide">Quà Tặng</span>
+                  <Badge variant="success" size="xs" className="mb-2">Quà Tặng</Badge>
                   <h5 className="font-bold text-slate-900 text-sm mt-1">Gói Vitamin & Gel Dinh Dưỡng</h5>
                   <p className="text-xs text-slate-500 mt-1">Tăng sức đề kháng và mượt lông cho chó/mèo</p>
                 </div>
                 <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
-                  <span className="font-bold text-amber-600 text-xs">800 điểm</span>
-                  <button
-                    onClick={() => handleRedeemVoucher('Gói Vitamin Dinh Dưỡng', 800)}
-                    className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold shadow-xs"
-                  >
+                  <Badge variant="warning" size="xs">800 điểm</Badge>
+                  <Button size="sm" onClick={() => handleRedeemVoucher('Gói Vitamin Dinh Dưỡng', 800)}>
                     Đổi quà
-                  </button>
+                  </Button>
                 </div>
-              </div>
+              </Card>
             </div>
-          </div>
+          </Card>
         </div>
       )}
 
       {/* TAB 4: TRỢ LÝ AI THÚ Y */}
       {activeTab === 'ai-chat' && (
         <div className="space-y-4">
-          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
+          <Card variant="outlined" padding="lg" className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-sky-500 to-blue-600 text-white flex items-center justify-center font-bold text-base shadow-xs">
+              <div className="w-10 h-10 rounded-xl bg-[var(--gradient-brand-reverse)] text-white flex items-center justify-center font-bold text-base shadow-[var(--shadow-sm)]">
                 <Sparkles className="w-5 h-5" />
               </div>
               <div>
-                <h2 className="text-base font-bold text-slate-900">Trợ lý AI Thú Y PetCare 24/7</h2>
-                <p className="text-xs text-slate-500">
+                <Card.Title className="text-base font-bold text-slate-900">Trợ lý AI Thú Y PetCare 24/7</Card.Title>
+                <Card.Description className="text-xs text-slate-500">
                   Hỏi đáp triệu chứng, sơ cứu ban đầu, dinh dưỡng & lịch tiêm phòng chuẩn thú y
-                </p>
+                </Card.Description>
               </div>
             </div>
-          </div>
+          </Card>
 
-          <div className="bg-white border border-slate-200 rounded-2xl shadow-xs flex flex-col h-[520px] overflow-hidden">
+          <Card variant="outlined" className="flex flex-col h-[520px] overflow-hidden">
             {/* Quick Questions */}
             <div className="p-3 border-b border-slate-100 bg-slate-50/70 flex items-center space-x-2 overflow-x-auto text-xs">
               <span className="text-slate-400 flex-shrink-0 font-medium">Gợi ý câu hỏi:</span>
-              <button
+              <Button
+                variant="ghost"
+                size="xs"
                 onClick={() => handleSendAi('Chó con 2 tháng tuổi nên tiêm phòng mũi gì trước?')}
-                className="px-2.5 py-1 bg-white hover:bg-blue-50 hover:text-blue-600 text-slate-600 border border-slate-200 rounded-lg whitespace-nowrap transition"
+                className="whitespace-nowrap"
               >
                 💉 Lịch tiêm phòng chó 2 tháng?
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="ghost"
+                size="xs"
                 onClick={() => handleSendAi('Mèo bị nôn bọt trắng và bỏ ăn thì phải làm sao?')}
-                className="px-2.5 py-1 bg-white hover:bg-blue-50 hover:text-blue-600 text-slate-600 border border-slate-200 rounded-lg whitespace-nowrap transition"
+                className="whitespace-nowrap"
               >
                 🐱 Mèo nôn bọt trắng & bỏ ăn?
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="ghost"
+                size="xs"
                 onClick={() => handleSendAi('Chế độ dinh dưỡng cho mèo Anh lông ngắn để mượt lông?')}
-                className="px-2.5 py-1 bg-white hover:bg-blue-50 hover:text-blue-600 text-slate-600 border border-slate-200 rounded-lg whitespace-nowrap transition"
+                className="whitespace-nowrap"
               >
                 ✨ Dinh dưỡng mượt lông mèo?
-              </button>
+              </Button>
             </div>
 
             {/* Chat Messages */}
@@ -1209,9 +1129,9 @@ export default function CustomerDashboard({ user, token, activeTab, setActiveTab
                   className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
                 >
                   <div
-                    className={`max-w-[85%] rounded-2xl p-3.5 leading-relaxed shadow-xs ${msg.sender === 'user'
-                      ? 'bg-blue-600 text-white rounded-br-xs'
-                      : 'bg-slate-100 text-slate-800 rounded-bl-xs border border-slate-200/80'
+                    className={`max-w-[85%] rounded-[var(--radius-card-lg)] p-3.5 leading-relaxed shadow-[var(--shadow-sm)] ${msg.sender === 'user'
+                      ? 'bg-[var(--color-role-customer-main)] text-white'
+                      : 'bg-[var(--color-neutral-100)] text-[var(--color-fg-primary)] border border-[var(--color-bd-light)]'
                       }`}
                   >
                     {msg.sender === 'ai' && (
@@ -1226,8 +1146,8 @@ export default function CustomerDashboard({ user, token, activeTab, setActiveTab
               ))}
               {aiLoading && (
                 <div className="flex justify-start">
-                  <div className="bg-slate-100 text-slate-500 rounded-2xl p-3 text-xs flex items-center space-x-2">
-                    <RefreshCw className="w-3.5 h-3.5 animate-spin text-blue-600" />
+                  <div className="bg-[var(--color-neutral-100)] text-[var(--color-fg-tertiary)] rounded-[var(--radius-card-lg)] p-3 text-xs flex items-center space-x-2">
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin text-[var(--color-role-customer-main)]" />
                     <span>AI đang phân tích triệu chứng và soạn câu trả lời...</span>
                   </div>
                 </div>
@@ -1243,24 +1163,24 @@ export default function CustomerDashboard({ user, token, activeTab, setActiveTab
                 }}
                 className="flex items-center space-x-2"
               >
-                <input
-                  type="text"
+                <Input
                   placeholder="Hỏi AI về sức khỏe, thức ăn, triệu chứng của thú cưng..."
                   value={aiInput}
                   onChange={e => setAiInput(e.target.value)}
-                  className="flex-1 h-10 px-3.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:border-blue-500 focus:bg-white focus:outline-none"
+                  className="flex-1"
+                  size="sm"
                 />
-                <button
+                <Button
                   type="submit"
                   disabled={!aiInput.trim() || aiLoading}
-                  className="h-10 px-4 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-200 text-white rounded-xl text-xs font-semibold flex items-center space-x-1.5 transition active:scale-95 shadow-xs"
+                  size="sm"
+                  leftIcon={<Send className="w-3.5 h-3.5" />}
                 >
-                  <span>Gửi</span>
-                  <Send className="w-3.5 h-3.5" />
-                </button>
+                  Gửi
+                </Button>
               </form>
             </div>
-          </div>
+          </Card>
         </div>
       )}
     </div>

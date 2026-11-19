@@ -17,6 +17,7 @@ import {
   Shield,
   Activity,
 } from "lucide-react";
+import { Card, Button, Badge, Input, Select, Modal, Table, Avatar } from '../../design-system/components';
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1";
 
@@ -289,41 +290,44 @@ export default function VetDashboard({
       {/* TAB 1: BỆNH ÁN ĐIỆN TỬ */}
       {activeTab === "medical" && (
         <div className="space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
+          <Card variant="outlined" padding="lg" className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <div className="flex items-center space-x-2">
-                <span className="w-8 h-8 rounded-xl bg-teal-50 text-teal-600 flex items-center justify-center font-bold">
+                <span className="w-8 h-8 rounded-xl bg-[var(--color-role-veterinarian-bg)] text-[var(--color-role-veterinarian-text)] flex items-center justify-center font-bold">
                   🩺
                 </span>
-                <h2 className="text-lg font-bold text-slate-900">
+                <Card.Title className="text-lg font-bold text-[var(--color-fg-primary)]">
                   Bệnh án điện tử thú cưng (EMR)
-                </h2>
+                </Card.Title>
               </div>
-              <p className="text-xs text-slate-500 mt-1">
+              <Card.Description className="text-xs text-slate-500 mt-1">
                 Lịch sử khám chữa bệnh, chẩn đoán triệu chứng, xét nghiệm lâm
                 sàng và theo dõi hồi phục
-              </p>
+              </Card.Description>
             </div>
-            <button
+            <Button
+              variant="primary"
+              size="sm"
+              leftIcon={<Plus className="w-4 h-4" />}
               onClick={() => setShowAddRecordModal(true)}
-              className="inline-flex items-center space-x-2 px-4 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-semibold shadow-sm transition active:scale-95"
             >
-              <Plus className="w-4 h-4" />
-              <span>Lập bệnh án mới</span>
-            </button>
-          </div>
+              Lập bệnh án mới
+            </Button>
+          </Card>
 
           <div className="grid grid-cols-1 gap-4">
             {medicalRecords.map((rec) => (
-              <div
+              <Card
                 key={rec.id}
-                className="bg-white border border-slate-200 hover:border-teal-400 rounded-2xl p-5 shadow-xs transition duration-200 space-y-3"
+                variant="outlined"
+                padding="lg"
+                className="hover:border-teal-400 transition duration-200 space-y-3"
               >
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
                   <div className="flex items-center space-x-3">
-                    <span className="font-mono font-bold text-xs px-2.5 py-1 rounded-lg bg-teal-50 text-teal-700 border border-teal-200">
+                    <Badge variant="info" size="xs">
                       {rec.id}
-                    </span>
+                    </Badge>
                     <h3 className="font-bold text-slate-900 text-sm">
                       {rec.petName}
                     </h3>
@@ -335,229 +339,141 @@ export default function VetDashboard({
                     <span className="text-[11px] text-slate-400">
                       Ngày khám: {rec.date}
                     </span>
-                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    <Badge variant="success" size="xs">
                       {rec.status}
-                    </span>
+                    </Badge>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 space-y-1">
+                  <Card variant="outlined" padding="sm" className="bg-slate-50 border-slate-100 space-y-1">
                     <span className="font-semibold text-slate-500 block uppercase text-[10px] tracking-wider">
                       Chẩn đoán lâm sàng
                     </span>
-                    <p className="font-medium text-slate-900">
-                      {rec.diagnosis}
-                    </p>
-                  </div>
-                  <div className="p-3 bg-teal-50/50 rounded-xl border border-teal-100 space-y-1">
-                    <span className="font-semibold text-teal-700 block uppercase text-[10px] tracking-wider">
+                    <p className="font-medium text-slate-900">{rec.diagnosis}</p>
+                  </Card>
+                  <Card variant="outlined" padding="sm" className="bg-[var(--color-role-veterinarian-bg)] border-[var(--color-role-veterinarian-border)] space-y-1">
+                    <span className="font-semibold text-[var(--color-role-veterinarian-text)] block uppercase text-[10px] tracking-wider">
                       Phác đồ điều trị & Lời dặn
                     </span>
-                    <p className="font-medium text-teal-900">{rec.treatment}</p>
-                  </div>
+                    <p className="font-medium text-[var(--color-role-veterinarian-dark)]">{rec.treatment}</p>
+                  </Card>
                 </div>
 
                 <div className="flex items-center justify-between pt-1 text-xs text-slate-500">
                   <span>
                     Hẹn tái khám:{" "}
-                    <strong className="text-slate-800">
-                      {rec.nextFollowUp}
-                    </strong>
+                    <strong className="text-slate-800">{rec.nextFollowUp}</strong>
                   </span>
-                  <div className="flex space-x-2">
-                    <button
-                      onClick={() => {
-                        setNewPrescription((prev) => ({
-                          ...prev,
-                          patient: rec.petName,
-                        }));
-                        setActiveTab("prescriptions");
-                        setShowAddPrescriptionModal(true);
-                      }}
-                      className="px-3 py-1.5 bg-teal-50 hover:bg-teal-100 text-teal-700 rounded-lg font-medium transition"
-                    >
-                      Kê đơn thuốc cho ca này
-                    </button>
-                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setNewPrescription((prev) => ({ ...prev, patient: rec.petName }));
+                      setActiveTab("prescriptions");
+                      setShowAddPrescriptionModal(true);
+                    }}
+                  >
+                    Kê đơn thuốc cho ca này
+                  </Button>
                 </div>
-              </div>
+              </Card>
             ))}
           </div>
 
-          {/* Modal Lập bệnh án mới */}
-          {showAddRecordModal && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs animate-fadeIn">
-              <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl border border-slate-200 space-y-4">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                  <h3 className="font-bold text-slate-900 text-base">
-                    Lập hồ sơ bệnh án thú cưng mới
-                  </h3>
-                  <button
-                    onClick={() => setShowAddRecordModal(false)}
-                    className="p-1 text-slate-400 hover:text-slate-600 rounded-lg"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-                <form
-                  onSubmit={handleCreateRecord}
-                  className="space-y-3.5 text-xs"
-                >
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="font-semibold text-slate-700 block mb-1">
-                        Tên thú cưng (Giống loài) *
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        placeholder="Ví dụ: Lu Lu (Husky 2 tuổi)"
-                        value={newRecord.petName}
-                        onChange={(e) =>
-                          setNewRecord({
-                            ...newRecord,
-                            petName: e.target.value,
-                          })
-                        }
-                        className="w-full h-9 px-3 border border-slate-200 rounded-xl focus:border-teal-500 focus:outline-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="font-semibold text-slate-700 block mb-1">
-                        Tên chủ nuôi
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="Nguyễn Văn A"
-                        value={newRecord.ownerName}
-                        onChange={(e) =>
-                          setNewRecord({
-                            ...newRecord,
-                            ownerName: e.target.value,
-                          })
-                        }
-                        className="w-full h-9 px-3 border border-slate-200 rounded-xl focus:border-teal-500 focus:outline-none"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="font-semibold text-slate-700 block mb-1">
-                      Số điện thoại liên hệ
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="0912 345 678"
-                      value={newRecord.phone}
-                      onChange={(e) =>
-                        setNewRecord({ ...newRecord, phone: e.target.value })
-                      }
-                      className="w-full h-9 px-3 border border-slate-200 rounded-xl focus:border-teal-500 focus:outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="font-semibold text-slate-700 block mb-1">
-                      Chẩn đoán bệnh / Triệu chứng lâm sàng *
-                    </label>
-                    <textarea
-                      rows={2}
-                      required
-                      placeholder="Mô tả thân nhiệt, nhịp thở, vị trí tổn thương, chẩn đoán..."
-                      value={newRecord.diagnosis}
-                      onChange={(e) =>
-                        setNewRecord({
-                          ...newRecord,
-                          diagnosis: e.target.value,
-                        })
-                      }
-                      className="w-full p-2.5 border border-slate-200 rounded-xl focus:border-teal-500 focus:outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="font-semibold text-slate-700 block mb-1">
-                      Phác đồ điều trị & Hướng dẫn dùng thuốc *
-                    </label>
-                    <textarea
-                      rows={2}
-                      required
-                      placeholder="Các thuốc chỉ định, đường dùng, hướng dẫn chủ chăm sóc..."
-                      value={newRecord.treatment}
-                      onChange={(e) =>
-                        setNewRecord({
-                          ...newRecord,
-                          treatment: e.target.value,
-                        })
-                      }
-                      className="w-full p-2.5 border border-slate-200 rounded-xl focus:border-teal-500 focus:outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="font-semibold text-slate-700 block mb-1">
-                      Hẹn ngày tái khám
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="Ví dụ: 03/11/2026 hoặc 5 ngày sau"
-                      value={newRecord.nextFollowUp}
-                      onChange={(e) =>
-                        setNewRecord({
-                          ...newRecord,
-                          nextFollowUp: e.target.value,
-                        })
-                      }
-                      className="w-full h-9 px-3 border border-slate-200 rounded-xl focus:border-teal-500 focus:outline-none"
-                    />
-                  </div>
-                  <div className="pt-2 flex justify-end space-x-2">
-                    <button
-                      type="button"
-                      onClick={() => setShowAddRecordModal(false)}
-                      className="px-4 py-2 border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 font-medium"
-                    >
-                      Hủy
-                    </button>
-                    <button
-                      type="submit"
-                      className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-semibold shadow-xs"
-                    >
-                      Lưu bệnh án
-                    </button>
-                  </div>
-                </form>
+          <Modal
+            open={showAddRecordModal}
+            onClose={() => setShowAddRecordModal(false)}
+            title="Lập hồ sơ bệnh án thú cưng mới"
+            size="lg"
+          >
+            <form onSubmit={handleCreateRecord} className="space-y-3.5 text-xs">
+              <div className="grid grid-cols-2 gap-3">
+                <Input
+                  label="Tên thú cưng (Giống loài) *"
+                  required
+                  placeholder="Ví dụ: Lu Lu (Husky 2 tuổi)"
+                  value={newRecord.petName}
+                  onChange={(e) => setNewRecord({ ...newRecord, petName: e.target.value })}
+                />
+                <Input
+                  label="Tên chủ nuôi"
+                  placeholder="Nguyễn Văn A"
+                  value={newRecord.ownerName}
+                  onChange={(e) => setNewRecord({ ...newRecord, ownerName: e.target.value })}
+                />
               </div>
-            </div>
-          )}
+              <Input
+                label="Số điện thoại liên hệ"
+                type="tel"
+                placeholder="0912 345 678"
+                value={newRecord.phone}
+                onChange={(e) => setNewRecord({ ...newRecord, phone: e.target.value })}
+              />
+              <Input
+                label="Chẩn đoán bệnh / Triệu chứng lâm sàng *"
+                as="textarea"
+                rows={2}
+                required
+                placeholder="Mô tả thân nhiệt, nhịp thở, vị trí tổn thương, chẩn đoán..."
+                value={newRecord.diagnosis}
+                onChange={(e) => setNewRecord({ ...newRecord, diagnosis: e.target.value })}
+              />
+              <Input
+                label="Phác đồ điều trị & Hướng dẫn dùng thuốc *"
+                as="textarea"
+                rows={2}
+                required
+                placeholder="Các thuốc chỉ định, đường dùng, hướng dẫn chủ chăm sóc..."
+                value={newRecord.treatment}
+                onChange={(e) => setNewRecord({ ...newRecord, treatment: e.target.value })}
+              />
+              <Input
+                label="Hẹn ngày tái khám"
+                placeholder="Ví dụ: 03/11/2026 hoặc 5 ngày sau"
+                value={newRecord.nextFollowUp}
+                onChange={(e) => setNewRecord({ ...newRecord, nextFollowUp: e.target.value })}
+              />
+              <div className="pt-2 flex justify-end space-x-2">
+                <Button variant="outline" type="button" onClick={() => setShowAddRecordModal(false)}>
+                  Hủy
+                </Button>
+                <Button type="submit">Lưu bệnh án</Button>
+              </div>
+            </form>
+          </Modal>
         </div>
       )}
 
       {/* TAB 2: LỊCH KHÁM & CA TRỰC HÔM NAY */}
       {activeTab === "schedule" && (
         <div className="space-y-6">
-          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
+          <Card variant="outlined" padding="lg" className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <div className="flex items-center space-x-2">
-                <span className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
+                <span className="w-8 h-8 rounded-xl bg-[var(--color-role-veterinarian-bg)] text-[var(--color-role-veterinarian-text)] flex items-center justify-center font-bold">
                   📅
                 </span>
-                <h2 className="text-lg font-bold text-slate-900">
+                <Card.Title className="text-lg font-bold text-[var(--color-fg-primary)]">
                   Lịch khám phụ trách hôm nay
-                </h2>
+                </Card.Title>
               </div>
-              <p className="text-xs text-slate-500 mt-1">
-                Danh sách thú cưng đăng ký khám với Bác sĩ{" "}
-                {user?.fullName || "Trưởng khoa"}
-              </p>
+              <Card.Description className="text-xs text-slate-500 mt-1">
+                Danh sách thú cưng đăng ký khám với Bác sĩ {user?.fullName || "Trưởng khoa"}
+              </Card.Description>
             </div>
-            <span className="px-3 py-1 bg-blue-50 text-blue-700 font-semibold rounded-xl text-xs border border-blue-200">
+            <Badge variant="info" size="sm">
               Tổng số ca: {vetSchedule.length}
-            </span>
-          </div>
+            </Badge>
+          </Card>
 
           <div className="space-y-3">
             {vetSchedule.map((item) => (
-              <div
+              <Card
                 key={item.id}
-                className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                variant="outlined"
+                padding="md"
+                className="flex flex-col sm:flex-row sm:items-center justify-between gap-4"
               >
                 <div className="flex items-center space-x-3.5">
                   <div className="w-14 h-12 rounded-xl bg-slate-100 border border-slate-200 flex flex-col items-center justify-center text-center">
@@ -568,48 +484,38 @@ export default function VetDashboard({
                   </div>
                   <div>
                     <div className="flex items-center space-x-2">
-                      <h4 className="font-bold text-sm text-slate-900">
-                        {item.pet}
-                      </h4>
-                      <span className="text-xs text-slate-400">
-                        ({item.owner})
-                      </span>
+                      <h4 className="font-bold text-sm text-slate-900">{item.pet}</h4>
+                      <span className="text-xs text-slate-400">({item.owner})</span>
                     </div>
                     <p className="text-xs text-slate-600 mt-0.5">
                       {item.service} •{" "}
-                      <span className="text-teal-600 font-medium">
-                        {item.room}
-                      </span>
+                      <span className="text-teal-600 font-medium">{item.room}</span>
                     </p>
                   </div>
                 </div>
 
                 <div className="flex items-center space-x-2 self-end sm:self-center">
                   {item.status === "IN_PROGRESS" ? (
-                    <button
-                      onClick={() =>
-                        handleUpdateScheduleStatus(item.id, "COMPLETED")
-                      }
-                      className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold shadow-xs transition"
+                    <Button
+                      variant="success"
+                      size="sm"
+                      onClick={() => handleUpdateScheduleStatus(item.id, "COMPLETED")}
                     >
                       ✓ Hoàn tất ca khám
-                    </button>
+                    </Button>
                   ) : item.status === "COMPLETED" ? (
-                    <span className="px-3 py-1 rounded-xl text-xs font-semibold bg-slate-100 text-slate-500">
-                      Đã hoàn tất
-                    </span>
+                    <Badge variant="ghost" size="sm">Đã hoàn tất</Badge>
                   ) : (
-                    <button
-                      onClick={() =>
-                        handleUpdateScheduleStatus(item.id, "IN_PROGRESS")
-                      }
-                      className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold shadow-xs transition"
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      onClick={() => handleUpdateScheduleStatus(item.id, "IN_PROGRESS")}
                     >
                       Tiếp nhận khám
-                    </button>
+                    </Button>
                   )}
                 </div>
-              </div>
+              </Card>
             ))}
           </div>
         </div>
@@ -618,41 +524,39 @@ export default function VetDashboard({
       {/* TAB 3: KÊ ĐƠN THUỐC */}
       {activeTab === "prescriptions" && (
         <div className="space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
-            <div>
-              <div className="flex items-center space-x-2">
-                <span className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold">
-                  💊
-                </span>
-                <h2 className="text-lg font-bold text-slate-900">
+          <Card variant="outlined" padding="md" className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <Card.Header className="flex items-center space-x-2">
+              <span className="w-8 h-8 rounded-xl bg-[var(--color-role-veterinarian-bg)] text-[var(--color-role-veterinarian-text)] flex items-center justify-center font-bold">
+                💊
+              </span>
+              <div>
+                <Card.Title className="text-lg font-bold text-[var(--color-fg-primary)]">
                   Kê đơn thuốc & Dược phẩm thú y
-                </h2>
+                </Card.Title>
+                <Card.Description className="text-xs text-[var(--color-fg-tertiary)] mt-1">
+                  Quản lý các toa thuốc điện tử đã kê cho thú cưng và xuất phiếu
+                  chỉ dẫn liều dùng
+                </Card.Description>
               </div>
-              <p className="text-xs text-slate-500 mt-1">
-                Quản lý các toa thuốc điện tử đã kê cho thú cưng và xuất phiếu
-                chỉ dẫn liều dùng
-              </p>
-            </div>
-            <button
+            </Card.Header>
+            <Button
+              variant="primary"
+              size="sm"
+              leftIcon={<Plus className="w-3.5 h-3.5" />}
               onClick={() => setShowAddPrescriptionModal(true)}
-              className="inline-flex items-center space-x-2 px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-semibold shadow-sm transition active:scale-95"
             >
-              <Plus className="w-4 h-4" />
-              <span>Kê toa mới</span>
-            </button>
-          </div>
+              Kê toa mới
+            </Button>
+          </Card>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             {prescriptions.map((p) => (
-              <div
-                key={p.id}
-                className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-3"
-              >
+              <Card key={p.id} variant="outlined" padding="md" className="space-y-3">
                 <div className="flex justify-between items-start border-b border-slate-100 pb-3">
                   <div>
-                    <span className="font-mono text-xs font-bold text-amber-700 px-2 py-0.5 rounded bg-amber-50 border border-amber-200">
+                    <Badge variant="warning" size="sm" className="font-mono text-xs">
                       {p.id}
-                    </span>
+                    </Badge>
                     <h4 className="font-bold text-sm text-slate-900 mt-1">
                       {p.patient}
                     </h4>
@@ -662,10 +566,7 @@ export default function VetDashboard({
 
                 <div className="space-y-2 text-xs">
                   {p.medicines.map((m, idx) => (
-                    <div
-                      key={idx}
-                      className="p-2.5 bg-slate-50 rounded-xl border border-slate-100 flex justify-between items-center"
-                    >
+                    <Card key={idx} variant="subtle" padding="sm" className="flex justify-between items-center">
                       <div>
                         <div className="font-semibold text-slate-800">
                           {m.name}
@@ -674,10 +575,10 @@ export default function VetDashboard({
                           {m.dosage} • {m.note}
                         </div>
                       </div>
-                      <span className="font-mono font-semibold text-slate-700 bg-white px-2 py-0.5 rounded border border-slate-200 text-[11px]">
+                      <Badge variant="ghost" size="xs" className="font-mono font-semibold text-[11px]">
                         {m.qty}
-                      </span>
-                    </div>
+                      </Badge>
+                    </Card>
                   ))}
                 </div>
 
@@ -689,195 +590,172 @@ export default function VetDashboard({
                     {p.doctor}
                   </span>
                 </div>
-              </div>
+              </Card>
             ))}
           </div>
 
           {/* Modal Kê toa mới */}
-          {showAddPrescriptionModal && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs animate-fadeIn">
-              <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-200 space-y-4">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                  <h3 className="font-bold text-slate-900 text-base">
-                    Kê toa thuốc điện tử mới
-                  </h3>
-                  <button
-                    onClick={() => setShowAddPrescriptionModal(false)}
-                    className="p-1 text-slate-400 hover:text-slate-600 rounded-lg"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-                <form
-                  onSubmit={handleCreatePrescription}
-                  className="space-y-3.5 text-xs"
-                >
-                  <div>
-                    <label className="font-semibold text-slate-700 block mb-1">
-                      Bệnh nhân thú cưng *
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="Ví dụ: Lu Lu (Husky 2 tuổi)"
-                      value={newPrescription.patient}
-                      onChange={(e) =>
-                        setNewPrescription({
-                          ...newPrescription,
-                          patient: e.target.value,
-                        })
-                      }
-                      className="w-full h-9 px-3 border border-slate-200 rounded-xl focus:border-amber-500 focus:outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="font-semibold text-slate-700 block mb-1">
-                      Tên thuốc thú y *
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="Ví dụ: Amoxicillin Clavulanate 250mg"
-                      value={newPrescription.medicineName}
-                      onChange={(e) =>
-                        setNewPrescription({
-                          ...newPrescription,
-                          medicineName: e.target.value,
-                        })
-                      }
-                      className="w-full h-9 px-3 border border-slate-200 rounded-xl focus:border-amber-500 focus:outline-none"
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="font-semibold text-slate-700 block mb-1">
-                        Liều lượng
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="1/2 viên x 2 lần/ngày"
-                        value={newPrescription.dosage}
-                        onChange={(e) =>
-                          setNewPrescription({
-                            ...newPrescription,
-                            dosage: e.target.value,
-                          })
-                        }
-                        className="w-full h-9 px-3 border border-slate-200 rounded-xl focus:border-amber-500 focus:outline-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="font-semibold text-slate-700 block mb-1">
-                        Số lượng cấp
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="1 vỉ (10 viên)"
-                        value={newPrescription.qty}
-                        onChange={(e) =>
-                          setNewPrescription({
-                            ...newPrescription,
-                            qty: e.target.value,
-                          })
-                        }
-                        className="w-full h-9 px-3 border border-slate-200 rounded-xl focus:border-amber-500 focus:outline-none"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="font-semibold text-slate-700 block mb-1">
-                      Lời dặn & Hướng dẫn sử dụng
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="Uống sau khi ăn no, ngưng nếu có dấu hiệu nôn ói"
-                      value={newPrescription.note}
-                      onChange={(e) =>
-                        setNewPrescription({
-                          ...newPrescription,
-                          note: e.target.value,
-                        })
-                      }
-                      className="w-full h-9 px-3 border border-slate-200 rounded-xl focus:border-amber-500 focus:outline-none"
-                    />
-                  </div>
-                  <div className="pt-2 flex justify-end space-x-2">
-                    <button
-                      type="button"
-                      onClick={() => setShowAddPrescriptionModal(false)}
-                      className="px-4 py-2 border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 font-medium"
-                    >
-                      Đóng
-                    </button>
-                    <button
-                      type="submit"
-                      className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-semibold shadow-xs"
-                    >
-                      Ký & Xuất toa thuốc
-                    </button>
-                  </div>
-                </form>
+          <Modal
+            isOpen={showAddPrescriptionModal}
+            onClose={() => setShowAddPrescriptionModal(false)}
+            title="Kê toa thuốc điện tử mới"
+            size="md"
+          >
+            <form
+              onSubmit={handleCreatePrescription}
+              className="space-y-3.5 text-xs"
+            >
+              <Input
+                label="Bệnh nhân thú cưng *"
+                required
+                placeholder="Ví dụ: Lu Lu (Husky 2 tuổi)"
+                value={newPrescription.patient}
+                onChange={(e) =>
+                  setNewPrescription({
+                    ...newPrescription,
+                    patient: e.target.value,
+                  })
+                }
+                fullWidth
+              />
+              <Input
+                label="Tên thuốc thú y *"
+                required
+                placeholder="Ví dụ: Amoxicillin Clavulanate 250mg"
+                value={newPrescription.medicineName}
+                onChange={(e) =>
+                  setNewPrescription({
+                    ...newPrescription,
+                    medicineName: e.target.value,
+                  })
+                }
+                fullWidth
+              />
+              <div className="grid grid-cols-2 gap-3">
+                <Input
+                  label="Liều lượng"
+                  placeholder="1/2 viên x 2 lần/ngày"
+                  value={newPrescription.dosage}
+                  onChange={(e) =>
+                    setNewPrescription({
+                      ...newPrescription,
+                      dosage: e.target.value,
+                    })
+                  }
+                  fullWidth
+                />
+                <Input
+                  label="Số lượng cấp"
+                  placeholder="1 vỉ (10 viên)"
+                  value={newPrescription.qty}
+                  onChange={(e) =>
+                    setNewPrescription({
+                      ...newPrescription,
+                      qty: e.target.value,
+                    })
+                  }
+                  fullWidth
+                />
               </div>
-            </div>
-          )}
+              <Input
+                label="Lời dặn & Hướng dẫn sử dụng"
+                placeholder="Uống sau khi ăn no, ngưng nếu có dấu hiệu nôn ói"
+                value={newPrescription.note}
+                onChange={(e) =>
+                  setNewPrescription({
+                    ...newPrescription,
+                    note: e.target.value,
+                  })
+                }
+                fullWidth
+              />
+              <div className="pt-2 flex justify-end space-x-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="md"
+                  onClick={() => setShowAddPrescriptionModal(false)}
+                >
+                  Đóng
+                </Button>
+                <Button
+                  type="submit"
+                  variant="primary"
+                  size="md"
+                  leftIcon={<CheckCircle2 className="w-3.5 h-3.5" />}
+                >
+                  Ký & Xuất toa thuốc
+                </Button>
+              </div>
+            </form>
+          </Modal>
         </div>
       )}
 
       {/* TAB 4: AI THAM VẤN LÂM SÀNG */}
       {activeTab === "ai-diagnostics" && (
         <div className="space-y-4">
-          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-teal-500 to-emerald-600 text-white flex items-center justify-center font-bold text-base shadow-xs">
+          <Card variant="outlined" padding="md" className="flex items-center justify-between">
+            <Card.Header className="flex items-center space-x-3 flex-1">
+              <div className="w-10 h-10 rounded-xl bg-[var(--gradient-green)] text-white flex items-center justify-center font-bold text-base shadow-[var(--shadow-sm)]">
                 <Sparkles className="w-5 h-5" />
               </div>
               <div>
-                <h2 className="text-base font-bold text-slate-900">
+                <Card.Title className="text-base font-bold text-slate-900">
                   AI Hỗ trợ Tham vấn Lâm sàng Thú y
-                </h2>
-                <p className="text-xs text-slate-500">
+                </Card.Title>
+                <Card.Description className="text-xs text-slate-500">
                   Tra cứu y văn, phân tích ca bệnh khó, tương tác dược lý học và
                   khuyến cáo điều trị
-                </p>
+                </Card.Description>
               </div>
-            </div>
-          </div>
+            </Card.Header>
+          </Card>
 
-          <div className="bg-white border border-slate-200 rounded-2xl shadow-xs flex flex-col h-[520px] overflow-hidden">
+          <Card variant="outlined" className="flex flex-col h-[520px] overflow-hidden">
             <div className="p-3 border-b border-slate-100 bg-slate-50/70 flex items-center space-x-2 overflow-x-auto text-xs">
               <span className="text-slate-400 flex-shrink-0 font-medium">
                 Tra cứu ca bệnh mẫu:
               </span>
-              <button
+              <Button
+                variant="ghost"
+                size="xs"
+                className="whitespace-nowrap"
+                leftIcon={<Activity className="w-3 h-3 text-teal-600" />}
                 onClick={() =>
                   handleSendAiDiag(
                     "Phác đồ điều trị Parvovirus ở chó con dưới 3 tháng tuổi"
                   )
                 }
-                className="px-2.5 py-1 bg-white hover:bg-teal-50 hover:text-teal-700 text-slate-600 border border-slate-200 rounded-lg whitespace-nowrap transition"
               >
-                🔬 Phác đồ Parvo chó con?
-              </button>
-              <button
+                Phác đồ Parvo chó con?
+              </Button>
+              <Button
+                variant="ghost"
+                size="xs"
+                className="whitespace-nowrap"
+                leftIcon={<AlertTriangle className="w-3 h-3 text-amber-600" />}
                 onClick={() =>
                   handleSendAiDiag(
                     "Tương tác thuốc giữa Meloxicam và Prednisolone"
                   )
                 }
-                className="px-2.5 py-1 bg-white hover:bg-teal-50 hover:text-teal-700 text-slate-600 border border-slate-200 rounded-lg whitespace-nowrap transition"
               >
-                ⚠️ Meloxicam + Prednisolone?
-              </button>
-              <button
+                Meloxicam + Prednisolone?
+              </Button>
+              <Button
+                variant="ghost"
+                size="xs"
+                className="whitespace-nowrap"
+                leftIcon={<Stethoscope className="w-3 h-3 text-sky-600" />}
                 onClick={() =>
                   handleSendAiDiag(
                     "Chẩn đoán phân biệt hội chứng vàng da (Jaundice) ở mèo"
                   )
                 }
-                className="px-2.5 py-1 bg-white hover:bg-teal-50 hover:text-teal-700 text-slate-600 border border-slate-200 rounded-lg whitespace-nowrap transition"
               >
-                🐱 Vàng da ở mèo?
-              </button>
+                Vàng da ở mèo?
+              </Button>
             </div>
 
             <div className="flex-1 p-4 overflow-y-auto space-y-3.5 text-xs">
@@ -888,11 +766,13 @@ export default function VetDashboard({
                     msg.sender === "user" ? "justify-end" : "justify-start"
                   }`}
                 >
-                  <div
-                    className={`max-w-[85%] rounded-2xl p-3.5 leading-relaxed shadow-xs ${
+                  <Card
+                    variant={msg.sender === "user" ? "filled" : "outlined"}
+                    padding="md"
+                    className={`max-w-[85%] shadow-[var(--shadow-sm)] ${
                       msg.sender === "user"
-                        ? "bg-teal-600 text-white rounded-br-xs"
-                        : "bg-slate-100 text-slate-800 rounded-bl-xs border border-slate-200/80"
+                        ? "rounded-[var(--radius-card-lg)] bg-[var(--color-role-veterinarian-main)] text-white"
+                        : "rounded-[var(--radius-card-lg)] bg-[var(--color-neutral-100)] text-[var(--color-fg-primary)] border border-[var(--color-bd-light)]"
                     }`}
                   >
                     {msg.sender === "ai" && (
@@ -902,17 +782,17 @@ export default function VetDashboard({
                       </div>
                     )}
                     <p className="whitespace-pre-wrap">{msg.text}</p>
-                  </div>
+                  </Card>
                 </div>
               ))}
               {aiDiagLoading && (
                 <div className="flex justify-start">
-                  <div className="bg-slate-100 text-slate-500 rounded-2xl p-3 text-xs flex items-center space-x-2">
-                    <RefreshCw className="w-3.5 h-3.5 animate-spin text-teal-600" />
-                    <span>
+                  <Card variant="subtle" padding="sm" className="flex items-center space-x-2">
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin text-[var(--color-role-veterinarian-main)]" />
+                    <span className="text-[var(--color-fg-tertiary)] text-xs">
                       AI đang tra cứu dữ liệu lâm sàng và đối chiếu y văn...
                     </span>
-                  </div>
+                  </Card>
                 </div>
               )}
             </div>
@@ -925,24 +805,26 @@ export default function VetDashboard({
                 }}
                 className="flex items-center space-x-2"
               >
-                <input
+                <Input
                   type="text"
                   placeholder="Nhập triệu chứng, tiền sử hoặc câu hỏi lâm sàng cần AI hỗ trợ..."
                   value={aiDiagInput}
                   onChange={(e) => setAiDiagInput(e.target.value)}
-                  className="flex-1 h-10 px-3.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:border-teal-500 focus:bg-white focus:outline-none"
+                  fullWidth
+                  size="sm"
                 />
-                <button
+                <Button
                   type="submit"
+                  variant="primary"
+                  size="sm"
                   disabled={!aiDiagInput.trim() || aiDiagLoading}
-                  className="h-10 px-4 bg-teal-600 hover:bg-teal-700 disabled:bg-slate-200 text-white rounded-xl text-xs font-semibold flex items-center space-x-1.5 transition active:scale-95 shadow-xs"
+                  rightIcon={<Send className="w-3.5 h-3.5" />}
                 >
-                  <span>Tham vấn</span>
-                  <Send className="w-3.5 h-3.5" />
-                </button>
+                  Tham vấn
+                </Button>
               </form>
             </div>
-          </div>
+          </Card>
         </div>
       )}
     </div>

@@ -1,0 +1,314 @@
+/**
+ * PetCare Design System — Card Styles
+ * Uses design tokens from tokens/
+ * Replaces: Landing feature cards, Dashboard stat cards, AdminConsole cards, Pet cards
+ */
+
+@import '@tokens/colors.css';
+@import '@tokens/spacing.css';
+@import '@tokens/typography.css';
+@import '@tokens/shadows.css';
+@import '@tokens/borderRadius.css';
+@import '@tokens/transitions.css';
+
+/* Base card */
+.card {
+  display: flex;
+  flex-direction: column;
+  background-color: var(--color-bg-primary);
+  border-radius: var(--radius-card-md);
+  transition: var(--transition-card);
+  box-sizing: border-box;
+}
+
+/* Variants */
+.card--default {
+  border: 1px solid var(--color-border-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+.card--elevated {
+  border: none;
+  box-shadow: var(--shadow-lg);
+}
+
+.card--outlined {
+  border: 2px solid var(--color-border-primary);
+  box-shadow: none;
+}
+
+.card--filled {
+  border: none;
+  background-color: var(--color-bg-secondary);
+  box-shadow: var(--shadow-sm);
+}
+
+.card--ghost {
+  border: none;
+  box-shadow: none;
+  background-color: transparent;
+}
+
+/* Padding */
+.card--padding-none { padding: 0; }
+.card--padding-sm { padding: var(--space-3); }
+.card--padding-md { padding: var(--space-4); }
+.card--padding-lg { padding: var(--space-6); }
+.card--padding-xl { padding: var(--space-8); }
+
+/* No border */
+.card--no-border {
+  border: none;
+}
+
+/* Hoverable */
+.card--hoverable {
+  cursor: pointer;
+}
+
+.card--hoverable:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-xl);
+}
+
+.card--hoverable:active {
+  transform: translateY(0) scale(0.99);
+}
+
+/* Focus visible for interactive cards */
+.card--hoverable:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus), var(--shadow-xl);
+  border-color: var(--color-interactive-primary-main);
+}
+
+/* Sub-components */
+.card__header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-bottom: var(--space-4);
+}
+
+.card__title {
+  font-family: var(--font-family-display);
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-fg-primary);
+  line-height: var(--line-height-tight);
+  margin: 0;
+}
+
+.card__description {
+  font-family: var(--font-family-sans);
+  font-size: var(--font-size-sm);
+  color: var(--color-fg-secondary);
+  line-height: var(--line-height-normal);
+  margin: 0;
+}
+
+.card__content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.card__footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  padding-top: var(--space-4);
+  margin-top: auto;
+  border-top: 1px solid var(--color-border-primary);
+}
+
+.card--padding-none .card__footer,
+.card--padding-sm .card__footer {
+  margin-left: calc(var(--space-3) * -1);
+  margin-right: calc(var(--space-3) * -1);
+  padding-left: var(--space-3);
+  padding-right: var(--space-3);
+}
+
+.card--padding-md .card__footer {
+  margin-left: calc(var(--space-4) * -1);
+  margin-right: calc(var(--space-4) * -1);
+  padding-left: var(--space-4);
+  padding-right: var(--space-4);
+}
+
+.card--padding-lg .card__footer {
+  margin-left: calc(var(--space-6) * -1);
+  margin-right: calc(var(--space-6) * -1);
+  padding-left: var(--space-6);
+  padding-right: var(--space-6);
+}
+
+.card--padding-xl .card__footer {
+  margin-left: calc(var(--space-8) * -1);
+  margin-right: calc(var(--space-8) * -1);
+  padding-left: var(--space-8);
+  padding-right: var(--space-8);
+}
+
+.card__media {
+  margin: calc(var(--space-4) * -1) calc(var(--space-4) * -1) var(--space-4);
+  border-radius: var(--radius-card-md) var(--radius-card-md) 0 0;
+  overflow: hidden;
+  line-height: 0;
+}
+
+.card--padding-sm .card__media {
+  margin: calc(var(--space-3) * -1) calc(var(--space-3) * -1) var(--space-3);
+}
+
+.card--padding-lg .card__media {
+  margin: calc(var(--space-6) * -1) calc(var(--space-6) * -1) var(--space-6);
+}
+
+.card--padding-xl .card__media {
+  margin: calc(var(--space-8) * -1) calc(var(--space-8) * -1) var(--space-8);
+}
+
+.card--padding-none .card__media {
+  margin: 0 0 var(--space-4);
+  border-radius: var(--radius-card-md) var(--radius-card-md) 0 0;
+}
+
+.card__media img,
+.card__media video {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.card__action {
+  display: flex;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border-top: 1px solid var(--color-border-primary);
+  background: var(--color-bg-secondary);
+  border-radius: 0 0 var(--radius-card-md) var(--radius-card-md);
+  margin: calc(var(--space-4) * -1) calc(var(--space-4) * -1) calc(var(--space-4) * -1);
+}
+
+/* Special card variants for common patterns */
+
+/* Stat Card */
+.card--stat {
+  padding: var(--space-5);
+}
+
+.card--stat .card__title {
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-bold);
+  font-family: var(--font-family-display);
+  line-height: 1.2;
+}
+
+.card--stat .card__description {
+  font-size: var(--font-size-sm);
+}
+
+/* Pet Card */
+.card--pet {
+  display: grid;
+  grid-template-columns: 80px 1fr;
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.card--pet .card__media {
+  margin: 0;
+  grid-row: 1 / -1;
+  border-radius: var(--radius-card-md) 0 0 var(--radius-card-md);
+  width: 80px;
+  height: 100%;
+  min-height: 120px;
+}
+
+.card--pet .card__media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.card--pet .card__content {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+/* Appointment Card */
+.card--appointment {
+  border-left: 4px solid var(--color-interactive-primary-main);
+}
+
+.card--appointment.card--confirmed {
+  border-left-color: var(--color-status-success-main);
+}
+
+.card--appointment.card--pending {
+  border-left-color: var(--color-status-warning-main);
+}
+
+.card--appointment.card--cancelled {
+  border-left-color: var(--color-status-error-main);
+}
+
+.card--appointment.card--completed {
+  border-left-color: var(--color-interactive-secondary-main);
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .card {
+    transition-duration: 0.01ms !important;
+  }
+
+  .card--hoverable:hover {
+    transform: none;
+  }
+
+  .card--hoverable:active {
+    transform: none;
+  }
+}
+
+/* High contrast mode */
+@media (prefers-contrast: high) {
+  .card--default,
+  .card--outlined {
+    border-width: 2px;
+  }
+
+  .card--elevated {
+    border: 2px solid var(--color-border-primary);
+  }
+
+  .card--filled {
+    border: 2px solid var(--color-border-primary);
+  }
+
+  .card--ghost {
+    border: 2px solid transparent;
+  }
+
+  .card__footer {
+    border-top-width: 2px;
+  }
+
+  .card__action {
+    border-top-width: 2px;
+  }
+}
+
+/* Print styles */
+@media print {
+  .card {
+    break-inside: avoid;
+    box-shadow: none !important;
+    border: 1px solid var(--color-border-primary) !important;
+  }
+}
