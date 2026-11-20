@@ -22,6 +22,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.LinkedHashMap;
@@ -32,7 +33,7 @@ import java.util.regex.Pattern;
 /**
  * Single place where exceptions become HTTP responses. Every handler returns the
  * {@link ApiResponse} envelope (status / success / message / data / timestamp) and
- * always resolves its status from {@link ErrorCode}.
+ * preserves explicit HTTP statuses or resolves them from {@link ErrorCode}.
  *
  * <p>Spring picks the most specific matching handler, so ordering does not matter:
  * {@code BadCredentialsException} wins over {@code AuthenticationException} and
@@ -201,6 +202,12 @@ public class GlobalExceptionHandler {
     }
 
     // ─── Catch-all ─────────────────────────────────────────────────────────
+
+    @ExceptionHandler(ResponseStatusException.class)
+    public ResponseEntity<ApiResponse<Void>> handleResponseStatus(ResponseStatusException ex) {
+        return ResponseEntity.status(ex.getStatusCode()).body(ApiResponse.error(
+                ex.getStatusCode().value(), ex.getReason() != null ? ex.getReason() : "Request failed"));
+    }
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleGeneric(Exception ex) {

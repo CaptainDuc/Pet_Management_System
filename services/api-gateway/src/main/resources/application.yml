@@ -10,9 +10,10 @@ spring:
       default-filters:
         - DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials, RETAIN_FIRST
       globalcors:
+        add-to-simple-url-handler-mapping: true
         cors-configurations:
           "[/**]":
-            allowedOriginPatterns: "${CORS_ALLOWED_ORIGIN_PATTERNS:http://localhost:3000}"
+            allowedOriginPatterns: "${CORS_ALLOWED_ORIGIN_PATTERNS:http://localhost,http://localhost:*,http://127.0.0.1,http://127.0.0.1:*}"
             allowedMethods: "GET,POST,PUT,PATCH,DELETE,OPTIONS"
             allowedHeaders: "*"
             allowCredentials: true
@@ -29,7 +30,7 @@ spring:
         - id: core-backend
           uri: ${CORE_SERVICE_URL:http://localhost:8080}
           predicates:
-            - Path=/api/v1/**,/v3/api-docs/**,/swagger-ui/**,/swagger-ui.html
+            - Path=/api/v1/**,/api-docs,/api-docs/**,/v3/api-docs/**,/swagger-ui/**,/swagger-ui.html
 
 management:
   endpoints:

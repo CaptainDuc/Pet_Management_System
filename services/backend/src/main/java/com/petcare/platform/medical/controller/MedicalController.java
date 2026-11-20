@@ -11,6 +11,7 @@ import com.petcare.platform.medical.dto.UpdateVaccinationRequest;
 import com.petcare.platform.medical.service.MedicalService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -42,6 +43,7 @@ public class MedicalController {
     }
 
     @PostMapping("/records")
+    @ResponseStatus(HttpStatus.CREATED)
     @PreAuthorize("hasAuthority('medical:create')")
     public ApiResponse<MedicalRecord> createRecord(
             @AuthenticationPrincipal UserPrincipal principal,
@@ -75,6 +77,7 @@ public class MedicalController {
     }
 
     @PostMapping("/vaccinations")
+    @ResponseStatus(HttpStatus.CREATED)
     @PreAuthorize("hasAuthority('medical:create')")
     public ApiResponse<Vaccination> createVaccination(
             @AuthenticationPrincipal UserPrincipal principal,

@@ -133,7 +133,9 @@ services:
       AI_AGENT_URL: http://ai-agent:8001
       AI_RAG_URL: http://ai-rag:8002
       AI_VISION_URL: http://ai-vision:8003
+      AI_RECOMMENDATION_URL: http://ai-recommendation:8004
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:-petcare_internal_dev_key}
+      CORS_ALLOWED_ORIGIN_PATTERNS: ${CORS_ALLOWED_ORIGIN_PATTERNS:-http://localhost,http://localhost:*,http://127.0.0.1,http://127.0.0.1:*}
     ports:
       - "8080:8080"
     depends_on:
@@ -152,9 +154,10 @@ services:
           "--spider",
           "http://localhost:8080/actuator/health",
         ]
-      interval: 30s
+      start_period: 40s
+      interval: 5s
       timeout: 10s
-      retries: 5
+      retries: 12
 
   payment-service:
     build:
@@ -181,6 +184,7 @@ services:
       BANK_CODE: ${BANK_CODE:-MB}
       BANK_ACCOUNT_NAME: ${BANK_ACCOUNT_NAME:-PETCARE SERVICE}
       PAYMENT_PREFIX: ${PAYMENT_PREFIX:-DH}
+      CORS_ALLOWED_ORIGIN_PATTERNS: ${CORS_ALLOWED_ORIGIN_PATTERNS:-http://localhost,http://localhost:*,http://127.0.0.1,http://127.0.0.1:*}
     ports:
       - "8082:8082"
     depends_on:
@@ -199,9 +203,10 @@ services:
           "--spider",
           "http://localhost:8082/actuator/health",
         ]
-      interval: 30s
+      start_period: 40s
+      interval: 5s
       timeout: 10s
-      retries: 5
+      retries: 12
 
   notification-service:
     build:
@@ -226,6 +231,7 @@ services:
       MAIL_USERNAME: ${MAIL_USERNAME:-}
       MAIL_PASSWORD: ${MAIL_PASSWORD:-}
       JWT_SECRET: ${JWT_SECRET:-your-256-bit-secret-key-change-in-production}
+      CORS_ALLOWED_ORIGIN_PATTERNS: ${CORS_ALLOWED_ORIGIN_PATTERNS:-http://localhost,http://localhost:*,http://127.0.0.1,http://127.0.0.1:*}
     ports:
       - "8083:8083"
     depends_on:
@@ -242,9 +248,10 @@ services:
           "--spider",
           "http://localhost:8083/actuator/health",
         ]
-      interval: 30s
+      start_period: 40s
+      interval: 5s
       timeout: 10s
-      retries: 5
+      retries: 12
 
   # ─── API Gateway ─────────────────────────────────────────────────────────────
   api-gateway:
@@ -260,12 +267,15 @@ services:
       CORE_SERVICE_URL: http://backend:8080
       PAYMENT_SERVICE_URL: http://payment-service:8082
       NOTIFICATION_SERVICE_URL: http://notification-service:8083
+      CORS_ALLOWED_ORIGIN_PATTERNS: ${CORS_ALLOWED_ORIGIN_PATTERNS:-http://localhost,http://localhost:*,http://127.0.0.1,http://127.0.0.1:*}
     ports:
       - "8000:8000"
     depends_on:
       backend:
         condition: service_healthy
       notification-service:
+        condition: service_healthy
+      payment-service:
         condition: service_healthy
     healthcheck:
       test:
@@ -276,9 +286,10 @@ services:
           "--spider",
           "http://localhost:8000/actuator/health",
         ]
-      interval: 30s
+      start_period: 40s
+      interval: 5s
       timeout: 10s
-      retries: 5
+      retries: 12
 
   # ─── Web Frontend ─────────────────────────────────────────────────────────────
   web:
@@ -286,9 +297,9 @@ services:
       context: ./web
       dockerfile: Dockerfile
       args:
-        VITE_API_URL: ${VITE_API_URL:-http://localhost:8000/api/v1}
-        VITE_PAYMENT_URL: ${VITE_PAYMENT_URL:-http://localhost:8000/api/v1}
-        VITE_NOTIFICATION_URL: ${VITE_NOTIFICATION_URL:-http://localhost:8000/api/v1}
+        VITE_API_URL: ${VITE_API_URL:-/api/v1}
+        VITE_PAYMENT_URL: ${VITE_PAYMENT_URL:-/api/v1}
+        VITE_NOTIFICATION_URL: ${VITE_NOTIFICATION_URL:-/api/v1}
     container_name: petcare-web
     restart: unless-stopped
     mem_limit: 50m
@@ -299,9 +310,9 @@ services:
       api-gateway:
         condition: service_healthy
     environment:
-      VITE_API_URL: ${VITE_API_URL:-http://localhost:8000/api/v1}
-      VITE_PAYMENT_URL: ${VITE_PAYMENT_URL:-http://localhost:8000/api/v1}
-      VITE_NOTIFICATION_URL: ${VITE_NOTIFICATION_URL:-http://localhost:8000/api/v1}
+      VITE_API_URL: ${VITE_API_URL:-/api/v1}
+      VITE_PAYMENT_URL: ${VITE_PAYMENT_URL:-/api/v1}
+      VITE_NOTIFICATION_URL: ${VITE_NOTIFICATION_URL:-/api/v1}
 
   # ─── AI Services ──────────────────────────────────────────────────────────────
   ai-agent:

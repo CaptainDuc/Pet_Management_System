@@ -21,7 +21,6 @@ const PasswordInput = forwardRef(function PasswordInput(
       rightIcon={
         <button
           type="button"
-          tabIndex={-1}
           onClick={() => setShowPassword((prev) => !prev)}
           className="text-[#64748B] hover:text-[#0F172A] focus:outline-none focus:text-[#0F172A] transition-colors p-1"
           aria-label={showPassword ? 'Ẩn mật khẩu' : 'Hiển thị mật khẩu'}

@@ -101,6 +101,7 @@
 .sidebar--collapsed .sidebar__nav-label,
 .sidebar--collapsed .sidebar__nav-badge,
 .sidebar--collapsed .sidebar__nav-children,
+.sidebar--collapsed .sidebar__nav-chevron,
 .sidebar--collapsed .sidebar__nav-group-label,
 .sidebar--collapsed .sidebar__nav-group-content {
   display: none;

@@ -14,6 +14,7 @@ import './Input.css';
 
 const Input = forwardRef(function Input(
   {
+    id: providedId,
     label,
     hint,
     error,
@@ -31,7 +32,8 @@ const Input = forwardRef(function Input(
   },
   ref
 ) {
-  const inputId = React.useId();
+  const generatedId = React.useId();
+  const inputId = providedId || generatedId;
   const hintId = hint ? `${inputId}-hint` : undefined;
   const errorId = error ? `${inputId}-error` : undefined;
   const successId = success ? `${inputId}-success` : undefined;
@@ -84,7 +86,7 @@ const Input = forwardRef(function Input(
           {...props}
         />
         {rightIcon && (
-          <span className="input__icon input__icon--right" aria-hidden="true">
+          <span className="input__icon input__icon--right">
             {rightIcon}
           </span>
         )}

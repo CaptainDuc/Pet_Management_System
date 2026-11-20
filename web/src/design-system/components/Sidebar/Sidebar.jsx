@@ -206,7 +206,7 @@ const NavItem = forwardRef(function NavItem(
       <span className="sidebar__nav-label">{label}</span>
       {badge && <span className="sidebar__nav-badge">{badge}</span>}
       {children && <span className="sidebar__nav-children">{children}</span>}
-      {!collapsed && children && <ChevronRight className="sidebar__nav-chevron" size={16} strokeWidth={2.5} />}
+      {children && <ChevronRight className="sidebar__nav-chevron" size={16} strokeWidth={2.5} />}
     </Component>
   );
 });

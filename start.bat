@@ -1,5 +1,6 @@
 @echo off
 chcp 65001 >nul
+cd /d "%~dp0"
 echo ========================================================
 echo        PETCARE PLATFORM - KHOI DONG TOAN HE THONG
 echo ========================================================
@@ -25,7 +26,7 @@ echo [3/3] Dang khoi dong toan bo he thong bang Docker Compose...
 echo (Qua trinh build lan dau co the mat 2-3 phut, vui long cho...)
 echo.
 
-docker compose up -d --build
+docker compose up -d --build --wait --wait-timeout 180
 
 if %errorlevel% equ 0 (
     echo.
@@ -35,9 +36,9 @@ if %errorlevel% equ 0 (
     echo  - Web Frontend:       http://localhost:3000
     echo                        http://localhost
     echo  - Backend Core API:   http://localhost:8080/api/v1
+    echo  - API Gateway:        http://localhost:8000/api/v1/services
     echo  - Swagger UI docs:    http://localhost:8080/swagger-ui.html
     echo  - RabbitMQ UI:        http://localhost:15672 (petcare / petcare123)
-    echo  - Grafana Monitor:    http://localhost:3001 (admin / admin123)
     echo ========================================================
     echo.
     echo Bam phim bat ky de thoat cua so nay (cac dich vu van chay ngam)...

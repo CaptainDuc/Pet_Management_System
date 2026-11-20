@@ -62,6 +62,10 @@ export const clinicApi = {
     return request("/pets", { method: "POST", token, body: payload });
   },
 
+  updatePet(id, payload, token) {
+    return request(`/pets/${id}`, { method: "PUT", token, body: payload });
+  },
+
   listServices(token) {
     return request(`/services${query({ page: 0, size: 50 })}`, { token });
   },

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import AdminConsole from './AdminConsole';
 import StaffPortal from './StaffPortal';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import {
   ArrowRight,
   Award,
@@ -122,6 +123,7 @@ const testimonials = [
 
 function LandingPage() {
   const [menuOpen, setMenuOpen] = useState(false);
+  const { user, isAuthenticated } = useAuth();
 
   return (
     <div className="min-h-screen bg-white font-sans text-slate-700">
@@ -142,9 +144,9 @@ function LandingPage() {
               <Clock className="h-3.5 w-3.5" />
               Mở cửa 8:00 – 20:00 hằng ngày
             </span>
-            <a href="/login" className="flex items-center gap-1.5 rounded-full border border-white/15 px-3 py-1 font-semibold text-white/80 transition hover:border-brand-peach hover:text-brand-peach">
+            <a href={isAuthenticated ? '/dashboard' : '/login'} className="flex items-center gap-1.5 rounded-full border border-white/15 px-3 py-1 font-semibold text-white/80 transition hover:border-brand-peach hover:text-brand-peach">
               <Users className="h-3.5 w-3.5" />
-              Đăng nhập
+              {isAuthenticated ? user?.fullName || 'Tài khoản của tôi' : 'Đăng nhập'}
             </a>
             <a href="https://facebook.com/petservicehcm/" aria-label="Facebook" className="transition hover:text-brand-peach">
               <Facebook className="h-4 w-4" />
@@ -184,16 +186,17 @@ function LandingPage() {
 
           <div className="flex items-center gap-3">
             <a
-              href="/login"
+              href={isAuthenticated ? '/dashboard' : '/login'}
               className="hidden items-center gap-2 rounded-full bg-brand-navy px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-brand-navy/20 transition hover:-translate-y-0.5 hover:bg-brand-blue sm:inline-flex"
             >
               <CalendarCheck className="h-4 w-4" />
-              Đặt lịch
+              {isAuthenticated ? 'Bảng điều khiển' : 'Đặt lịch'}
             </a>
             <button
               type="button"
               onClick={() => setMenuOpen((open) => !open)}
               aria-label="Mở menu"
+              aria-expanded={menuOpen}
               className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-slate-200 text-brand-navy lg:hidden"
             >
               {menuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
@@ -223,11 +226,11 @@ function LandingPage() {
                 Gọi {PHONE_DISPLAY}
               </a>
               <a
-                href="/login"
+                href={isAuthenticated ? '/dashboard' : '/login'}
                 className="flex items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold text-brand-navy"
               >
                 <Users className="h-4 w-4" />
-                Đăng nhập
+                {isAuthenticated ? 'Bảng điều khiển' : 'Đăng nhập'}
               </a>
             </div>
           </div>
@@ -937,5 +940,5 @@ export default function App() {
     return <AdminConsole />;
   }
 
-  return <LandingPage />;
+  return <AuthProvider><LandingPage /></AuthProvider>;
 }

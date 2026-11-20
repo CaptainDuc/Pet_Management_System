@@ -15,7 +15,8 @@ import './Modal.css';
 
 const Modal = forwardRef(function Modal(
   {
-    isOpen = false,
+    open,
+    isOpen = open ?? false,
     onClose,
     title,
     description,
@@ -36,6 +37,8 @@ const Modal = forwardRef(function Modal(
   const modalRef = useRef(null);
   const previousActiveElement = useRef(null);
   const focusableElementsRef = useRef([]);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     if (isOpen) {
@@ -67,7 +70,7 @@ const Modal = forwardRef(function Modal(
 
       const handleKeyDown = (e) => {
         if (e.key === 'Escape' && closeOnEscape) {
-          onClose?.();
+          onCloseRef.current?.();
           return;
         }
 
@@ -93,7 +96,7 @@ const Modal = forwardRef(function Modal(
         previousActiveElement.current?.focus();
       };
     }
-  }, [isOpen, closeOnEscape, onClose]);
+  }, [isOpen, closeOnEscape]);
 
   if (!isOpen) return null;
 
@@ -136,7 +139,6 @@ const Modal = forwardRef(function Modal(
       className={classNames}
       onClick={handleOverlayClick}
       role="presentation"
-      aria-hidden="true"
     >
       <div
         ref={modalRef}

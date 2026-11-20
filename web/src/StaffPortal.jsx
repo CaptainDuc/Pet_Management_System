@@ -18,6 +18,7 @@ import StaffDashboard from './pages/dashboard/StaffDashboard';
 import OwnerDashboard from './pages/dashboard/OwnerDashboard';
 import ProfileTab from './pages/dashboard/ProfileTab';
 import NotificationBell from './components/NotificationBell';
+import CustomerPortal from './components/CustomerPortal';
 
 // Role configurations using design tokens (CSS custom properties)
 const ROLE_CONFIGS = {
@@ -27,7 +28,7 @@ const ROLE_CONFIGS = {
     subtitle: 'Chăm sóc & Lịch hẹn thú cưng',
     badgeVariant: 'info',
     accentToken: 'var(--color-brand-primary)',
-    defaultTab: 'pets',
+    defaultTab: 'overview',
     tabs: [
       { id: 'pets', label: 'Thú cưng của tôi', icon: '🐾' },
       { id: 'bookings', label: 'Đặt lịch hẹn', icon: '📅' },
@@ -126,14 +127,14 @@ function getAssignedRoles(user) {
 }
 
 function AppContent({ initialScreen = 'login' }) {
-  const { user, token, isAuthenticated, logout } = useAuth();
+  const { user, token, isAuthenticated, isInitializing, logout } = useAuth();
 
   // Navigation state: 'login' | 'register' | 'forgot-password' | 'dashboard'
   const [screen, setScreen] = useState(initialScreen);
 
   // Detect user's primary role or allow Admin / Multi-role user to switch perspective
   const [activeRole, setActiveRole] = useState('CUSTOMER');
-  const [activeTab, setActiveTab] = useState('pets');
+  const [activeTab, setActiveTab] = useState('overview');
   const [showRoleDropdown, setShowRoleDropdown] = useState(false);
   const userRoles = getAssignedRoles(user);
 
@@ -147,19 +148,24 @@ function AppContent({ initialScreen = 'login' }) {
 
   // Determine user primary role on login
   useEffect(() => {
+    if (isInitializing) return;
     if (isAuthenticated && user) {
+      const primaryRole = getAssignedRoles(user)[0] || 'CUSTOMER';
+      if (primaryRole === 'CUSTOMER' && ['/login', '/register'].includes(window.location.pathname)) {
+        window.location.replace('/');
+        return;
+      }
       setScreen('dashboard');
       if (window.location.pathname !== '/dashboard') {
         window.history.replaceState(null, '', '/dashboard');
       }
-      const primaryRole = getAssignedRoles(user)[0] || 'CUSTOMER';
       setActiveRole(primaryRole);
       setActiveTab(ROLE_CONFIGS[primaryRole]?.defaultTab || 'profile');
     } else if (!isAuthenticated && window.location.pathname === '/dashboard') {
       setScreen('login');
       window.history.replaceState(null, '', '/login');
     }
-  }, [isAuthenticated, user]);
+  }, [isAuthenticated, user, isInitializing]);
 
   // Only allow switching between roles actually assigned to the user
   const handleRoleChange = (newRole) => {
@@ -237,13 +243,12 @@ function AppContent({ initialScreen = 'login' }) {
   );
 
   // AUTH SCREENS
+  if (isInitializing) return <div className="pc-light min-h-screen flex items-center justify-center" role="status">Đang khôi phục phiên đăng nhập...</div>;
   if (screen === 'login') {
     return (
       <div className="min-h-screen flex flex-col">
-        {renderNavSwitcher()}
         <LoginPage
           onNavigate={navigate}
-          onSuccess={() => navigate('dashboard')}
         />
       </div>
     );
@@ -252,10 +257,8 @@ function AppContent({ initialScreen = 'login' }) {
   if (screen === 'register') {
     return (
       <div className="min-h-screen flex flex-col">
-        {renderNavSwitcher()}
         <RegisterPage
           onNavigate={navigate}
-          onSuccess={() => navigate('dashboard')}
         />
       </div>
     );
@@ -264,11 +267,14 @@ function AppContent({ initialScreen = 'login' }) {
   if (screen === 'forgot-password') {
     return (
       <div className="min-h-screen flex flex-col">
-        {renderNavSwitcher()}
         <ForgotPasswordPage onNavigate={navigate} />
       </div>
     );
   }
+
+  if (activeRole === 'CUSTOMER' && userRoles.length === 1) return <CustomerPortal user={user} token={token} activeTab={activeTab} setActiveTab={setActiveTab} onLogout={async () => { await logout(); window.location.assign('/'); }}>
+    {activeTab === 'profile' ? <><div className="pc-heading"><div><h1>Hồ sơ cá nhân</h1><p>Thông tin của bạn, luôn được cập nhật.</p></div></div><ProfileTab user={user} token={token} /><button className="pc-text-button" onClick={async () => { await logout(); window.location.assign('/'); }}><LogOut size={16} />Đăng xuất</button><div className="pc-form-actions"><button className="pc-button pc-button--soft" onClick={() => setActiveTab('loyalty')}>Điểm thưởng</button><button className="pc-button pc-button--soft" onClick={() => setActiveTab('ai-chat')}>Trợ lý AI</button></div></> : <CustomerDashboard user={user} token={token} activeTab={activeTab} setActiveTab={setActiveTab} />}
+  </CustomerPortal>;
 
   // AUTHENTICATED ROLE-BASED DASHBOARD - using design tokens for layout theme
   return (
