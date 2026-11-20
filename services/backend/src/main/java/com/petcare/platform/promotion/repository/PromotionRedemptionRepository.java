@@ -12,4 +12,6 @@ public interface PromotionRedemptionRepository extends JpaRepository<PromotionRe
     Optional<PromotionRedemption> findByBookingId(UUID bookingId);
 
     long countByPromotionIdAndStatus(UUID promotionId, RedemptionStatus status);
+
+    boolean existsByPromotionId(UUID promotionId);
 }

@@ -143,7 +143,7 @@ Landing retains its existing display progression (48px, 60px and 72px at its res
 
 The desktop customer shell has a sticky white header (84px), a sticky sidebar (246px) and a flexible main area. Main content has a maximum width of 1180px, with 38px/40px/56px main padding. The overview uses a 1.65:1 workspace split with a 26px gap and a two-column pet grid.
 
-At 1150px and below, the sidebar narrows to 210px, main padding becomes 30px/24px, and the overview becomes one column with two adjacent aside panels. At 760px and below, the header becomes 72px, the sidebar hides, and four customer destinations move to a fixed bottom navigation with safe-area padding. Main padding becomes 26px/18px/100px; aside panels stack. The pet grid retains two columns.
+At 1150px and below, the sidebar narrows to 210px, main padding becomes 30px/24px, and the overview becomes one column with two adjacent aside panels. At 760px and below, the header becomes 72px, the sidebar hides, and five customer destinations (overview, pets, bookings, AI, profile) move to a fixed bottom navigation with safe-area padding. Main padding becomes 26px/18px/100px; aside panels stack. The pet grid retains two columns.
 
 Authentication uses a 90px header and equal story/form columns; the form caps at 390px. At 760px and below the story image panel hides, the header becomes 76px and the form occupies one column. The landing continues using its existing Tailwind container and breakpoints rather than adopting the portal shell.
 
@@ -173,9 +173,17 @@ Pet cards combine a 160px image/fallback area with an 18px body; on mobile these
 
 Use visible labels with native input, select and textarea elements. Customer fields have a minimum height of 47px, the field radius and 16px Nunito Sans entry text; authentication inputs are at least 50px tall. Preserve native email/password/date/number/URL semantics, required constraints, input bounds and form submission. Notices use alert/status semantics; service/time buttons expose `aria-pressed`.
 
+### Pet Profile Photo
+
+The dashboard photo area contains the whole image (`object-fit: contain`) against its pale ground, keeping portrait faces visible without cropping.
+
+PetPhotoInput adds a native file picker and a single-image drop target inside the existing pet dialog. The pale upload area has a dashed cool border, an 18px radius, 20px padding and a 120px minimum height. A selected image uses a cropped preview (78px square, 14px radius) with a separate remove action. Hover and drag-over use a navy border and pale blue fill; keyboard focus within the native input outlines the area in sky (3px, offset 3px). Busy/disabled presentation uses 0.65 opacity and a wait cursor. The optional HTTP/HTTPS URL field remains under native details/summary.
+
+Accept one JPG, PNG or WebP file up to 5 MB. The browser converts it to a JPEG thumbnail with a maximum 640px long edge, preserving aspect ratio without upscaling and flattening transparency onto white. Preparation updates the loading label, disables replacement/removal and blocks profile save/dismissal until complete. Invalid type, size or decoding errors appear as an alert linked to the file input; the previous selected image remains available. The thumbnail stays in the profile draft until Save; removing it also takes effect only when the profile is saved.
+
 ### Navigation
 
-The customer shell owns header/sidebar/bottom navigation; CustomerDashboard owns overview, pets and bookings. AuthLayout shares the customer brand and stylesheet; legacy staff pages stay in their existing shell. Desktop navigation exposes `aria-current="page"`, with a pale selected surface; mobile exposes four primary destinations and account links provide access to extras.
+The customer shell owns header/sidebar/bottom navigation; CustomerDashboard owns overview, pets and bookings. AuthLayout shares the customer brand and stylesheet; legacy staff pages stay in their existing shell. Desktop navigation exposes `aria-current="page"`, with a pale selected surface; mobile exposes five primary destinations (overview, pets, bookings, AI, profile), and account links provide access to extras.
 
 The landing remains at `/`. Login, register and password recovery use their explicit routes. A customer whose highest-priority assigned role is CUSTOMER returns to `/` after sign-in; signed-in landing links lead to `/dashboard`. Only customer-only accounts use the dedicated customer shell. Staff and multi-role accounts retain role priority and assigned-role navigation in the legacy shell. Customer logout returns to `/`.
 
@@ -187,7 +195,7 @@ Pet add/edit and booking reuse the shared Modal with the light dialog scope appl
 
 ### Imagery
 
-Authentication reuses the pre-existing landing asset `web/public/images/hero.webp` unmodified. No new raster was generated for this extension. Customer pet imagery comes from stored profile URLs; missing photos use a Lucide paw placeholder, not fabricated portraits.
+Authentication reuses the pre-existing landing asset `web/public/images/hero.webp` unmodified. No new raster was generated for this extension. Customer pet imagery comes from owner-selected profile thumbnails or existing HTTP/HTTPS URLs; missing photos use a Lucide paw placeholder, not fabricated portraits. Thumbnail conversion prepares owner-provided imagery and does not introduce a new visual identity.
 
 ## Do's and Don'ts
 

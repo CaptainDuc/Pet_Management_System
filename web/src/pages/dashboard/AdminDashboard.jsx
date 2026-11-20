@@ -19,6 +19,8 @@ import {
 } from "lucide-react";
 import { Card, Button, Badge, Input, Select, Table } from '../../design-system/components';
 
+import PromotionsManager from '../../components/PromotionsManager';
+
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1";
 
 export default function AdminDashboard({
@@ -271,13 +273,14 @@ export default function AdminDashboard({
 
   return (
     <div className="space-y-6">
+      {activeTab === 'system' && <p className="pc-demo-note">Thông số hạ tầng bên dưới đang là dữ liệu minh họa, chưa phản ánh trạng thái giám sát thực tế.</p>}
       {/* TAB 1: QUẢN LÝ NGƯỜI DÙNG */}
       {activeTab === "users" && (
         <div className="space-y-6">
           <Card variant="outlined" padding="md" className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <Card.Header className="flex items-center space-x-2">
               <span className="w-8 h-8 rounded-xl bg-[var(--color-role-admin-bg)] text-[var(--color-role-admin-text)] flex items-center justify-center font-bold">
-                👥
+                <Users size={18} />
               </span>
               <div>
                 <Card.Title className="text-lg font-bold text-[var(--color-fg-primary)]">
@@ -300,12 +303,12 @@ export default function AdminDashboard({
           </Card>
 
           {/* Filters Bar */}
-          <Card variant="outlined" padding="sm" className="flex flex-wrap items-center gap-3 text-xs">
+          <Card variant="outlined" padding="sm" className="pc-work-filters text-xs">
             <div className="relative flex-1 min-w-[200px]">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
               <Input
+                aria-label="Tìm tài khoản"
                 type="text"
-                placeholder="Tìm theo tên hoặc email người dùng..."
+                placeholder="Tìm tên hoặc email..."
                 value={userSearch}
                 onChange={(e) => setUserSearch(e.target.value)}
                 size="sm"
@@ -317,6 +320,7 @@ export default function AdminDashboard({
             <div className="flex items-center space-x-2">
               <span className="text-slate-400">Vai trò:</span>
               <Select
+                aria-label="Lọc vai trò"
                 value={userRoleFilter}
                 onChange={(e) => setUserRoleFilter(e.target.value)}
                 size="sm"
@@ -334,6 +338,7 @@ export default function AdminDashboard({
             <div className="flex items-center space-x-2">
               <span className="text-slate-400">Trạng thái:</span>
               <Select
+                aria-label="Lọc trạng thái tài khoản"
                 value={userStatusFilter}
                 onChange={(e) => setUserStatusFilter(e.target.value)}
                 size="sm"
@@ -350,7 +355,7 @@ export default function AdminDashboard({
           <Table
             columns={[
               { key: 'fullName', header: 'Họ và tên', render: (val) => <span className="font-semibold text-slate-900">{val || "—"}</span> },
-              { key: 'email', header: 'Email', width: '200px', render: (val) => <span className="text-slate-600 font-mono text-[11px]">{val}</span> },
+              { key: 'email', header: 'Email', width: '250px', render: (val) => <span className="text-slate-600 text-[13px]">{val}</span> },
               { key: 'phone', header: 'Số điện thoại', width: '150px', render: (val) => <span className="text-slate-600">{val || "—"}</span> },
               { key: 'role', header: 'Vai trò (Role)', width: '150px', render: (_, row) => <Badge variant="primary" size="xs" className="font-mono">{row.role || (row.roles && row.roles[0]) || "CUSTOMER"}</Badge> },
               { key: 'status', header: 'Trạng thái', width: '140px', render: (_, row) => <Badge variant={row.status === "ACTIVE" ? "success" : "danger"} size="xs">{row.status === "ACTIVE" ? "Đang hoạt động" : "Đã khóa"}</Badge> },
@@ -380,7 +385,7 @@ export default function AdminDashboard({
           <Card variant="outlined" padding="md" className="flex items-center justify-between">
             <Card.Header className="flex items-center space-x-2">
               <span className="w-8 h-8 rounded-xl bg-[var(--color-role-admin-bg)] text-[var(--color-role-admin-text)] flex items-center justify-center font-bold">
-                🛡️
+                <Shield size={18} />
               </span>
               <div>
                 <Card.Title className="text-lg font-bold text-[var(--color-fg-primary)]">
@@ -498,7 +503,7 @@ export default function AdminDashboard({
           <Card variant="outlined" padding="md" className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <Card.Header className="flex items-center space-x-2">
               <span className="w-8 h-8 rounded-xl bg-[var(--color-role-admin-bg)] text-[var(--color-role-admin-text)] flex items-center justify-center font-bold">
-                📜
+                <Activity size={18} />
               </span>
               <div>
                 <Card.Title className="text-lg font-bold text-[var(--color-fg-primary)]">
@@ -544,7 +549,7 @@ export default function AdminDashboard({
           <Card variant="outlined" padding="md" className="flex items-center justify-between">
             <Card.Header className="flex items-center space-x-2">
               <span className="w-8 h-8 rounded-xl bg-[var(--color-role-admin-bg)] text-[var(--color-role-admin-text)] flex items-center justify-center font-bold">
-                ⚡
+                <Activity size={18} />
               </span>
               <div>
                 <Card.Title className="text-lg font-bold text-[var(--color-fg-primary)]">
@@ -590,6 +595,11 @@ export default function AdminDashboard({
             ))}
           </div>
         </div>
+      )}
+
+      {/* TAB: QUẢN LÝ MÃ GIẢM GIÁ */}
+      {activeTab === 'promotions' && (
+        <PromotionsManager token={token} onApiLog={onApiLog} />
       )}
     </div>
   );

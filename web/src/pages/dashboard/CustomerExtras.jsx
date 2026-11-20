@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Award, CheckCircle, Sparkles, Send, RefreshCw } from 'lucide-react';
 import { Card, Input, Button, Badge } from '../../design-system/components';
+import AiMessageText from '../../components/AiMessageText';
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1";
 
-export default function CustomerExtras({ user, token, activeTab, onApiLog }) {
+export default function CustomerExtras({ user, token, activeTab, onApiLog, onBookingSuggestion }) {
   // Loyalty state
   const [loyaltyData, setLoyaltyData] = useState({
     points: 1250,
@@ -24,6 +25,17 @@ export default function CustomerExtras({ user, token, activeTab, onApiLog }) {
   ]);
   const [aiInput, setAiInput] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
+  const chatRef = useRef(null);
+  const followChat = useRef(true);
+  useEffect(() => {
+    const pane = chatRef.current;
+    if (!pane) return;
+    const follow = () => { if (followChat.current) pane.scrollTop = pane.scrollHeight; };
+    follow();
+    const observer = new ResizeObserver(follow);
+    observer.observe(pane);
+    return () => observer.disconnect();
+  }, [aiMessages, aiLoading, activeTab]);
 
   // Fetch Loyalty from backend /api/v1/loyalty/me
   const fetchLoyalty = async () => {
@@ -58,6 +70,7 @@ export default function CustomerExtras({ user, token, activeTab, onApiLog }) {
   const handleSendAi = async (customPrompt) => {
     const q = customPrompt || aiInput;
     if (!q.trim() || aiLoading) return;
+    followChat.current = true;
 
     const userMsg = { sender: 'user', text: q };
     setAiMessages(prev => [...prev, userMsg]);
@@ -76,24 +89,18 @@ export default function CustomerExtras({ user, token, activeTab, onApiLog }) {
       const data = await res.json();
       if (onApiLog) onApiLog({ status: res.status, data });
 
-      let replyText = '';
-      if (data?.tip) {
-        replyText = data.tip;
-      } else if (data?.data?.tip) {
-        replyText = data.data.tip;
-      } else if (data?.response) {
-        replyText = data.response;
-      } else {
-        replyText = `Cảm ơn bạn đã hỏi về "${q}". Đối với triệu chứng này, bạn cần theo dõi sát thân nhiệt và thói quen uống nước của thú cưng. Nếu tình trạng nôn hoặc bỏ ăn kéo dài trên 24 giờ, hãy mang bé đến phòng khám PetCare gần nhất để được làm xét nghiệm máu và siêu âm kịp thời!`;
-      }
-
-      setAiMessages(prev => [...prev, { sender: 'ai', text: replyText }]);
+      if (!res.ok || data?.success === false) throw new Error(data?.message || 'Không kết nối được hệ thống tư vấn. Bạn thử lại sau nhé.');
+      const result = data?.data || data;
+      setAiMessages(prev => [...prev, {
+        sender: 'ai', text: result.answer || result.tip || result.response || 'AI chưa có câu trả lời. Bạn thử lại sau nhé.',
+        bookingForm: result.status === 'error' ? null : result.bookingForm,
+      }]);
     } catch (err) {
       setAiMessages(prev => [
         ...prev,
         {
           sender: 'ai',
-          text: 'Hệ thống gợi ý: Bạn nên giữ ấm cho bé, cho uống nhiều nước sạch và tạm ngưng thức ăn dầu mỡ trong 6-8 tiếng. Nếu có dấu hiệu sốt cao hoặc mệt mỏi li bì, hãy đặt lịch khám trực tiếp với bác sĩ PetCare ngay nhé!'
+          text: err.message || 'Không kết nối được hệ thống tư vấn. Bạn thử lại sau nhé.'
         }
       ]);
     } finally {
@@ -310,7 +317,7 @@ export default function CustomerExtras({ user, token, activeTab, onApiLog }) {
             </div>
 
             {/* Chat Messages */}
-            <div className="flex-1 p-4 overflow-y-auto space-y-3.5 text-xs">
+            <div ref={chatRef} onScroll={event => { const node = event.currentTarget; followChat.current = node.scrollHeight - node.scrollTop - node.clientHeight < 80; }} className="flex-1 p-4 overflow-y-auto space-y-3.5 text-xs" aria-live="polite">
               {aiMessages.map((msg, idx) => (
                 <div
                   key={idx}
@@ -328,7 +335,8 @@ export default function CustomerExtras({ user, token, activeTab, onApiLog }) {
                         <span>PetCare AI Vet</span>
                       </div>
                     )}
-                    <p className="whitespace-pre-wrap">{msg.text}</p>
+                    {msg.sender === 'ai' ? <AiMessageText text={msg.text} /> : <p className="whitespace-pre-wrap">{msg.text}</p>}
+                    {msg.bookingForm && onBookingSuggestion && <button className="pc-button pc-button--soft pc-button--small mt-3" onClick={() => onBookingSuggestion(msg.bookingForm)}>Kiểm tra lịch AI đề xuất</button>}
                   </div>
                 </div>
               ))}

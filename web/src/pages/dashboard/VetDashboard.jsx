@@ -287,6 +287,7 @@ export default function VetDashboard({
 
   return (
     <div className="space-y-6">
+      {['medical', 'schedule', 'prescriptions'].includes(activeTab) && <p className="pc-demo-note">Màn hình đang dùng hồ sơ minh họa. Các thao tác ở đây chưa lưu thành dữ liệu khám bệnh thực tế.</p>}
       {/* TAB 1: BỆNH ÁN ĐIỆN TỬ */}
       {activeTab === "medical" && (
         <div className="space-y-6">
@@ -294,7 +295,7 @@ export default function VetDashboard({
             <div>
               <div className="flex items-center space-x-2">
                 <span className="w-8 h-8 rounded-xl bg-[var(--color-role-veterinarian-bg)] text-[var(--color-role-veterinarian-text)] flex items-center justify-center font-bold">
-                  🩺
+                  <Stethoscope size={18} />
                 </span>
                 <Card.Title className="text-lg font-bold text-[var(--color-fg-primary)]">
                   Bệnh án điện tử thú cưng (EMR)
@@ -382,6 +383,7 @@ export default function VetDashboard({
           </div>
 
           <Modal
+            className="pc-light pc-work pc-work-dialog"
             open={showAddRecordModal}
             onClose={() => setShowAddRecordModal(false)}
             title="Lập hồ sơ bệnh án thú cưng mới"
@@ -452,7 +454,7 @@ export default function VetDashboard({
             <div>
               <div className="flex items-center space-x-2">
                 <span className="w-8 h-8 rounded-xl bg-[var(--color-role-veterinarian-bg)] text-[var(--color-role-veterinarian-text)] flex items-center justify-center font-bold">
-                  📅
+                  <Calendar size={18} />
                 </span>
                 <Card.Title className="text-lg font-bold text-[var(--color-fg-primary)]">
                   Lịch khám phụ trách hôm nay
@@ -501,7 +503,7 @@ export default function VetDashboard({
                       size="sm"
                       onClick={() => handleUpdateScheduleStatus(item.id, "COMPLETED")}
                     >
-                      ✓ Hoàn tất ca khám
+                      <CheckCircle2 className="inline mr-1" size={15} />Hoàn tất ca khám
                     </Button>
                   ) : item.status === "COMPLETED" ? (
                     <Badge variant="ghost" size="sm">Đã hoàn tất</Badge>
@@ -527,7 +529,7 @@ export default function VetDashboard({
           <Card variant="outlined" padding="md" className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <Card.Header className="flex items-center space-x-2">
               <span className="w-8 h-8 rounded-xl bg-[var(--color-role-veterinarian-bg)] text-[var(--color-role-veterinarian-text)] flex items-center justify-center font-bold">
-                💊
+                <Pill size={18} />
               </span>
               <div>
                 <Card.Title className="text-lg font-bold text-[var(--color-fg-primary)]">
@@ -596,6 +598,7 @@ export default function VetDashboard({
 
           {/* Modal Kê toa mới */}
           <Modal
+            className="pc-light pc-work pc-work-dialog"
             isOpen={showAddPrescriptionModal}
             onClose={() => setShowAddPrescriptionModal(false)}
             title="Kê toa thuốc điện tử mới"

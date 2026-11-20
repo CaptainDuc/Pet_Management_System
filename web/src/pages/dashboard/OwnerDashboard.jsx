@@ -15,8 +15,11 @@ import {
   Sparkles,
   Filter,
   ChevronRight,
+  Star,
 } from "lucide-react";
 import { Card, Button, Badge, Table, Input } from '../../design-system/components';
+
+import PromotionsManager from '../../components/PromotionsManager';
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1";
 
@@ -81,50 +84,30 @@ export default function OwnerDashboard({
   ]);
 
   // Pricing Catalog state
-  const [services, setServices] = useState([
-    {
-      id: "SRV-01",
-      name: "Khám lâm sàng tổng quát",
-      category: "Khám chữa",
-      price: 150000,
-      duration: "30 phút",
-    },
-    {
-      id: "SRV-02",
-      name: "Tiêm phòng vaccine dại Rabisin",
-      category: "Tiêm chủng",
-      price: 120000,
-      duration: "15 phút",
-    },
-    {
-      id: "SRV-03",
-      name: "Tiêm phòng vaccine 7 bệnh phòng dại",
-      category: "Tiêm chủng",
-      price: 280000,
-      duration: "20 phút",
-    },
-    {
-      id: "SRV-04",
-      name: "Siêu âm ổ bụng chẩn đoán hình ảnh",
-      category: "Cận lâm sàng",
-      price: 250000,
-      duration: "30 phút",
-    },
-    {
-      id: "SRV-05",
-      name: "Tắm sấy, cắt móng, vệ sinh tai (Chó < 5kg)",
-      category: "Spa & Grooming",
-      price: 180000,
-      duration: "60 phút",
-    },
-    {
-      id: "SRV-06",
-      name: "Tắm sấy, cắt tỉa lông tạo kiểu (Chó 5-15kg)",
-      category: "Spa & Grooming",
-      price: 280000,
-      duration: "90 phút",
-    },
-  ]);
+  const [services, setServices] = useState([]);
+  const [servicesLoading, setServicesLoading] = useState(false);
+
+  const fetchServices = async () => {
+    setServicesLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/services?page=0&size=50`);
+      const data = await res.json();
+      if (res.ok && data?.data?.content) {
+        setServices(data.data.content.map((s, idx) => ({
+          id: `SRV-${String(idx + 1).padStart(2, '0')}`,
+          rawId: s.id,
+          name: s.name,
+          category: s.description || 'Dịch vụ phòng khám',
+          duration: `${s.durationMinutes} phút`,
+          price: Number(s.basePrice || 0)
+        })));
+      }
+    } catch (err) {
+      console.warn('Services fetch error:', err);
+    } finally {
+      setServicesLoading(false);
+    }
+  };
 
   // Audit Logs state
   const [auditLogs, setAuditLogs] = useState([]);
@@ -189,18 +172,21 @@ export default function OwnerDashboard({
       fetchAnalytics();
     } else if (activeTab === "audit") {
       fetchAudit();
+    } else if (activeTab === 'services') {
+      fetchServices();
     }
   }, [activeTab]);
 
   return (
     <div className="space-y-6">
+      {['analytics', 'staff-mgmt'].includes(activeTab) && <p className="pc-demo-note">Màn hình này còn sử dụng số liệu minh họa cho báo cáo và nhân sự. Không dùng để đối soát doanh thu thực tế.</p>}
       {/* TAB 1: BÁO CÁO DOANH THU & KPI */}
       {activeTab === "analytics" && (
         <div className="space-y-6">
           <Card variant="outlined" padding="md" className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <Card.Header className="flex items-center space-x-2">
               <span className="w-8 h-8 rounded-xl bg-[var(--color-role-owner-bg)] text-[var(--color-role-owner-text)] flex items-center justify-center font-bold">
-                📊
+                <BarChart2 size={18} />
               </span>
               <div>
                 <Card.Title className="text-lg font-bold text-[var(--color-fg-primary)]">
@@ -271,7 +257,7 @@ export default function OwnerDashboard({
               </Card.Description>
               <div className="text-2xl font-black text-slate-900 tracking-tight flex items-center space-x-1.5">
                 <span>{analyticsStats.customerSatisfaction}</span>
-                <span className="text-amber-500 text-lg">★</span>
+                <Star className="text-amber-700" size={18} fill="currentColor" aria-label="sao" />
               </div>
               <div className="text-xs text-emerald-600 font-medium">
                 Dựa trên 395 lượt đánh giá
@@ -382,7 +368,7 @@ export default function OwnerDashboard({
           <Card variant="outlined" padding="md" className="flex items-center justify-between">
             <Card.Header className="flex items-center space-x-2">
               <span className="w-8 h-8 rounded-xl bg-[var(--color-role-owner-bg)] text-[var(--color-role-owner-text)] flex items-center justify-center font-bold">
-                👨‍⚕️
+                <Users size={18} />
               </span>
               <div>
                 <Card.Title className="text-lg font-bold text-[var(--color-fg-primary)]">
@@ -431,7 +417,7 @@ export default function OwnerDashboard({
                       Đánh giá khách hàng:
                     </span>
                     <strong className="text-sm text-amber-600">
-                      {st.rating} ★
+                      {st.rating} <Star className="inline text-amber-700" size={13} fill="currentColor" aria-label="sao" />
                     </strong>
                   </Card>
                 </div>
@@ -484,7 +470,7 @@ export default function OwnerDashboard({
           <Card variant="outlined" padding="md" className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <Card.Header className="flex items-center space-x-2">
               <span className="w-8 h-8 rounded-xl bg-[var(--color-role-owner-bg)] text-[var(--color-role-owner-text)] flex items-center justify-center font-bold">
-                📜
+                <Activity size={18} />
               </span>
               <div>
                 <Card.Title className="text-lg font-bold text-[var(--color-fg-primary)]">
@@ -522,6 +508,11 @@ export default function OwnerDashboard({
             className="table-wrapper"
           />
         </div>
+      )}
+
+      {/* TAB: QUẢN LÝ MÃ GIẢM GIÁ & KHUYẾN MÃI */}
+      {activeTab === 'promotions' && (
+        <PromotionsManager token={token} onApiLog={onApiLog} />
       )}
     </div>
   );

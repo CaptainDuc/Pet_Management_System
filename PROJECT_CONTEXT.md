@@ -8,6 +8,8 @@
 ```
 PetManageSystem/
 ├── PROJECT_CONTEXT.md          ← File tổng quan kiến trúc dự án
+├── TODO.md                     ← Danh sách việc cần làm (xong mục nào xóa mục đó)
+├── GEMINI.md                   ← Agent rules & guidelines
 ├── docker-compose.yml          ← Khởi động toàn bộ stack
 ├── .env.example                ← Biến môi trường mẫu
 │

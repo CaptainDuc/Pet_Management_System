@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import AdminConsole from './AdminConsole';
 import StaffPortal from './StaffPortal';
+import PublicAiChat from './components/PublicAiChat';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { getLoginPath } from './utils/roles';
 import {
   ArrowRight,
   Award,
@@ -121,7 +123,7 @@ const testimonials = [
   },
 ];
 
-function LandingPage() {
+export function LandingPage() {
   const [menuOpen, setMenuOpen] = useState(false);
   const { user, isAuthenticated } = useAuth();
 
@@ -185,6 +187,14 @@ function LandingPage() {
           </nav>
 
           <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => window.dispatchEvent(new Event('open-public-ai-chat'))}
+              className="hidden items-center gap-2 rounded-full border border-brand-blue/20 bg-white px-4 py-2.5 text-sm font-bold text-brand-blue shadow-sm transition hover:-translate-y-0.5 hover:border-brand-blue hover:bg-sky-50 sm:inline-flex"
+            >
+              <Sparkles className="h-4 w-4" />
+              Hỏi AI
+            </button>
             <a
               href={isAuthenticated ? '/dashboard' : '/login'}
               className="hidden items-center gap-2 rounded-full bg-brand-navy px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-brand-navy/20 transition hover:-translate-y-0.5 hover:bg-brand-blue sm:inline-flex"
@@ -232,6 +242,17 @@ function LandingPage() {
                 <Users className="h-4 w-4" />
                 {isAuthenticated ? 'Bảng điều khiển' : 'Đăng nhập'}
               </a>
+              <button
+                type="button"
+                onClick={() => {
+                  setMenuOpen(false);
+                  window.dispatchEvent(new Event('open-public-ai-chat'));
+                }}
+                className="flex items-center justify-center gap-2 rounded-xl border border-brand-blue/20 bg-sky-50 px-4 py-3 text-sm font-bold text-brand-blue"
+              >
+                <Sparkles className="h-4 w-4" />
+                Chat với AI thú y
+              </button>
             </div>
           </div>
         )}
@@ -908,6 +929,8 @@ function LandingPage() {
       >
         <Phone className="h-6 w-6" />
       </a>
+
+      <PublicAiChat />
     </div>
   );
 }
@@ -925,6 +948,16 @@ function authScreenFor(pathname) {
   return 'login';
 }
 
+function HomeRoute() {
+  const { user, isAuthenticated, isInitializing } = useAuth();
+  const workSession = isAuthenticated && getLoginPath(user) === '/dashboard';
+  useEffect(() => {
+    if (!isInitializing && workSession) window.location.replace('/dashboard');
+  }, [isInitializing, workSession]);
+  if (isInitializing || workSession) return <div className="pc-light min-h-screen flex items-center justify-center" role="status">Đang khôi phục phiên đăng nhập...</div>;
+  return <LandingPage />;
+}
+
 export default function App() {
   const { pathname } = window.location;
 
@@ -940,5 +973,5 @@ export default function App() {
     return <AdminConsole />;
   }
 
-  return <AuthProvider><LandingPage /></AuthProvider>;
+  return <AuthProvider><HomeRoute /></AuthProvider>;
 }

@@ -26,3 +26,21 @@ FORM: User-confirmed overview and three-step booking flow; the user's landing
 reference and explicit approval govern composition. seed:aced74861d2e5570.
 
 FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance
+
+## Pet profile photo extension
+
+The existing pet add/edit dialog includes PetPhotoInput: an OS file picker and
+single-image drag/drop area with preview, replacement and removal. Accept JPG,
+PNG or WebP up to 5 MB. The browser converts the image to JPEG on a white ground,
+preserving aspect ratio within a 640px long edge without upscaling. The resulting
+data URL must fit within 350000 characters. No separate upload is performed:
+the thumbnail is saved atomically with the pet profile through the existing JSON
+API. Database migration V12 widens photo_url to TEXT for this bounded thumbnail.
+An optional existing HTTP/HTTPS image URL remains under details/summary.
+
+Keep the inherited light styling: a pale dashed drop area, rounded cropped
+preview, navy hover/drag border and sky focus-within outline. Preparing an image
+shows loading text and blocks replacement, removal, profile save and dismissal;
+validation/decoding failures use an associated alert and preserve the draft image.
+Choosing or removing an image changes the draft; saving the profile persists it.
+Retain the existing five-destination mobile navigation and legacy staff surfaces.

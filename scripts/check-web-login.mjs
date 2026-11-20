@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
 import { mkdir, writeFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
 
 const base = process.argv.find(arg => /^https?:/.test(arg)) || 'http://localhost:3000';
 const pages = await (await fetch('http://127.0.0.1:9222/json')).json();
@@ -20,6 +21,7 @@ const runtimeErrors = [];
 let mockBookingRequest;
 let mockedBookings = [];
 let pendingPromotion;
+let mockCancellationReason;
 const serviceId = '11000000-0000-0000-0000-000000000001';
 const secondServiceId = '11000000-0000-0000-0000-000000000002';
 const slotId = '22000000-0000-0000-0000-000000000001';
@@ -32,6 +34,12 @@ socket.onmessage = async event => {
     let body;
     let responseCode = 200;
     if (url.pathname.endsWith('/services')) body = { data: { content: [{ id: serviceId, name: 'Chăm sóc toàn diện', basePrice: 250000, durationMinutes: 30 }, { id: secondServiceId, name: 'Spa cho bé', basePrice: 350000, durationMinutes: 30 }] } };
+    else if (url.pathname.endsWith('/ai/tips')) body = { success: true, data: { answer: 'Đã chuẩn bị lịch cho Milo.', status: 'success', bookingForm: { petId: mockBookingRequest.petId, serviceId: secondServiceId, date: testDate, note: 'Ghi chú từ đề xuất AI.', requiresConfirmation: true } } };
+    else if (url.pathname.endsWith('/cancel')) {
+      mockCancellationReason = JSON.parse(request.postData).reason;
+      mockedBookings = mockedBookings.map(booking => ({ ...booking, status: 'CANCELLED' }));
+      body = { data: mockedBookings[0] };
+    }
     else if (url.pathname.endsWith('/promotions/validate')) { pendingPromotion = requestId; return; }
     else if (url.pathname.includes('/slots/available')) {
       const date = url.searchParams.get('date');
@@ -78,7 +86,7 @@ async function evaluate(expression) {
   const result = await cdp('Runtime.evaluate', {
     expression, returnByValue: true, awaitPromise: true,
   });
-  if (result.exceptionDetails) throw new Error(result.exceptionDetails.text);
+  if (result.exceptionDetails) throw new Error(result.exceptionDetails.exception?.description || result.exceptionDetails.text);
   return result.result.value;
 }
 async function waitFor(expression) {
@@ -119,6 +127,37 @@ async function enterDashboard() {
   await waitFor("!!document.querySelector('main') && document.querySelectorAll('.pc-nav button').length > 0");
 }
 
+async function checkLiveCareServices() {
+  const names = ['Tắm vệ sinh', 'Cắt tỉa tạo kiểu', 'Vệ sinh tai', 'Cắt móng', 'Cạo lông vệ sinh', 'Combo cơ bản', 'Combo đầy đủ', 'Combo cao cấp'];
+  await evaluate("document.querySelector('.pc-heading .pc-button').click()");
+  await waitFor("document.querySelectorAll('.pc-choice-grid button').length >= 8");
+  const choices = await evaluate("[...document.querySelectorAll('.pc-choice-grid strong')].map(node => node.textContent)");
+  for (const name of names) assert.ok(choices.includes(name), 'Live catalogue missing '+name);
+  await capture('care-services-desktop');
+  await capture('care-services-mobile', 390, 844);
+  await cdp('Emulation.setDeviceMetricsOverride', {width:1440,height:900,deviceScaleFactor:1,mobile:false});
+  await evaluate("[...document.querySelectorAll('.pc-choice-grid button')].find(button => button.querySelector('strong').textContent === 'Combo cao cấp').click()");
+  await evaluate("document.querySelector('.pc-dialog button[type=submit]').click()");
+  await waitFor("!!document.querySelector('input[name=bookingDate]')");
+  await fill('input[name=bookingDate]', testDate);
+  await waitFor("!!document.querySelector('.pc-slot-grid button')");
+  const windows = await evaluate("[...document.querySelectorAll('.pc-slot-grid button')].map(button=>button.textContent)");
+  for (const window of windows) {
+    const [start,end] = window.split('–').map(value=>value.trim().split(':').map(Number));
+    assert.equal(end[0]*60+end[1] - start[0]*60-start[1],150,'Live high-tier combo needs 150 minutes');
+  }
+  await capture('care-slots-desktop');
+  await evaluate("document.querySelector('.pc-slot-grid button').click()");
+  await evaluate("document.querySelector('.pc-dialog button[type=submit]').click()");
+  await waitFor("!!document.querySelector('.pc-summary-total')");
+  assert.equal(await evaluate("document.querySelector('.pc-summary').textContent.includes('150 phút')"),true);
+  assert.equal(await evaluate("document.querySelector('.pc-summary-total').textContent.includes('450.000')"),true);
+  await capture('care-confirm-desktop');
+  await capture('care-confirm-mobile',390,844);
+  await evaluate("document.querySelector('.pc-dialog [aria-label=\"Close modal\"]').click()");
+  console.log('PASS: eight real care services, live 150-minute availability and 450000 VND confirmation; no booking submitted');
+}
+
 async function checkCustomerFlow() {
   await waitFor("!!document.querySelector('.pc-empty h3') && !document.querySelector('[role=status] .pc-muted')");
   await capture('dashboard-empty');
@@ -135,12 +174,41 @@ async function checkCustomerFlow() {
   await evaluate("document.querySelector('input[name=petWeight]').focus()");
   await fill('input[name=petWeight]', '5.2');
   assert.equal(await evaluate('document.activeElement.name'), 'petWeight', 'Editing must retain field focus');
+  await evaluate(`(() => {
+    const transfer = new DataTransfer();
+    transfer.items.add(new File(['not an image'], 'wrong.txt', {type: 'text/plain'}));
+    document.querySelector('.pc-photo-drop').dispatchEvent(new DragEvent('drop', {bubbles:true, cancelable:true, dataTransfer:transfer}));
+  })()`);
+  await waitFor("document.querySelector('.pc-photo-field [role=alert]')?.textContent.includes('JPG, PNG')");
+  await evaluate(`(async () => {
+    const blob = await (await fetch('/images/hero.webp')).blob();
+    const transfer = new DataTransfer();
+    transfer.items.add(new File([blob], 'pet.webp', {type: 'image/webp'}));
+    document.querySelector('.pc-photo-drop').dispatchEvent(new DragEvent('drop', {bubbles:true, cancelable:true, dataTransfer:transfer}));
+  })()`);
+  await waitFor("document.querySelector('.pc-photo-drop img')?.src.startsWith('data:image/jpeg;base64,') && !document.querySelector('.pc-dialog button[type=submit]').disabled");
+  const dom = await cdp('DOM.getDocument');
+  const fileInput = await cdp('DOM.querySelector', {nodeId: dom.root.nodeId, selector: 'input[name=petPhotoFile]'});
+  await cdp('DOM.setFileInputFiles', {nodeId: fileInput.nodeId, files: [resolve('web/public/images/hero.webp')]});
+  await waitFor("document.querySelector('.pc-photo-drop img')?.complete && !document.querySelector('.pc-dialog button[type=submit]').disabled");
+  await evaluate("document.querySelector('.pc-photo-drop').scrollIntoView({block:'center'})");
+  await capture('pet-photo-desktop');
+  await capture('pet-photo-mobile', 390, 844);
   await evaluate("document.querySelector('.pc-dialog button[type=submit]').click()");
   await waitFor("!document.querySelector('.pc-dialog') && document.querySelector('.pc-pet').innerText.includes('5.2 kg')");
+  await cdp('Page.reload');
+  await delay(400);
+  await waitFor("document.querySelector('.pc-pet img')?.naturalWidth > 0");
+  assert.equal(await evaluate("document.querySelector('.pc-pet img').src.startsWith('data:image/jpeg;base64,')"), true);
+  console.log('PASS: image drag/drop, file selection, invalid type rejection and real persisted photo after reload');
   await capture('desktop');
   await capture('mobile', 390, 844);
   await cdp('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
-  await cdp('Fetch.enable', { patterns: ['*api/v1/services*', '*api/v1/schedules/slots/available*', '*api/v1/bookings*', '*api/v1/promotions/validate*'].map(urlPattern => ({ urlPattern })) });
+  if (process.argv.includes('--care-services')) {
+    await checkLiveCareServices();
+    return;
+  }
+  await cdp('Fetch.enable', { patterns: ['*api/v1/services*', '*api/v1/schedules/slots/available*', '*api/v1/bookings*', '*api/v1/promotions/validate*', '*api/v1/ai/tips*'].map(urlPattern => ({ urlPattern })) });
   await cdp('Page.reload');
   await waitFor("!!document.querySelector('.pc-heading button:not([disabled])') && !!document.querySelector('.pc-pet')");
   await evaluate("document.querySelector('.pc-heading .pc-button').click()");
@@ -190,6 +258,42 @@ async function checkCustomerFlow() {
   assert.equal(mockBookingRequest.items[0].timeSlotId, slotId);
   assert.equal(mockBookingRequest.notes, 'Bé hơi nhút nhát.');
   console.log('PASS: real pet create/edit; three-step booking with controlled service/availability responses');
+  await evaluate("[...document.querySelectorAll('.pc-booking button')].find(button => button.textContent === 'Hủy lịch hẹn').click()");
+  await waitFor("!!document.querySelector('.pc-dialog textarea')");
+  await fill('.pc-dialog textarea', 'Đổi ngày hẹn cho bé.');
+  await evaluate("document.querySelector('.pc-dialog form').requestSubmit()");
+  await waitFor("!document.querySelector('.pc-dialog') && document.querySelector('.pc-booking').innerText.includes('Đã hủy')");
+  assert.equal(mockCancellationReason, 'Đổi ngày hẹn cho bé.');
+  assert.equal(await evaluate("[...document.querySelectorAll('.pc-booking button')].some(button => button.textContent === 'Thanh toán')"), false);
+  await evaluate("[...document.querySelectorAll('.pc-nav button')].find(button => button.textContent === 'Trợ lý AI').click()");
+  await waitFor("!!document.querySelector('input[placeholder^=\"Hỏi AI\"]')");
+  await fill('input[placeholder^="Hỏi AI"]', 'Tôi muốn đặt lịch khám cho Milo');
+  await evaluate("document.querySelector('main form').requestSubmit()");
+  await waitFor("[...document.querySelectorAll('main button')].some(button => button.textContent === 'Kiểm tra lịch AI đề xuất')");
+  await capture('ai-chat-desktop');
+  await capture('ai-chat-mobile', 390, 844);
+  assert.equal(await evaluate(`(() => {
+    const button = [...document.querySelectorAll('main button')].find(node => node.textContent === 'Kiểm tra lịch AI đề xuất');
+    const pane = button.closest('[aria-live]');
+    const a = button.getBoundingClientRect(), b = pane.getBoundingClientRect();
+    return a.top >= b.top && a.bottom <= b.bottom;
+  })()`), true, 'Newest AI booking action must be visible inside chat');
+  assert.equal(await evaluate("[...document.querySelectorAll('.pc-mobile-nav button')].some(button => button.textContent === 'Trợ lý AI')"), true);
+  await evaluate("[...document.querySelectorAll('main button')].find(button => button.textContent === 'Kiểm tra lịch AI đề xuất').click()");
+  await waitFor("!!document.querySelector('.pc-choice[aria-pressed=true]')");
+  assert.equal(await evaluate("document.querySelector('.pc-choice[aria-pressed=true]').textContent.includes('Spa cho bé')"), true);
+  await evaluate("document.querySelector('.pc-dialog button[type=submit]').click()");
+  await waitFor("!!document.querySelector('input[name=bookingDate]')");
+  assert.equal(await evaluate("document.querySelector('input[name=bookingDate]').value"), testDate);
+  await waitFor("!!document.querySelector('.pc-slot-grid button')");
+  await evaluate("document.querySelector('.pc-slot-grid button').click()");
+  await evaluate("document.querySelector('.pc-dialog button[type=submit]').click()");
+  await waitFor("!!document.querySelector('textarea[name=bookingNotes]')");
+  assert.equal(await evaluate("document.querySelector('textarea[name=bookingNotes]').value"), 'Ghi chú từ đề xuất AI.');
+  assert.equal(await evaluate("document.querySelector('.pc-summary-total').textContent.includes('350.000')"), true);
+  await capture('ai-booking-mobile', 390, 844);
+  await evaluate("document.querySelector('.pc-dialog [aria-label=\"Close modal\"]').click()");
+  console.log('PASS: cancellation and AI suggestion reuse the booking wizard with explicit confirmation (controlled responses)');
   await cdp('Fetch.disable');
 }
 
@@ -200,6 +304,18 @@ try {
   await cdp('Page.navigate', { url: base + '/' });
   await waitFor("!!document.querySelector('a[href=\"/login\"]')");
   await evaluate('localStorage.clear()');
+  await cdp('Page.reload');
+  await delay(400);
+  await waitFor("!!document.querySelector('[aria-label=\"Mở trợ lý AI thú y\"]')");
+  await evaluate("document.querySelector('[aria-label=\"Mở trợ lý AI thú y\"]').click()");
+  await waitFor("!!document.querySelector('[aria-label=\"Câu hỏi cho trợ lý AI\"]')");
+  await fill('[aria-label="Câu hỏi cho trợ lý AI"]', 'Tôi muốn đặt lịch khám');
+  await evaluate("document.querySelector('[aria-label=\"Câu hỏi cho trợ lý AI\"]').closest('form').requestSubmit()");
+  await waitFor("document.body.innerText.includes('Bạn cần đăng nhập để đặt lịch')");
+  await capture('public-ai-desktop');
+  await capture('public-ai-mobile', 390, 844);
+  await cdp('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
+  console.log('PASS: public AI booking intent uses real backend and requires login');
   await cdp('Page.navigate', { url: base + '/login' });
   await waitFor("!!document.querySelector('#login-email')");
   if (process.argv.includes('--customer-flow')) {

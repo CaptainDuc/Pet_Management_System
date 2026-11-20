@@ -9,8 +9,8 @@ const tabs = [
   ['ai-chat', 'Trợ lý AI', MessageCircle], ['profile', 'Hồ sơ cá nhân', UserRound],
 ];
 
-export function CustomerBrand() {
-  return <a href="/" className="pc-brand" aria-label="Pet Service — Trang chủ"><span><PawPrint size={25} /></span><div><strong>PET SERVICE</strong><small>Trao gửi yêu thương</small></div></a>;
+export function CustomerBrand({ href = '/' }) {
+  return <a href={href} className="pc-brand" aria-label={href === '/' ? 'Pet Service — Trang chủ' : 'Pet Service — Bảng điều khiển'}><span><PawPrint size={25} /></span><div><strong>PET SERVICE</strong><small>Trao gửi yêu thương</small></div></a>;
 }
 
 export default function CustomerPortal({ user, token, activeTab, setActiveTab, onLogout, children }) {
@@ -25,6 +25,6 @@ export default function CustomerPortal({ user, token, activeTab, setActiveTab, o
       </aside>
       <main className="pc-main"><div className="pc-content">{children}</div></main>
     </div>
-    <nav className="pc-mobile-nav" aria-label="Điều hướng trên điện thoại">{tabs.filter(([id]) => ['overview', 'pets', 'bookings', 'profile'].includes(id)).map(([id, label, Icon]) => <button key={id} aria-current={activeTab === id ? 'page' : undefined} onClick={() => setActiveTab(id)}><Icon size={21} />{id === 'pets' ? 'Thú cưng' : id === 'profile' ? 'Tài khoản' : label}</button>)}</nav>
+    <nav className="pc-mobile-nav" aria-label="Điều hướng trên điện thoại">{tabs.filter(([id]) => ['overview', 'pets', 'bookings', 'ai-chat', 'profile'].includes(id)).map(([id, label, Icon]) => <button key={id} aria-current={activeTab === id ? 'page' : undefined} onClick={() => setActiveTab(id)}><Icon size={21} />{id === 'pets' ? 'Thú cưng' : id === 'profile' ? 'Tài khoản' : label}</button>)}</nav>
   </div>;
 }

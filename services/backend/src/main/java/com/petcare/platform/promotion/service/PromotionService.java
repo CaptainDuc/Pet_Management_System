@@ -6,7 +6,10 @@ import com.petcare.platform.promotion.domain.Promotion;
 import com.petcare.platform.promotion.domain.PromotionRedemption;
 import com.petcare.platform.promotion.domain.RedemptionStatus;
 import com.petcare.platform.promotion.dto.AppliedPromotion;
+import com.petcare.platform.promotion.dto.CreatePromotionRequest;
+import com.petcare.platform.promotion.dto.PromotionResponse;
 import com.petcare.platform.promotion.dto.PromotionValidationResponse;
+import com.petcare.platform.promotion.dto.UpdatePromotionRequest;
 import com.petcare.platform.promotion.repository.PromotionRedemptionRepository;
 import com.petcare.platform.promotion.repository.PromotionRepository;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +21,7 @@ import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 
@@ -29,6 +33,91 @@ public class PromotionService {
 
     private final PromotionRepository promotionRepository;
     private final PromotionRedemptionRepository redemptionRepository;
+
+    @Transactional(readOnly = true)
+    public List<PromotionResponse> findAll() {
+        return promotionRepository.findAllByOrderByCreatedAtDesc()
+                .stream()
+                .map(PromotionResponse::from)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public PromotionResponse findById(UUID id) {
+        Promotion promotion = promotionRepository.findById(id)
+                .orElseThrow(() -> new BusinessException("Không tìm thấy mã khuyến mãi"));
+        return PromotionResponse.from(promotion);
+    }
+
+    @Transactional
+    public PromotionResponse create(CreatePromotionRequest request) {
+        String code = normalize(request.code());
+        if (promotionRepository.existsByCodeIgnoreCase(code)) {
+            throw new BusinessException("Mã khuyến mãi '" + code + "' đã tồn tại trên hệ thống");
+        }
+
+        validatePromotionConfig(request.discountType(), request.discountValue(), request.startDate(), request.endDate());
+
+        Promotion promotion = new Promotion();
+        promotion.setCode(code);
+        promotion.setName(request.name().trim());
+        promotion.setDiscountType(request.discountType());
+        promotion.setDiscountValue(request.discountValue());
+        promotion.setMinOrderAmount(request.minOrderAmount() != null ? request.minOrderAmount() : BigDecimal.ZERO);
+        promotion.setMaxUses(request.maxUses());
+        promotion.setUsedCount(0);
+        promotion.setStartDate(request.startDate());
+        promotion.setEndDate(request.endDate());
+        promotion.setActive(request.active() == null || request.active());
+
+        Promotion saved = promotionRepository.save(promotion);
+        return PromotionResponse.from(saved);
+    }
+
+    @Transactional
+    public PromotionResponse update(UUID id, UpdatePromotionRequest request) {
+        Promotion promotion = promotionRepository.findById(id)
+                .orElseThrow(() -> new BusinessException("Không tìm thấy mã khuyến mãi"));
+
+        validatePromotionConfig(request.discountType(), request.discountValue(), request.startDate(), request.endDate());
+
+        promotion.setName(request.name().trim());
+        promotion.setDiscountType(request.discountType());
+        promotion.setDiscountValue(request.discountValue());
+        promotion.setMinOrderAmount(request.minOrderAmount() != null ? request.minOrderAmount() : BigDecimal.ZERO);
+        promotion.setMaxUses(request.maxUses());
+        promotion.setStartDate(request.startDate());
+        promotion.setEndDate(request.endDate());
+        if (request.active() != null) {
+            promotion.setActive(request.active());
+        }
+
+        Promotion saved = promotionRepository.save(promotion);
+        return PromotionResponse.from(saved);
+    }
+
+    @Transactional
+    public PromotionResponse toggleActive(UUID id) {
+        Promotion promotion = promotionRepository.findById(id)
+                .orElseThrow(() -> new BusinessException("Không tìm thấy mã khuyến mãi"));
+        promotion.setActive(!promotion.isActive());
+        Promotion saved = promotionRepository.save(promotion);
+        return PromotionResponse.from(saved);
+    }
+
+    @Transactional
+    public void delete(UUID id) {
+        Promotion promotion = promotionRepository.findById(id)
+                .orElseThrow(() -> new BusinessException("Không tìm thấy mã khuyến mãi"));
+
+        if (redemptionRepository.existsByPromotionId(id)) {
+            promotion.setActive(false);
+            promotionRepository.save(promotion);
+            throw new BusinessException("Mã khuyến mãi đã có lượt sử dụng hoặc đang trong đơn đặt lịch. Hệ thống đã tự động chuyển sang trạng thái 'Ngưng hoạt động' để bảo toàn dữ liệu.");
+        }
+
+        promotionRepository.delete(promotion);
+    }
 
     @Transactional(readOnly = true)
     public PromotionValidationResponse validate(String rawCode, BigDecimal subtotal) {
@@ -113,6 +202,21 @@ public class PromotionService {
         redemption.setStatus(RedemptionStatus.RELEASED);
         redemption.setReleasedAt(Instant.now());
         redemptionRepository.save(redemption);
+    }
+
+    private void validatePromotionConfig(DiscountType type, BigDecimal value, LocalDate start, LocalDate end) {
+        if (type == DiscountType.PERCENTAGE) {
+            if (value == null || value.compareTo(BigDecimal.ZERO) <= 0 || value.compareTo(BigDecimal.valueOf(100)) > 0) {
+                throw new BusinessException("Mức giảm phần trăm phải nằm trong khoảng từ 0.01% đến 100%");
+            }
+        } else if (type == DiscountType.FIXED_AMOUNT) {
+            if (value == null || value.compareTo(BigDecimal.ZERO) <= 0) {
+                throw new BusinessException("Số tiền giảm cố định phải lớn hơn 0");
+            }
+        }
+        if (start != null && end != null && end.isBefore(start)) {
+            throw new BusinessException("Ngày kết thúc không được sớm hơn ngày bắt đầu");
+        }
     }
 
     private Rejection rejection(Promotion promotion, BigDecimal subtotal, long reserved, LocalDate today) {

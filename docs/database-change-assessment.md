@@ -52,21 +52,24 @@ This documentation update does not claim that these tables or rules already exis
 
 ## Flyway Baseline Migration — Payment Service
 
-See [`flyway-baseline-payment-service.md`](flyway-baseline-payment-service.md) for full details on the V4 baseline migration that combines V1+V2+V3 for fresh database deployments.
+See [`flyway-baseline-payment-service.md`](flyway-baseline-payment-service.md) for the canonical V1-V3 chain, retired V4 marker and guarded compatibility path for the known legacy V1+V4 database.
 
 ### Summary
 
 | Migration | Status | Notes |
 |-----------|--------|-------|
 | V1__init_payment_schema.sql | Kept | Audit trail; checksum preserved |
-| V2__sepay_orders_and_webhook.sql.bak | Excluded | Renamed from `.sql` → ignored by Flyway |
-| V3__booking_orders_and_event_outbox.sql.bak | Excluded | Renamed from `.sql` → ignored by Flyway |
-| V4__baseline_payment_schema.sql | **New baseline** | Combines V1+V2+V3 for fresh DBs |
+| V2__sepay_orders_and_webhook.sql | Kept | Canonical immutable migration from the other branch |
+| V3__booking_orders_and_event_outbox.sql | Kept | Canonical immutable booking/event migration |
+| V4__retired_baseline_marker.sql | Marker | No duplicate table creation |
 
 ### Deployment
 
-- **Fresh DB:** `flyway migrate` → applies V4
-- **Existing DB (V1 applied):** `flyway repair` → marks V4 as applied, then `flyway migrate` Before implementation, align the Java entities and the physical Flyway schema, then add PostgreSQL integration tests for:
+- **Fresh/V1/V1-V3 DB:** normal migration and validation.
+- **Known legacy V1+V4:** back up, restore missing V2 column settings and adopt metadata with the guarded tool first;
+  see the linked guide. Do not use repair to mark pending migrations as applied.
+
+Additional PostgreSQL integration coverage to consider:
 
 - Concurrent appointments for the same veterinarian.
 - Adjacent non-overlapping appointments.

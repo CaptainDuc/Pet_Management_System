@@ -1,107 +1,79 @@
-# Flyway Baseline Migration — Payment Service
+# Payment migration compatibility for the merge
 
-## Problem
+## Canonical migration chain
 
-The payment-service had a migration history that violated Flyway's **immutable migration principle**:
+The merged source keeps V1, V2 and V3 exactly as published on origin/nguyentam.
+V2 extends the V1 schema; V3 adds booking payment events. Later ALTER statements
+are normal versioned migrations and do not invalidate V1.
 
-```
-V1__init_payment_schema.sql       → Created `payments` table with `owner_id UUID NOT NULL`
-V2__sepay_orders_and_webhook.sql  → ALTER COLUMN `owner_id` DROP NOT NULL
-V3__booking_orders_and_event_outbox.sql  → Added orders, payment_events, outbox_events
-```
+V4__retired_baseline_marker.sql only runs SELECT 1. It reserves version 4 without
+creating existing tables again. The old V4 baseline is kept for audit and the
+compatibility test under infrastructure/postgres/payment-history; it is outside
+Flyway's active classpath locations.
 
-**Issue:** V2 modifies a table created in V1 (`ALTER COLUMN owner_id DROP NOT NULL`). This is an anti-pattern because:
-- Flyway validates checksums on every migrate
-- If V1 was already applied to a DB, V2's ALTER will fail or behave unexpectedly
-- Migrations should be additive only; never modify previous migrations
+## Database paths
 
-## Solution: Baseline Migration (V4)
+| Existing state | Required action |
+|---|---|
+| Empty database | Start the updated payment service; V1-V4 run normally. |
+| V1 only | Normal migrate applies V2, V3 and the marker. |
+| V1-V3 from the other branch | Normal migrate applies only the marker. |
+| Known V1 + old V4 on this local machine | Run the guarded adoption tool first. |
+| Unknown history/checksum/schema | Stop and inspect; the adoption tool refuses it. |
 
-Created `V4__baseline_payment_schema.sql` that combines V1 + V2 + V3 into a single migration for **fresh database deployments**.
+The previous advice to rename applied V2/V3 to .bak and repair automatically
+was incorrect. Repair does not mark pending migrations as executed. Do not use
+repair or baseline blindly to hide a mismatch, and do not reset Docker volumes.
 
-### Migration Files
+## Inspect and adopt the known legacy V4
 
-| File | Purpose |
-|------|---------|
-| `V1__init_payment_schema.sql` | Original V1 — kept for history |
-| `V2__sepay_orders_and_webhook.sql.bak` | Renamed from `.sql` → excluded from Flyway |
-| `V3__booking_orders_and_event_outbox.sql.bak` | Renamed from `.sql` → excluded from Flyway |
-| `V4__baseline_payment_schema.sql` | **New baseline** — combines all three for fresh DBs |
+Stop the payment application during adoption and leave its PostgreSQL container
+running. From the project root:
 
-### V4 Contents (Single Migration)
-
-1. **SePay/VietQR Orders** (`orders` table) — from V2
-2. **Payments** (`payments` table) — from V1, with `owner_id` nullable from the start
-3. **Payment Transactions** (`payment_transactions`) — from V3, with all V2 extensions (idempotency keys, provider IDs)
-4. **Inbox Events** (`inbox_events`) — idempotent consumption
-5. **Outbox Events** (`outbox_events`) — transactional outbox pattern
-6. **Payment Events** (`payment_events`) — event-driven notifications
-
-## Deployment Strategies
-
-### Fresh Database (CI/CD, New Environments)
-
-```bash
-# Flyway automatically picks up V4 as the first migration
-flyway migrate
-# Result: V4 applied, schema at version 4
+```powershell
+python scripts/normalize-payment-history.py
 ```
 
-### Existing Database (Already has V1 Applied)
+The default is read-only. It prints version/checksum metadata, never credentials.
+For the known legacy history only:
 
-**Option 1: Flyway Repair (Recommended)**
-```bash
-# Marks V4 as "already applied" without executing it
-flyway repair
-# Then migrate normally - V4 skipped, V5+ applied
-flyway migrate
+```powershell
+python scripts/normalize-payment-history.py --apply
 ```
 
-**Option 2: Manual Baseline**
-```bash
-# If repair doesn't work
-flyway baseline -baselineVersion=4
-flyway migrate
-```
+The tool first writes a full pg_dump under ignored .local-backups/. If backup
+fails, it does not modify history. The SQL locks the Flyway history table, checks
+the exact legacy checksums and required schema objects, then records the already
+present V2/V3 features in canonical history. It also restores the four V2 column
+settings omitted on some legacy installations: nullable payment_id and defaults
+for transaction_type, provider and idempotency_key. Orders, payments, bank
+references and transaction payloads stay unchanged. Original history remains
+in the full backup. Business row counts are
+checked before and after.
 
-## Checksum Validation
+Then build/start the updated payment service. Flyway validation stays enabled;
+it applies the no-op V4 marker using the normal migration mechanism. Neither
+application startup nor the adoption tool automatically runs Flyway repair.
 
-Flyway validates checksums on each migrate. Since V2/V3 are renamed to `.bak`:
-- They are **ignored** by Flyway (only `.sql` files are scanned)
-- No checksum conflicts on existing DBs
-- Clean history for new DBs
-
-## Key Design Decisions
-
-| Decision | Rationale |
-|----------|-----------|
-| Keep V1 as `.sql` | Preserves audit trail; Flyway sees it but checksum matches |
-| Rename V2/V3 to `.bak` | Excludes from Flyway scan; no validation conflicts |
-| V4 combines all tables | Single baseline = one version for fresh DBs |
-| `owner_id` nullable in V4 | Avoids ALTER COLUMN; matches final desired state |
-| All indexes in V4 | No separate migration for indexes |
+The known checksums are V1=83097785, V2=-1182131905, V3=1911053231 and archived
+legacy V4=995927507. Tests obtain canonical checksums from Flyway itself to catch
+accidental changes to the immutable migration files.
 
 ## Verification
 
-```bash
-# Fresh DB
-flyway migrate
-flyway info
-# Should show: V4 baseline applied, V5+ pending
+PaymentMigrationTest uses a disposable PostgreSQL database and covers fresh
+install, V1 upgrade with retained payment data, V1-V3 upgrade with retained order
+data, legacy V1+V4 adoption with retained order/transaction data, repeat adoption,
+restoration of legacy V1 column settings for SePay callbacks, and rejection of
+unknown checksum or incomplete schema. There are seven integration tests.
 
-# Existing DB (after repair)
-flyway migrate
-flyway info
-# Should show: V1 applied, V4 marked as "Success" (repaired), V5+ applied
+From services/backend, using its existing Maven wrapper:
+
+```powershell
+$env:JAVA_HOME = 'C:\Program Files\Java\jdk-21.0.12.1'
+.\mvnw.cmd -f ../payment-service/pom.xml test -B
 ```
 
-## Rollback
-
-Flyway doesn't support rollback for baseline migrations. To revert:
-1. Drop all payment tables manually
-2. Run `flyway clean` (if in dev)
-3. Re-run migrations from V1 (or V4 for fresh)
-
----
-
-**See also:** `docs/database-change-assessment.md` for the broader database migration strategy assessment.
+The other developer's database history still needs to be inspected on their own
+machine; Git does not copy their database or environment secrets. Keep the
+backup until both developers have validated the merged branch.

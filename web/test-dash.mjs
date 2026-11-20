@@ -56,6 +56,22 @@ async function test() {
     assert.ok(dashboard.includes('pc-nav'));
     assert.ok(dashboard.includes('<main'));
     assert.ok(dashboard.includes('Chào User'));
+    const { default: App, LandingPage } = await vite.ssrLoadModule('/src/App.jsx');
+    window.location.pathname = '/';
+    assert.ok(renderToString(React.createElement(App)).includes('Đang khôi phục phiên đăng nhập'));
+    const { AuthProvider } = await vite.ssrLoadModule('/src/context/AuthContext.jsx');
+    assert.ok(renderToString(React.createElement(AuthProvider, null, React.createElement(LandingPage))).includes('Mở trợ lý AI'));
+    const { getLoginPath, getAssignedRoles } = await vite.ssrLoadModule('/src/utils/roles.js');
+    for (const role of ['ADMIN', 'OWNER', 'STAFF', 'VETERINARIAN']) {
+      assert.equal(getLoginPath({ role }), '/dashboard');
+      assert.equal(getLoginPath({ roles: [{ name: `ROLE_${role}` }] }), '/dashboard');
+    }
+    assert.equal(getLoginPath({ roles: ['CUSTOMER'] }), '/');
+    assert.deepEqual(getAssignedRoles({ role: 'CUSTOMER', roles: ['ADMIN', 'CUSTOMER'] }), ['ADMIN', 'CUSTOMER']);
+    for (const name of ['AdminDashboard', 'OwnerDashboard']) {
+      const { default: Dashboard } = await vite.ssrLoadModule(`/src/pages/dashboard/${name}.jsx`);
+      assert.ok(renderToString(React.createElement(Dashboard, { user, activeTab: 'promotions', token: 'test' })).includes('Quản lý Mã Giảm Giá'));
+    }
     console.log(`  -> SUCCESS! HTML length: ${html.length}`);
   } catch (err) {
     console.error(`  -> ERROR:`, err.message);

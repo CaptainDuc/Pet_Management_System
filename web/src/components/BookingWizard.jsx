@@ -7,17 +7,17 @@ export const formatMoney = value => new Intl.NumberFormat('vi-VN', { style: 'cur
 export const localDate = (date = new Date()) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 export const formatTime = value => new Date(value).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
 
-export default function BookingWizard({ pets, services, initialPetId, token, onClose, onBooked }) {
+export default function BookingWizard({ pets, services, initialPetId, suggestion, token, onClose, onBooked }) {
   const [step, setStep] = useState(0);
   const [petId, setPetId] = useState(initialPetId || pets[0]?.id || '');
-  const [serviceId, setServiceId] = useState('');
-  const [date, setDate] = useState(localDate());
+  const [serviceId, setServiceId] = useState(services.some(item => item.id === suggestion?.serviceId) ? suggestion.serviceId : '');
+  const [date, setDate] = useState(/^\d{4}-\d{2}-\d{2}$/.test(suggestion?.date || '') && suggestion.date >= localDate() ? suggestion.date : localDate());
   const [slots, setSlots] = useState([]);
   const [slot, setSlot] = useState(null);
   const [loading, setLoading] = useState(false);
   const [retry, setRetry] = useState(0);
   const [error, setError] = useState('');
-  const [notes, setNotes] = useState('');
+  const [notes, setNotes] = useState(suggestion?.note || '');
   const [code, setCode] = useState('');
   const [promotion, setPromotion] = useState(null);
   const [checking, setChecking] = useState(false);

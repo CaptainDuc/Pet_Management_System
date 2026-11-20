@@ -103,6 +103,14 @@ export const clinicApi = {
       body: { message },
     });
   },
+
+  cancelBooking(id, reason, token) {
+    return request(`/bookings/${id}/cancel`, {
+      method: 'POST',
+      token,
+      body: { reason: reason || 'Khách hàng hủy lịch hẹn' },
+    });
+  },
 };
 
 export const invoiceApi = {
@@ -118,5 +126,39 @@ export const invoiceApi = {
 
   getByBooking(bookingId, token) {
     return request(`/invoices/by-booking/${bookingId}`, { token });
+  },
+};
+
+export const promotionApi = {
+  list(token) {
+    return request('/promotions', { token });
+  },
+
+  get(id, token) {
+    return request(`/promotions/${id}`, { token });
+  },
+
+  create(payload, token) {
+    return request('/promotions', { method: 'POST', token, body: payload });
+  },
+
+  update(id, payload, token) {
+    return request(`/promotions/${id}`, { method: 'PUT', token, body: payload });
+  },
+
+  toggle(id, token) {
+    return request(`/promotions/${id}/toggle`, { method: 'PATCH', token });
+  },
+
+  delete(id, token) {
+    return request(`/promotions/${id}`, { method: 'DELETE', token });
+  },
+
+  validate(code, bookingTotal, token) {
+    return request('/promotions/validate', {
+      method: 'POST',
+      token,
+      body: { code, bookingTotal },
+    });
   },
 };

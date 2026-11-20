@@ -342,8 +342,15 @@ services:
     ports:
       - "8002:8002"
     environment:
-      DATABASE_URL: postgresql://${BACKEND_DB_USER:-petcare}:${BACKEND_DB_PASSWORD:-petcare123}@backend-postgres:5432/${BACKEND_DB_NAME:-petcare}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-sk-stub}
+      DATABASE_URL: postgresql://${BACKEND_DB_USER:-petcare}:${BACKEND_DB_PASSWORD:-petcare123}@backend-postgres:5432/pet_rag
+      PGVECTOR_TABLE: pet_chunks
+      EMBED_PROVIDER: openrouter
+      EMBED_MODEL: nvidia/nemotron-3.5-embed-1b:free
+      EMBED_DIM: 2048
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      GROQ_MODEL: ${GROQ_MODEL:-openai/gpt-oss-120b}
+      RAG_TOP_K: ${RAG_TOP_K:-5}
     depends_on:
       backend-postgres:
         condition: service_healthy

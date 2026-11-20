@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import {
   Bell, CreditCard, Users, Plus, Search, CheckCircle2,
   Clock, DollarSign, Printer, ArrowRight, X, Phone,
-  FileText, Check, AlertCircle, Sparkles, QrCode
+  FileText, Check, AlertCircle, Sparkles, QrCode, CalendarDays, PawPrint
 } from 'lucide-react';
 import { clinicApi, invoiceApi } from '../../api/clinic';
 import VietQrPaymentModal from '../../components/VietQrPaymentModal';
@@ -74,7 +74,7 @@ export default function StaffDashboard({ user, token, activeTab, setActiveTab })
     ownerName: '',
     phone: '',
     petName: '',
-    service: 'Khám tổng quát',
+    service: 'Khám bệnh tổng quát',
     doctor: 'BS. Lê Minh Hoàng'
   });
 
@@ -278,7 +278,7 @@ export default function StaffDashboard({ user, token, activeTab, setActiveTab })
     };
     setReceptionQueue([item, ...receptionQueue]);
     setShowAddWalkinModal(false);
-    setNewWalkin({ ownerName: '', phone: '', petName: '', service: 'Khám tổng quát', doctor: 'BS. Lê Minh Hoàng' });
+    setNewWalkin({ ownerName: '', phone: '', petName: '', service: 'Khám bệnh tổng quát', doctor: 'BS. Lê Minh Hoàng' });
   };
 
   const handleCreateInvoice = async (e) => {
@@ -305,6 +305,7 @@ export default function StaffDashboard({ user, token, activeTab, setActiveTab })
 
   return (
     <div className="space-y-6">
+      {['reception', 'customers'].includes(activeTab) && <p className="pc-demo-note">Thông tin tiếp đón và danh bạ trên màn hình này đang là dữ liệu minh họa. Lịch hẹn và hóa đơn dùng dữ liệu từ hệ thống.</p>}
       {/* TAB 1: BÀN TIẾP ĐÓN & CHECK-IN */}
       {activeTab === 'reception' && (
         <div className="space-y-6">
@@ -312,7 +313,7 @@ export default function StaffDashboard({ user, token, activeTab, setActiveTab })
             <div>
               <div className="flex items-center space-x-2">
                 <span className="w-8 h-8 rounded-xl bg-[var(--color-role-staff-bg)] text-[var(--color-role-staff-text)] flex items-center justify-center font-bold">
-                  🛎️
+                  <Bell size={18} />
                 </span>
                 <Card.Title className="text-lg font-bold text-[var(--color-fg-primary)]">Bàn tiếp đón & Check-in sảnh chờ</Card.Title>
               </div>
@@ -361,16 +362,18 @@ export default function StaffDashboard({ user, token, activeTab, setActiveTab })
                       variant="primary"
                       size="sm"
                       onClick={() => handleCheckIn(item.id)}
+                      leftIcon={<Check size={15} />}
                     >
-                      ✓ Xác nhận khách đã đến
+                      Xác nhận khách đã đến
                     </Button>
                   ) : item.status === 'WAITING_VET' ? (
                     <Button
                       variant="warning"
                       size="sm"
                       onClick={() => handleSendToDoctor(item.id)}
+                      rightIcon={<ArrowRight size={15} />}
                     >
-                      Mời vào phòng khám →
+                      Mời vào phòng khám
                     </Button>
                   ) : item.status === 'IN_EXAM' ? (
                     <Badge variant="success" size="sm">
@@ -388,6 +391,7 @@ export default function StaffDashboard({ user, token, activeTab, setActiveTab })
 
           {/* Modal Tiếp đón khách vãng lai */}
           <Modal
+            className="pc-light pc-work pc-work-dialog"
             open={showAddWalkinModal}
             onClose={() => setShowAddWalkinModal(false)}
             title="Tiếp nhận khách vãng lai tại quầy"
@@ -451,7 +455,7 @@ export default function StaffDashboard({ user, token, activeTab, setActiveTab })
             <div>
               <div className="flex items-center space-x-2">
                 <span className="w-8 h-8 rounded-xl bg-[var(--color-role-staff-bg)] text-[var(--color-role-staff-text)] flex items-center justify-center font-bold">
-                  📅
+                  <CalendarDays size={18} />
                 </span>
                 <Card.Title className="text-lg font-bold text-[var(--color-fg-primary)]">Quản lý lịch hẹn</Card.Title>
               </div>
@@ -578,6 +582,7 @@ export default function StaffDashboard({ user, token, activeTab, setActiveTab })
           />
 
           <Modal
+            className="pc-light pc-work pc-work-dialog"
             open={Boolean(reportingBooking)}
             onClose={() => setReportingBooking(null)}
             title="Báo trùng lịch / sự cố"
@@ -624,7 +629,7 @@ export default function StaffDashboard({ user, token, activeTab, setActiveTab })
             <div>
               <div className="flex items-center space-x-2">
                 <span className="w-8 h-8 rounded-xl bg-[var(--color-role-staff-bg)] text-[var(--color-role-staff-text)] flex items-center justify-center font-bold">
-                  🧾
+                  <FileText size={18} />
                 </span>
                 <Card.Title className="text-lg font-bold text-[var(--color-fg-primary)]">Quầy Thu ngân & Hóa đơn viện phí</Card.Title>
               </div>
@@ -721,6 +726,7 @@ export default function StaffDashboard({ user, token, activeTab, setActiveTab })
           />
 
           <Modal
+            className="pc-light pc-work pc-work-dialog"
             open={showAddInvoiceModal}
             onClose={() => setShowAddInvoiceModal(false)}
             title="Phát hành hóa đơn từ lịch hẹn"
@@ -772,7 +778,7 @@ export default function StaffDashboard({ user, token, activeTab, setActiveTab })
             <div>
               <div className="flex items-center space-x-2">
                 <span className="w-8 h-8 rounded-xl bg-[var(--color-role-staff-bg)] text-[var(--color-role-staff-text)] flex items-center justify-center font-bold">
-                  👥
+                  <Users size={18} />
                 </span>
                 <Card.Title className="text-lg font-bold text-[var(--color-fg-primary)]">Danh bạ Khách hàng & Hồ sơ chủ nuôi</Card.Title>
               </div>
@@ -809,7 +815,7 @@ export default function StaffDashboard({ user, token, activeTab, setActiveTab })
                   <div className="text-slate-500">Thú cưng đã đăng ký:</div>
                   {c.pets.map((p, idx) => (
                     <Badge key={idx} variant="ghost" size="xs" className="w-full justify-start">
-                      🐾 {p}
+                      <PawPrint size={13} /> {p}
                     </Badge>
                   ))}
                 </div>
