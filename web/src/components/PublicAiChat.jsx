@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { MessageCircle, RefreshCw, Send, Sparkles, X } from 'lucide-react';
 import AiMessageText from './AiMessageText';
 
@@ -14,6 +14,17 @@ export default function PublicAiChat() {
   const [messages, setMessages] = useState([INITIAL_MESSAGE]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const chatRef = useRef(null);
+  const followChat = useRef(true);
+  useEffect(() => {
+    const pane = chatRef.current;
+    if (!pane) return;
+    const follow = () => { if (followChat.current) pane.scrollTop = pane.scrollHeight; };
+    follow();
+    const observer = new ResizeObserver(follow);
+    observer.observe(pane);
+    return () => observer.disconnect();
+  }, [messages, loading, open]);
 
   useEffect(() => {
     const openChat = () => setOpen(true);
@@ -25,6 +36,7 @@ export default function PublicAiChat() {
     event.preventDefault();
     const question = input.trim();
     if (!question || loading) return;
+    followChat.current = true;
 
     setMessages(prev => [...prev, { sender: 'user', text: question }]);
     setInput('');
@@ -37,9 +49,11 @@ export default function PublicAiChat() {
         body: JSON.stringify({ question }),
       });
       const data = await response.json();
-      let answer = data?.answer || data?.data?.answer
+      if (!response.ok || data?.success === false) throw new Error('AI request failed');
+      const result = data?.data || data;
+      let answer = result.answer
         || 'Xin lỗi, mình chưa có câu trả lời phù hợp. Bạn nên đưa thú cưng đến bác sĩ thú y để kiểm tra.';
-      if (data?.needsLogin) {
+      if (result.needsLogin) {
         answer += '\n\nBạn có thể đăng nhập để đặt lịch khám.';
       }
       setMessages(prev => [...prev, { sender: 'ai', text: answer }]);
@@ -77,7 +91,7 @@ export default function PublicAiChat() {
             </button>
           </div>
 
-          <div className="flex-1 space-y-3 overflow-y-auto p-3 text-xs">
+          <div ref={chatRef} onScroll={event => { const node = event.currentTarget; followChat.current = node.scrollHeight - node.scrollTop - node.clientHeight < 80; }} className="flex-1 space-y-3 overflow-y-auto p-3 text-xs" aria-live="polite">
             {messages.map((message, index) => (
               <div key={index} className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
                 <div
@@ -107,6 +121,7 @@ export default function PublicAiChat() {
             <div className="flex items-center space-x-2">
               <input
                 type="text"
+                aria-label="Câu hỏi cho trợ lý AI"
                 value={input}
                 onChange={event => setInput(event.target.value)}
                 placeholder="Mô tả triệu chứng của thú cưng..."

@@ -8,7 +8,7 @@ import jakarta.validation.constraints.NotNull;
 import java.util.List;
 import java.util.UUID;
 
-@Schema(description = "Create a booking; each item takes exactly one time slot")
+@Schema(description = "Create a booking; each item selects its first slot and reserves consecutive slots for the full service duration")
 public record CreateBookingRequest(
         @NotNull UUID petId,
         UUID branchId,

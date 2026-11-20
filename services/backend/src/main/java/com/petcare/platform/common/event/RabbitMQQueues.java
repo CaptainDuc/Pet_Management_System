@@ -41,10 +41,6 @@ public final class RabbitMQQueues {
     public static final String NOTIFICATION_EXCHANGE = "petcare.notification";
     public static final String NOTIFICATION_SEND     = "notification.send";
 
-    // ─── Inventory ─────────────────────────────────────────────────────────────────
-    public static final String INVENTORY_EXCHANGE  = "petcare.inventory";
-    public static final String INVENTORY_LOW_STOCK = "inventory.low-stock";
-
     // ─── Review ────────────────────────────────────────────────────────────────────
     public static final String REVIEW_EXCHANGE = "petcare.review";
     public static final String REVIEW_CREATED  = "review.created";

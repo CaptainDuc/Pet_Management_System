@@ -1,0 +1,175 @@
+/**
+ * PetCare Design System — Transition & Animation Tokens (CSS Custom Properties)
+ * Auto-generated from transitions.js - do not edit directly
+ * Brand: Pet Service (Pet Service)
+ */
+
+:root {
+  /* Durations */
+  --duration-instant: 0ms;
+  --duration-fastest: 50ms;
+  --duration-faster: 100ms;
+  --duration-fast: 150ms;
+  --duration-normal: 200ms;
+  --duration-slow: 300ms;
+  --duration-slower: 400ms;
+  --duration-slowest: 500ms;
+  --duration-entrance: 500ms;
+  --duration-ripple: 650ms;
+
+  /* Easings - landing page uses smooth, premium easings */
+  --ease-linear: linear;
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-out-quad: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  --ease-out-cubic: cubic-bezier(0.215, 0.61, 0.355, 1);
+  --ease-out-quart: cubic-bezier(0.165, 0.84, 0.44, 1);
+  --ease-out-quint: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-out-expo: cubic-bezier(0.19, 1, 0.22, 1);
+  --ease-out-back: cubic-bezier(0.175, 0.885, 0.32, 1.275);
+
+  /* Transition combinations */
+  --transition-colors: color var(--duration-fast) var(--ease-out), background-color var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out), fill var(--duration-fast) var(--ease-out), stroke var(--duration-fast) var(--ease-out);
+  --transition-opacity: opacity var(--duration-fast) var(--ease-out);
+  --transition-transform: transform var(--duration-fast) var(--ease-out);
+  --transition-box-shadow: box-shadow var(--duration-fast) var(--ease-out);
+  --transition-all: all var(--duration-normal) var(--ease-out);
+
+  --transition-button: background-color var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out);
+  --transition-input: border-color var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out), background-color var(--duration-fast) var(--ease-out);
+  --transition-card: transform var(--duration-normal) var(--ease-out), box-shadow var(--duration-normal) var(--ease-out);
+  --transition-modal: opacity var(--duration-normal) var(--ease-out), transform var(--duration-normal) var(--ease-out);
+  --transition-dropdown: opacity var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out);
+  --transition-tooltip: opacity var(--duration-faster) var(--ease-out), transform var(--duration-faster) var(--ease-out);
+  --transition-nav: color var(--duration-fast) var(--ease-out), background-color var(--duration-fast) var(--ease-out);
+  --transition-tab: color var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out);
+  --transition-badge: background-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out);
+  --transition-sidebar: transform var(--duration-normal) var(--ease-out), width var(--duration-normal) var(--ease-out);
+  --transition-overlay: opacity var(--duration-fast) var(--ease-out), visibility var(--duration-fast) var(--ease-out);
+
+  /* Brand-specific transitions */
+  --transition-brand-glow: box-shadow var(--duration-normal) var(--ease-out);
+  --transition-gradient: background-position var(--duration-slower) var(--ease-out);
+
+  /* Animations (keyframe references) */
+  --animation-fade-in: fadeIn var(--duration-fast) var(--ease-out);
+  --animation-fade-out: fadeOut var(--duration-fast) var(--ease-in);
+  --animation-slide-up: slideUp var(--duration-normal) var(--ease-out);
+  --animation-slide-down: slideDown var(--duration-normal) var(--ease-out);
+  --animation-slide-in-right: slideInRight var(--duration-normal) var(--ease-out);
+  --animation-slide-in-left: slideInLeft var(--duration-normal) var(--ease-out);
+  --animation-scale-in: scaleIn var(--duration-normal) var(--ease-out);
+  --animation-scale-out: scaleOut var(--duration-fast) var(--ease-in);
+  --animation-form-entrance: slideUp var(--duration-entrance) var(--ease-out-quart);
+  --animation-page-slide: slideUp var(--duration-normal) var(--ease-out-quart);
+  --animation-error-slide: slideDown var(--duration-fast) var(--ease-out-quart);
+  --animation-spin: spin 1s linear infinite;
+  --animation-pulse: pulse 2s var(--ease-in-out) infinite;
+  --animation-shimmer: shimmer 1.5s linear infinite;
+  --animation-ripple: ripple var(--duration-ripple) var(--ease-out-quint);
+  --animation-shake: shake 0.5s var(--ease-in-out);
+  --animation-tap-feedback: scaleIn var(--duration-fastest) var(--ease-out);
+
+  /* Brand entrance animations */
+  --animation-brand-glow: brandGlow 2s var(--ease-in-out) infinite;
+  --animation-brand-shimmer: shimmer 3s linear infinite;
+}
+
+/* Keyframe animations */
+@keyframes fadeIn {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+@keyframes fadeOut {
+  0% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+@keyframes slideUp {
+  0% { opacity: 0; transform: translateY(10px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideDown {
+  0% { opacity: 0; transform: translateY(-10px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideInRight {
+  0% { opacity: 0; transform: translateX(10px); }
+  100% { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes slideInLeft {
+  0% { opacity: 0; transform: translateX(-10px); }
+  100% { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes scaleIn {
+  0% { opacity: 0; transform: scale(0.95); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes scaleOut {
+  0% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(0.95); }
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+@keyframes bounce {
+  0%, 100% { transform: translateY(-5%); animation-timing-function: cubic-bezier(0.8, 0, 1, 1); }
+  50% { transform: translateY(0); animation-timing-function: cubic-bezier(0, 0, 0.2, 1); }
+}
+
+@keyframes ripple {
+  0% { transform: translate(-50%, -50%) scale(0.2); opacity: 0.85; }
+  45% { opacity: 0.55; }
+  100% { transform: translate(-50%, -50%) scale(1.25); opacity: 0; }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  10%, 30%, 50%, 70%, 90% { transform: translateX(-4px); }
+  20%, 40%, 60%, 80% { transform: translateX(4px); }
+}
+
+/* Brand-specific keyframes */
+@keyframes brandGlow {
+  0%, 100% { box-shadow: 0 0 20px rgba(37, 99, 235, 0.2); }
+  50% { box-shadow: 0 0 40px rgba(37, 99, 235, 0.4), 0 0 60px rgba(6, 182, 212, 0.2); }
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-fast: 0.01ms;
+    --duration-normal: 0.01ms;
+    --duration-slow: 0.01ms;
+    --duration-entrance: 0.01ms;
+    --duration-ripple: 0.01ms;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

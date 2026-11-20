@@ -158,20 +158,19 @@ public class ScheduleService {
             List<UUID> skillIds = List.copyOf(
                     skillsByStaff.getOrDefault(schedule.getStaffId(), Set.of()));
 
-            List<SlotView> views = slotsBySchedule.getOrDefault(schedule.getId(), List.of()).stream()
-                    .filter(t -> t.getStartTime().isAfter(now))
-                    .filter(t -> includeBooked || !t.isBooked())
-                    .filter(t -> neededMinutes == null
-                            || Duration.between(t.getStartTime(), t.getEndTime()).toMinutes() == neededMinutes
-                            || Duration.between(t.getStartTime(), t.getEndTime()).toMinutes() >= Math.min(neededMinutes, 30))
-                    .map(t -> new SlotView(
-                            t.getId(),
-                            t.getStartTime().atZone(ZONE).toOffsetDateTime(),
-                            t.getEndTime().atZone(ZONE).toOffsetDateTime(),
-                            !t.isBooked(),
-                            skillIds,
-                            t.getResourceId()))
-                    .toList();
+            List<TimeSlot> ordered = slotsBySchedule.getOrDefault(schedule.getId(), List.of());
+            List<SlotView> views = new ArrayList<>();
+            for (TimeSlot first : ordered) {
+                if (!first.getStartTime().isAfter(now)) continue;
+                List<TimeSlot> window = neededMinutes == null ? List.of(first)
+                        : SlotWindow.covering(ordered, first, neededMinutes);
+                if (window.isEmpty()) continue;
+                boolean available = window.stream().noneMatch(TimeSlot::isBooked);
+                if (!includeBooked && !available) continue;
+                views.add(new SlotView(first.getId(), first.getStartTime().atZone(ZONE).toOffsetDateTime(),
+                        window.getLast().getEndTime().atZone(ZONE).toOffsetDateTime(), available,
+                        skillIds, first.getResourceId()));
+            }
 
             if (!views.isEmpty()) {
                 result.add(new StaffSlots(schedule.getStaffId(), schedule.getId(),

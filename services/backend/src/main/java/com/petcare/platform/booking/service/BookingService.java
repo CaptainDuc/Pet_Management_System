@@ -1,5 +1,7 @@
 package com.petcare.platform.booking.service;
 
+import com.petcare.platform.invoice.repository.InvoiceRepository;
+import com.petcare.platform.invoice.domain.InvoiceStatus;
 import com.petcare.platform.booking.event.BookingEventData;
 import com.petcare.platform.common.event.RabbitMQQueues;
 import com.petcare.platform.common.outbox.OutboxService;
@@ -28,6 +30,7 @@ import com.petcare.platform.promotion.repository.PromotionRepository;
 import com.petcare.platform.promotion.service.PromotionService;
 import com.petcare.platform.schedule.domain.Schedule;
 import com.petcare.platform.schedule.domain.TimeSlot;
+import com.petcare.platform.schedule.service.SlotWindow;
 import com.petcare.platform.schedule.repository.ScheduleRepository;
 import com.petcare.platform.schedule.repository.TimeSlotRepository;
 import com.petcare.platform.servicecatalog.domain.CareService;
@@ -47,7 +50,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
@@ -73,6 +75,7 @@ public class BookingService {
             BookingStatus.CONFIRMED, Set.of(BookingStatus.IN_PROGRESS, BookingStatus.CANCELLED),
             BookingStatus.IN_PROGRESS, Set.of(BookingStatus.COMPLETED, BookingStatus.CANCELLED));
 
+    private final InvoiceRepository invoiceRepository;
     private final BookingRepository bookingRepository;
     private final BookingItemRepository itemRepository;
     private final BookingStatusHistoryRepository historyRepository;
@@ -89,7 +92,7 @@ public class BookingService {
     @Value("${app.booking.cancel-cutoff-hours:2}")
     private int cancelCutoffHours;
 
-    private record PlannedItem(CareService service, UUID slotId, UUID staffId, String notes) {}
+    private record PlannedItem(CareService service, UUID slotId, List<UUID> reservedSlots, UUID staffId, String notes) {}
 
     // ─── Đặt lịch ──────────────────────────────────────────────────────────
 
@@ -112,10 +115,6 @@ public class BookingService {
 
             if (!slot.getStartTime().isAfter(now)) {
                 throw new BusinessException("Slot is in the past");
-            }
-            long minutes = Duration.between(slot.getStartTime(), slot.getEndTime()).toMinutes();
-            if (service.getDurationMinutes() > 0 && minutes < Math.min(service.getDurationMinutes(), 30)) {
-                throw new BusinessException("Slot duration does not match service duration");
             }
             if (slot.getScheduleId() == null) {
                 throw new BusinessException("Slot does not belong to a schedule");
@@ -141,11 +140,21 @@ public class BookingService {
             if (skillRepository.findByStaffIdAndServiceId(staffId, service.getId()).isEmpty()) {
                 throw new BusinessException("Staff does not provide this service");
             }
-            planned.add(new PlannedItem(service, slot.getId(), staffId, item.notes()));
+            List<TimeSlot> window = SlotWindow.covering(
+                    timeSlotRepository.findByScheduleIdInOrderByStartTimeAsc(List.of(schedule.getId())),
+                    slot, service.getDurationMinutes());
+            if (window.isEmpty()) {
+                throw new BusinessException("Not enough consecutive slots for this service");
+            }
+            planned.add(new PlannedItem(service, slot.getId(), window.stream().map(TimeSlot::getId).toList(), staffId, item.notes()));
         }
 
         // 2. Giữ chỗ nguyên tử, theo thứ tự id để tránh khóa chéo giữa hai giao dịch
-        planned.stream().map(PlannedItem::slotId).sorted().forEach(slotId -> {
+        List<UUID> reservations = planned.stream().flatMap(item -> item.reservedSlots().stream()).toList();
+        if (reservations.stream().distinct().count() != reservations.size()) {
+            throw new BusinessException("Booking services overlap in time");
+        }
+        reservations.stream().sorted().forEach(slotId -> {
             if (timeSlotRepository.markBooked(slotId) == 0) {
                 throw new ConflictException("SLOT_ALREADY_BOOKED");
             }
@@ -180,6 +189,7 @@ public class BookingService {
             item.setServiceId(p.service().getId());
             item.setStaffId(p.staffId());
             item.setTimeSlotId(p.slotId());
+            item.setReservedSlotIds(new java.util.HashSet<>(p.reservedSlots()));
             item.setUnitPrice(p.service().getBasePrice());
             item.setNotes(p.notes());
             itemRepository.save(item);
@@ -339,6 +349,12 @@ public class BookingService {
                     booking.getId(), BookingStatus.PENDING, BookingStatus.CONFIRMED,
                     actorId, null));
         }
+        invoiceRepository.findByBookingId(booking.getId()).ifPresent(invoice -> {
+            if (invoice.getStatus() != InvoiceStatus.PAID) {
+                invoice.setStatus(InvoiceStatus.PAID);
+                invoiceRepository.save(invoice);
+            }
+        });
         bookingRepository.save(booking);
         promotionService.consume(booking.getId());
         return autoConfirm;
@@ -364,8 +380,8 @@ public class BookingService {
 
         List<BookingItem> items = itemRepository.findByBookingId(id);
         List<UUID> slotIds = items.stream()
-                .map(BookingItem::getTimeSlotId)
-                .filter(Objects::nonNull)
+                .flatMap(i -> reservedSlots(i).stream())
+                .distinct()
                 .toList();
         Instant earliest = timeSlotRepository.findAllById(slotIds).stream()
                 .map(TimeSlot::getStartTime)
@@ -453,8 +469,7 @@ public class BookingService {
                 .findAllById(all.stream().map(BookingItem::getServiceId).distinct().toList())
                 .stream().collect(Collectors.toMap(CareService::getId, s -> s));
         Map<UUID, TimeSlot> slots = timeSlotRepository
-                .findAllById(all.stream().map(BookingItem::getTimeSlotId)
-                        .filter(Objects::nonNull).distinct().toList())
+                .findAllById(all.stream().flatMap(i -> reservedSlots(i).stream()).distinct().toList())
                 .stream().collect(Collectors.toMap(TimeSlot::getId, t -> t));
         Map<UUID, Promotion> promotions = promotionRepository
                 .findAllById(bookings.stream().map(Booking::getPromotionId)
@@ -466,12 +481,14 @@ public class BookingService {
                     .stream().map(i -> {
                         CareService service = services.get(i.getServiceId());
                         TimeSlot slot = i.getTimeSlotId() == null ? null : slots.get(i.getTimeSlotId());
+                        Instant endTime = reservedSlots(i).stream().map(slots::get).filter(Objects::nonNull)
+                                .map(TimeSlot::getEndTime).max(Instant::compareTo).orElse(null);
                         return new ItemResponse(
                                 i.getId(), i.getServiceId(),
                                 service == null ? null : service.getName(),
                                 i.getStaffId(), i.getTimeSlotId(),
                                 slot == null ? null : slot.getStartTime().atZone(ZONE).toOffsetDateTime(),
-                                slot == null ? null : slot.getEndTime().atZone(ZONE).toOffsetDateTime(),
+                                endTime == null ? null : endTime.atZone(ZONE).toOffsetDateTime(),
                                 i.getStatus().name(), i.getUnitPrice(), i.getNotes());
                     }).toList();
             Promotion promotion = b.getPromotionId() == null ? null : promotions.get(b.getPromotionId());
@@ -482,5 +499,10 @@ public class BookingService {
                     b.getStaffNote(), b.getNotes(), itemResponses,
                     b.getCreatedAt(), b.getUpdatedAt());
         }).toList();
+    }
+
+    private Set<UUID> reservedSlots(BookingItem item) {
+        if (!item.getReservedSlotIds().isEmpty()) return item.getReservedSlotIds();
+        return item.getTimeSlotId() == null ? Set.of() : Set.of(item.getTimeSlotId());
     }
 }

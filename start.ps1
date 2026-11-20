@@ -1,3 +1,5 @@
+﻿Set-Location -LiteralPath $PSScriptRoot
+
 Write-Host "========================================================" -ForegroundColor Cyan
 Write-Host "       PETCARE PLATFORM - KHỞI ĐỘNG TOÀN HỆ THỐNG        " -ForegroundColor Cyan
 Write-Host "========================================================" -ForegroundColor Cyan
@@ -26,7 +28,7 @@ Write-Host "[3/3] Đang khởi động toàn bộ hệ thống bằng Docker Com
 Write-Host "(Quá trình build lần đầu có thể mất 2-3 phút, vui lòng chờ...)" -ForegroundColor Gray
 Write-Host ""
 
-docker compose up -d --build
+docker compose up -d --build --wait --wait-timeout 180
 
 if ($LASTEXITCODE -eq 0) {
     Write-Host ""
@@ -36,10 +38,11 @@ if ($LASTEXITCODE -eq 0) {
     Write-Host " - Web Frontend:      http://localhost:3000" -ForegroundColor White
     Write-Host "                      http://localhost" -ForegroundColor White
     Write-Host " - Backend Core API:  http://localhost:8080/api/v1" -ForegroundColor White
+    Write-Host " - API Gateway:       http://localhost:8000/api/v1/services" -ForegroundColor White
     Write-Host " - Swagger UI docs:   http://localhost:8080/swagger-ui.html" -ForegroundColor White
     Write-Host " - RabbitMQ UI:       http://localhost:15672 (petcare / petcare123)" -ForegroundColor White
-    Write-Host " - Grafana Monitor:   http://localhost:3001 (admin / admin123)" -ForegroundColor White
     Write-Host "========================================================" -ForegroundColor Green
 } else {
     Write-Host "[LỖI] Có lỗi xảy ra trong quá trình khởi động container." -ForegroundColor Red
+    exit 1
 }

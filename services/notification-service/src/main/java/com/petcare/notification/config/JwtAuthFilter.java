@@ -1,5 +1,7 @@
 package com.petcare.notification.config;
 
+import com.petcare.notification.dto.ApiResponse;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
@@ -22,10 +24,13 @@ import java.util.UUID;
 public class JwtAuthFilter extends OncePerRequestFilter {
 
     private final SecretKey key;
+    private final ObjectMapper objectMapper;
 
     public JwtAuthFilter(
             @Value("${JWT_SECRET:your-256-bit-secret-key-change-this-in-production-must-be-at-least-256-bits}")
-            String secret) {
+            String secret,
+            ObjectMapper objectMapper) {
+        this.objectMapper = objectMapper;
         byte[] keyBytes;
         try {
             keyBytes = Decoders.BASE64.decode(secret);
@@ -42,7 +47,8 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        return !request.getRequestURI().startsWith("/api/");
+        return "OPTIONS".equalsIgnoreCase(request.getMethod())
+                || !request.getRequestURI().startsWith("/api/");
     }
 
     @Override
@@ -81,7 +87,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     private void reject(HttpServletResponse response, String message) throws IOException {
         response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
         response.setContentType("application/json;charset=UTF-8");
-        response.getWriter().write(
-                "{\"success\":false,\"message\":\"" + message + "\",\"data\":null}");
+        ApiResponse<Void> apiResponse = ApiResponse.error(HttpServletResponse.SC_UNAUTHORIZED, message);
+        objectMapper.writeValue(response.getWriter(), apiResponse);
     }
 }

@@ -20,6 +20,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Comparator;
 import java.util.Map;
 import java.util.UUID;
 
@@ -179,12 +180,15 @@ public class AiService {
 
         String hint = serviceHint(question);
         CareService service = services.stream()
+                .filter(item -> containsIgnoreCase(question, item.getName()))
+                .max(Comparator.comparingInt(item -> item.getName().length()))
+                .orElseGet(() -> services.stream()
                 .filter(item -> containsIgnoreCase(item.getName(), hint))
                 .findFirst()
                 .orElseGet(() -> services.stream()
                         .filter(item -> containsIgnoreCase(item.getName(), "khám"))
                         .findFirst()
-                        .orElse(services.get(0)));
+                        .orElse(services.get(0))));
 
         Map<String, Object> form = new LinkedHashMap<>();
         form.put("petId", pet.getId());

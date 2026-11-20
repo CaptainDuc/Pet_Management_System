@@ -38,4 +38,20 @@ public class LoyaltyService {
                         .tier("BRONZE")
                         .build()));
     }
+
+    @Transactional
+    public LoyaltyAccount adjustPoints(UUID userId, long pointsDelta, String reason) {
+        LoyaltyAccount account = loyaltyAccountRepository.findByUserId(userId)
+                .orElseGet(() -> LoyaltyAccount.builder()
+                        .userId(userId)
+                        .points(0L)
+                        .tier("BRONZE")
+                        .build());
+        long newPoints = account.getPoints() + pointsDelta;
+        if (newPoints < 0) {
+            throw new IllegalArgumentException("Points cannot go below zero");
+        }
+        account.setPoints(newPoints);
+        return loyaltyAccountRepository.save(account);
+    }
 }

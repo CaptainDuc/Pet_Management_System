@@ -1,12 +1,12 @@
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8080/api/v1';
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1";
 
-async function request(endpoint, { method = 'GET', token, body } = {}) {
+async function request(endpoint, { method = "GET", token, body } = {}) {
   const headers = {};
   if (body !== undefined) {
-    headers['Content-Type'] = 'application/json';
+    headers["Content-Type"] = "application/json";
   }
   if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
+    headers["Authorization"] = `Bearer ${token}`;
   }
 
   let response;
@@ -17,19 +17,23 @@ async function request(endpoint, { method = 'GET', token, body } = {}) {
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
   } catch {
-    const error = new Error('Không thể kết nối đến máy chủ backend (http://localhost:8080).');
+    const error = new Error(
+      "Không thể kết nối đến máy chủ backend (http://localhost:8000)."
+    );
     error.status = 0;
     throw error;
   }
 
   let payload = null;
-  const contentType = response.headers.get('content-type');
-  if (contentType && contentType.includes('application/json')) {
+  const contentType = response.headers.get("content-type");
+  if (contentType && contentType.includes("application/json")) {
     payload = await response.json();
   }
 
   if (!response.ok) {
-    const error = new Error(payload?.message || `Yêu cầu thất bại (HTTP ${response.status})`);
+    const error = new Error(
+      payload?.message || `Yêu cầu thất bại (HTTP ${response.status})`
+    );
     error.status = response.status;
     error.payload = payload;
     throw error;
@@ -41,12 +45,12 @@ async function request(endpoint, { method = 'GET', token, body } = {}) {
 function query(params) {
   const search = new URLSearchParams();
   Object.entries(params).forEach(([key, value]) => {
-    if (value !== undefined && value !== null && value !== '') {
+    if (value !== undefined && value !== null && value !== "") {
       search.set(key, value);
     }
   });
   const qs = search.toString();
-  return qs ? `?${qs}` : '';
+  return qs ? `?${qs}` : "";
 }
 
 export const clinicApi = {
@@ -55,7 +59,11 @@ export const clinicApi = {
   },
 
   createPet(payload, token) {
-    return request('/pets', { method: 'POST', token, body: payload });
+    return request("/pets", { method: "POST", token, body: payload });
+  },
+
+  updatePet(id, payload, token) {
+    return request(`/pets/${id}`, { method: "PUT", token, body: payload });
   },
 
   listServices(token) {
@@ -63,11 +71,13 @@ export const clinicApi = {
   },
 
   listBookings(token, params = {}) {
-    return request(`/bookings${query({ page: 0, size: 50, ...params })}`, { token });
+    return request(`/bookings${query({ page: 0, size: 50, ...params })}`, {
+      token,
+    });
   },
 
   createBooking(payload, token) {
-    return request('/bookings', { method: 'POST', token, body: payload });
+    return request("/bookings", { method: "POST", token, body: payload });
   },
 
   availableSlots(params, token) {
@@ -75,20 +85,20 @@ export const clinicApi = {
   },
 
   validatePromotion(code, bookingTotal, token) {
-    return request('/promotions/validate', {
-      method: 'POST',
+    return request("/promotions/validate", {
+      method: "POST",
       token,
       body: { code, bookingTotal },
     });
   },
 
   markBookingPaid(id, token) {
-    return request(`/bookings/${id}/mark-paid`, { method: 'POST', token });
+    return request(`/bookings/${id}/mark-paid`, { method: "POST", token });
   },
 
   reportBookingIssue(id, message, token) {
     return request(`/bookings/${id}/report`, {
-      method: 'POST',
+      method: "POST",
       token,
       body: { message },
     });
@@ -105,11 +115,13 @@ export const clinicApi = {
 
 export const invoiceApi = {
   listInvoices(token, params = {}) {
-    return request(`/invoices${query({ page: 0, size: 50, ...params })}`, { token });
+    return request(`/invoices${query({ page: 0, size: 50, ...params })}`, {
+      token,
+    });
   },
 
   issueInvoice(bookingId, token) {
-    return request('/invoices', { method: 'POST', token, body: { bookingId } });
+    return request("/invoices", { method: "POST", token, body: { bookingId } });
   },
 
   getByBooking(bookingId, token) {
@@ -150,4 +162,3 @@ export const promotionApi = {
     });
   },
 };
-

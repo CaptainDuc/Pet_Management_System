@@ -1,9 +1,10 @@
 import React, { useState, forwardRef } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
-import FormInput from './FormInput';
+import { Input } from '../../design-system/components';
 
 /**
  * PasswordInput component with accessible toggle show/hide visibility
+ * Uses Design System Input component
  */
 const PasswordInput = forwardRef(function PasswordInput(
   { id = 'password', label = 'Mật khẩu', ...props },
@@ -12,15 +13,14 @@ const PasswordInput = forwardRef(function PasswordInput(
   const [showPassword, setShowPassword] = useState(false);
 
   return (
-    <FormInput
+    <Input
       ref={ref}
       id={id}
       label={label}
       type={showPassword ? 'text' : 'password'}
-      rightElement={
+      rightIcon={
         <button
           type="button"
-          tabIndex={-1}
           onClick={() => setShowPassword((prev) => !prev)}
           className="text-[#64748B] hover:text-[#0F172A] focus:outline-none focus:text-[#0F172A] transition-colors p-1"
           aria-label={showPassword ? 'Ẩn mật khẩu' : 'Hiển thị mật khẩu'}

@@ -86,7 +86,13 @@ class VetAccessTest extends IntegrationTestBase {
 
         ResponseEntity<String> written = writeRecord(vet.token(), s.petId());
         assertThat(written.getStatusCode()).as(written.getBody()).isEqualTo(HttpStatus.CREATED);
-        assertThat(json(written).path("vetName").asText()).isEqualTo(vet.fullName());
+        assertThat(json(written).path("data").path("vetName").asText()).isEqualTo(vet.fullName());
+
+        ResponseEntity<String> vaccinated = send(HttpMethod.POST, "/api/v1/medical/vaccinations",
+                vet.token(), Map.of("petId", s.petId().toString(), "vaccineName", "Rabies",
+                        "administeredDate", LocalDate.now().toString()));
+        assertThat(vaccinated.getStatusCode()).as(vaccinated.getBody()).isEqualTo(HttpStatus.CREATED);
+        assertThat(json(vaccinated).path("data").path("vetName").asText()).isEqualTo(vet.fullName());
 
         // 4. Thú cưng khác không thuộc lịch hẹn của bác sĩ: không xem, không ghi
         TestUser otherOwner = newUser("CUSTOMER");

@@ -38,10 +38,11 @@ logs/
 .github
 
 web/dist/
-.github
 .agents
+.claude
+.impeccable
+.scripts
 
-# RAG local environment
-.venv/
-ai/rag/backup.sql
-*.sql.bak
+# Local test login credentials
+/TAI_KHOAN_KIEM_THU*.local.txt
+/.local-backups/

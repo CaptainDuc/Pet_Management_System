@@ -1,4 +1,4 @@
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8080/api/v1';
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1";
 
 /**
  * Standard fetch helper with error normalization
@@ -6,7 +6,7 @@ const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8080/api/v1';
 async function request(endpoint, options = {}) {
   const url = `${API_BASE}${endpoint}`;
   const headers = {
-    'Content-Type': 'application/json',
+    "Content-Type": "application/json",
     ...(options.headers || {}),
   };
 
@@ -17,8 +17,8 @@ async function request(endpoint, options = {}) {
     });
 
     let data = null;
-    const contentType = response.headers.get('content-type');
-    if (contentType && contentType.includes('application/json')) {
+    const contentType = response.headers.get("content-type");
+    if (contentType && contentType.includes("application/json")) {
       data = await response.json();
     }
 
@@ -27,8 +27,12 @@ async function request(endpoint, options = {}) {
       // - 400 Validation: { status: 400, success: false, message: "Validation error", data: { field: "message" } }
       // - 401 Bad credentials: { status: 401, success: false, message: "Invalid credentials" }
       // - 422 Business error: { status: 422, success: false, message: "Email already registered" }
-      const errorMessage = data?.message || `Yêu cầu thất bại với mã lỗi HTTP ${response.status}`;
-      const fieldErrors = data?.data && typeof data.data === 'object' && !Array.isArray(data.data) ? data.data : {};
+      const errorMessage =
+        data?.message || `Yêu cầu thất bại với mã lỗi HTTP ${response.status}`;
+      const fieldErrors =
+        data?.data && typeof data.data === "object" && !Array.isArray(data.data)
+          ? data.data
+          : {};
 
       const error = new Error(errorMessage);
       error.status = response.status;
@@ -39,8 +43,10 @@ async function request(endpoint, options = {}) {
 
     return data;
   } catch (err) {
-    if (err.name === 'TypeError' && err.message.includes('fetch')) {
-      const netError = new Error('Không thể kết nối đến máy chủ backend (http://localhost:8080). Vui lòng kiểm tra dịch vụ.');
+    if (err.name === "TypeError" && err.message.includes("fetch")) {
+      const netError = new Error(
+        "Không thể kết nối đến máy chủ backend (http://localhost:8000). Vui lòng kiểm tra dịch vụ."
+      );
       netError.status = 0;
       throw netError;
     }
@@ -54,8 +60,8 @@ export const authApi = {
    * @param {{ email: string, password: string }} credentials
    */
   async login(credentials) {
-    const res = await request('/auth/login', {
-      method: 'POST',
+    const res = await request("/auth/login", {
+      method: "POST",
       body: JSON.stringify({
         email: credentials.email.trim(),
         password: credentials.password,
@@ -79,8 +85,8 @@ export const authApi = {
       body.phone = payload.phone.trim();
     }
 
-    const res = await request('/auth/register', {
-      method: 'POST',
+    const res = await request("/auth/register", {
+      method: "POST",
       body: JSON.stringify(body),
     });
     return res.data;
@@ -91,8 +97,8 @@ export const authApi = {
    * @param {string} refreshToken
    */
   async refreshToken(refreshToken) {
-    const res = await request('/auth/refresh', {
-      method: 'POST',
+    const res = await request("/auth/refresh", {
+      method: "POST",
       body: JSON.stringify({ refreshToken }),
     });
     return res.data;
@@ -106,10 +112,10 @@ export const authApi = {
   async logout(payload, accessToken) {
     const headers = {};
     if (accessToken) {
-      headers['Authorization'] = `Bearer ${accessToken}`;
+      headers["Authorization"] = `Bearer ${accessToken}`;
     }
-    const res = await request('/auth/logout', {
-      method: 'POST',
+    const res = await request("/auth/logout", {
+      method: "POST",
       headers,
       body: JSON.stringify({
         refreshToken: payload?.refreshToken || null,
@@ -123,8 +129,8 @@ export const authApi = {
    * GET /api/v1/users/me
    */
   async getProfile(accessToken) {
-    const res = await request('/users/me', {
-      method: 'GET',
+    const res = await request("/users/me", {
+      method: "GET",
       headers: {
         Authorization: `Bearer ${accessToken}`,
       },

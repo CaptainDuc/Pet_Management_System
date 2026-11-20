@@ -10,6 +10,7 @@ import com.petcare.platform.staff.dto.CreateStaffRequest;
 import com.petcare.platform.staff.dto.SkillResponse;
 import com.petcare.platform.staff.dto.StaffResponse;
 import com.petcare.platform.staff.dto.StaffSkillsResponse;
+import com.petcare.platform.staff.dto.UpdateSkillRequest;
 import com.petcare.platform.staff.repository.StaffRepository;
 import com.petcare.platform.staff.repository.StaffSkillRepository;
 import com.petcare.platform.user.repository.UserRepository;
@@ -118,5 +119,32 @@ public class StaffService {
     private StaffResponse toResponse(Staff s) {
         return new StaffResponse(s.getId(), s.getUserId(), s.getBranchId(),
                 s.getPosition(), s.getBio(), s.isActive(), s.getCreatedAt(), s.getUpdatedAt());
+    }
+
+    @Transactional
+    public SkillResponse updateSkill(UUID staffId, UUID skillId, UpdateSkillRequest request) {
+        StaffSkill skill = skillRepository.findById(skillId)
+                .orElseThrow(() -> new ResourceNotFoundException("StaffSkill", skillId));
+        if (!skill.getStaffId().equals(staffId)) {
+            throw new BusinessException("Skill does not belong to this staff");
+        }
+        String level = request.proficiencyLevel().trim().toUpperCase();
+        if (!LEVELS.contains(level)) {
+            throw new BusinessException("proficiencyLevel must be EXPERT, INTERMEDIATE or BEGINNER");
+        }
+        skill.setProficiencyLevel(level);
+        skillRepository.save(skill);
+        return new SkillResponse(skill.getId(), skill.getServiceId(),
+                skill.getProficiencyLevel(), skill.getCreatedAt());
+    }
+
+    @Transactional
+    public void removeSkill(UUID staffId, UUID skillId) {
+        StaffSkill skill = skillRepository.findById(skillId)
+                .orElseThrow(() -> new ResourceNotFoundException("StaffSkill", skillId));
+        if (!skill.getStaffId().equals(staffId)) {
+            throw new BusinessException("Skill does not belong to this staff");
+        }
+        skillRepository.delete(skill);
     }
 }

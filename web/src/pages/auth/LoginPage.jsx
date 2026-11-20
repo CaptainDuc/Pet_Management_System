@@ -59,9 +59,9 @@ export default function LoginPage({ onNavigate, onSuccess }) {
     setGeneralError('');
 
     try {
-      await login(formData);
+      const authData = await login(formData);
       if (onSuccess) {
-        onSuccess();
+        onSuccess(authData);
       }
     } catch (err) {
       if (err.status === 401) {

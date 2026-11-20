@@ -3,9 +3,11 @@ package com.petcare.platform.loyalty.controller;
 import com.petcare.platform.common.dto.ApiResponse;
 import com.petcare.platform.common.security.SecurityUtils;
 import com.petcare.platform.loyalty.domain.LoyaltyAccount;
+import com.petcare.platform.loyalty.dto.AdjustPointsRequest;
 import com.petcare.platform.loyalty.service.LoyaltyService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -44,5 +46,16 @@ public class LoyaltyController {
                     "Not allowed to read the loyalty account of another user");
         }
         return ApiResponse.ok(loyaltyService.getAccountByUser(customerId));
+    }
+
+    /**
+     * Admin endpoint to adjust points for any customer.
+     * Requires ADMIN role.
+     */
+    @PostMapping("/adjust")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Adjust loyalty points for a customer (ADMIN only)")
+    public ApiResponse<LoyaltyAccount> adjustPoints(@Valid @RequestBody AdjustPointsRequest request) {
+        return ApiResponse.ok(loyaltyService.adjustPoints(request.userId(), request.pointsDelta(), request.reason()));
     }
 }

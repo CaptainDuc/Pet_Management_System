@@ -199,23 +199,6 @@ public class RabbitMQConfig {
         return bind(notificationQueue(), notificationExchange(), RabbitMQQueues.NOTIFICATION_SEND);
     }
 
-    // ─── Inventory Exchange & Queue ──────────────────────────────────────────────────
-
-    @Bean
-    public TopicExchange inventoryExchange() {
-        return new TopicExchange(RabbitMQQueues.INVENTORY_EXCHANGE, true, false);
-    }
-
-    @Bean
-    public Queue inventoryLowStockQueue() {
-        return eventQueue(RabbitMQQueues.INVENTORY_LOW_STOCK, RabbitMQQueues.INVENTORY_LOW_STOCK);
-    }
-
-    @Bean
-    public Binding inventoryLowStockBinding() {
-        return bind(inventoryLowStockQueue(), inventoryExchange(), RabbitMQQueues.INVENTORY_LOW_STOCK);
-    }
-
     // ─── Review Exchange & Queue ─────────────────────────────────────────────────────
 
     @Bean

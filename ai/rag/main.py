@@ -350,12 +350,14 @@ def root():
 
 @app.get("/health")
 def health():
+    config = EmbeddingConfig()
     info = {
         "status": "ok",
         "database": "unknown",
         "docs": None,
-        "embedding": EmbeddingConfig().summary(),
+        "embedding": config.summary(),
         "llm": {"provider": "groq", "model": GROQ_MODEL},
+        "configured": {"embeddingKey": bool(config.api_key), "llmKey": bool(GROQ_API_KEY)},
     }
     try:
         with psycopg.connect(DATABASE_URL, connect_timeout=5) as conn:
@@ -368,6 +370,8 @@ def health():
                 )
                 info["meta"] = dict(cursor.fetchall())
         info["database"] = "ok"
+        if not info["docs"] or not config.api_key or not GROQ_API_KEY:
+            info["status"] = "degraded"
     except Exception as error:  # noqa: BLE001
         info["status"] = "degraded"
         info["database"] = str(error)[:300]

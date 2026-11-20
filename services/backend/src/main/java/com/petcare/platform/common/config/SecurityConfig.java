@@ -38,9 +38,16 @@ public class SecurityConfig {
     private static final String[] PUBLIC_ENDPOINTS = {
             "/api/v1/auth/**",
             "/api/v1/internal/**",
+
+            // Swagger / OpenAPI
             "/swagger-ui/**",
             "/swagger-ui.html",
+            "/api-docs",
             "/api-docs/**",
+            "/v3/api-docs/**",
+
+            // Health check
+            "/actuator/health",
             "/actuator/health/**",
             "/actuator/info",
             "/actuator/prometheus"
@@ -78,7 +85,7 @@ public class SecurityConfig {
                         .accessDeniedHandler(accessDeniedHandler))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(PUBLIC_ENDPOINTS).permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/v1/ai/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/ai/tips").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/services/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/branches/**").permitAll()
                         .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")

@@ -2,10 +2,11 @@ import React, { useEffect, useState } from 'react';
 import {
   Bell, CreditCard, Users, Plus, Search, CheckCircle2,
   Clock, DollarSign, Printer, ArrowRight, X, Phone,
-  FileText, Check, AlertCircle, Sparkles, QrCode
+  FileText, Check, AlertCircle, Sparkles, QrCode, CalendarDays, PawPrint
 } from 'lucide-react';
 import { clinicApi, invoiceApi } from '../../api/clinic';
 import VietQrPaymentModal from '../../components/VietQrPaymentModal';
+import { Card, Button, Badge, Table, Input, Select, Modal, Avatar } from '../../design-system/components';
 
 const INVOICE_STATUS = {
   ISSUED: { label: 'Đã phát hành', cls: 'bg-sky-50 text-sky-700 border-sky-200' },
@@ -73,7 +74,7 @@ export default function StaffDashboard({ user, token, activeTab, setActiveTab })
     ownerName: '',
     phone: '',
     petName: '',
-    service: 'Khám tổng quát',
+    service: 'Khám bệnh tổng quát',
     doctor: 'BS. Lê Minh Hoàng'
   });
 
@@ -277,7 +278,7 @@ export default function StaffDashboard({ user, token, activeTab, setActiveTab })
     };
     setReceptionQueue([item, ...receptionQueue]);
     setShowAddWalkinModal(false);
-    setNewWalkin({ ownerName: '', phone: '', petName: '', service: 'Khám tổng quát', doctor: 'BS. Lê Minh Hoàng' });
+    setNewWalkin({ ownerName: '', phone: '', petName: '', service: 'Khám bệnh tổng quát', doctor: 'BS. Lê Minh Hoàng' });
   };
 
   const handleCreateInvoice = async (e) => {
@@ -304,40 +305,44 @@ export default function StaffDashboard({ user, token, activeTab, setActiveTab })
 
   return (
     <div className="space-y-6">
+      {['reception', 'customers'].includes(activeTab) && <p className="pc-demo-note">Thông tin tiếp đón và danh bạ trên màn hình này đang là dữ liệu minh họa. Lịch hẹn và hóa đơn dùng dữ liệu từ hệ thống.</p>}
       {/* TAB 1: BÀN TIẾP ĐÓN & CHECK-IN */}
       {activeTab === 'reception' && (
         <div className="space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
+          <Card variant="outlined" padding="lg" className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <div className="flex items-center space-x-2">
-                <span className="w-8 h-8 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center font-bold">
-                  🛎️
+                <span className="w-8 h-8 rounded-xl bg-[var(--color-role-staff-bg)] text-[var(--color-role-staff-text)] flex items-center justify-center font-bold">
+                  <Bell size={18} />
                 </span>
-                <h2 className="text-lg font-bold text-slate-900">Bàn tiếp đón & Check-in sảnh chờ</h2>
+                <Card.Title className="text-lg font-bold text-[var(--color-fg-primary)]">Bàn tiếp đón & Check-in sảnh chờ</Card.Title>
               </div>
-              <p className="text-xs text-slate-500 mt-1">
+              <Card.Description className="text-xs text-slate-500 mt-1">
                 Quản lý luồng khách đến phòng khám, xác nhận check-in và điều phối thú cưng vào các phòng khám
-              </p>
+              </Card.Description>
             </div>
-            <button
+            <Button
+              variant="primary"
+              size="sm"
+              leftIcon={<Plus className="w-4 h-4" />}
               onClick={() => setShowAddWalkinModal(true)}
-              className="inline-flex items-center space-x-2 px-4 py-2.5 bg-sky-600 hover:bg-sky-700 text-white rounded-xl text-xs font-semibold shadow-sm transition active:scale-95"
             >
-              <Plus className="w-4 h-4" />
-              <span>Tiếp đón khách vãng lai</span>
-            </button>
-          </div>
+              Tiếp đón khách vãng lai
+            </Button>
+          </Card>
 
           <div className="space-y-3">
             {receptionQueue.map(item => (
-              <div
+              <Card
                 key={item.id}
-                className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                variant="outlined"
+                padding="md"
+                className="flex flex-col sm:flex-row sm:items-center justify-between gap-4"
               >
                 <div className="flex items-center space-x-3.5">
-                  <div className="w-14 h-12 rounded-xl bg-slate-100 border border-slate-200 flex flex-col items-center justify-center text-center">
-                    <Clock className="w-3.5 h-3.5 text-slate-500 mb-0.5" />
-                    <span className="font-mono text-[11px] font-bold text-slate-700">{item.time}</span>
+                  <div className="w-14 h-12 rounded-xl bg-[var(--color-neutral-100)] border border-[var(--color-bd-light)] flex flex-col items-center justify-center text-center">
+                    <Clock className="w-3.5 h-3.5 text-[var(--color-fg-tertiary)] mb-0.5" />
+                    <span className="font-mono text-[11px] font-bold text-[var(--color-fg-secondary)]">{item.time}</span>
                   </div>
                   <div>
                     <div className="flex items-center space-x-2">
@@ -353,388 +358,365 @@ export default function StaffDashboard({ user, token, activeTab, setActiveTab })
 
                 <div className="flex items-center space-x-2 self-end sm:self-center">
                   {item.status === 'WAITING_CHECKIN' ? (
-                    <button
+                    <Button
+                      variant="primary"
+                      size="sm"
                       onClick={() => handleCheckIn(item.id)}
-                      className="px-3.5 py-1.5 bg-sky-600 hover:bg-sky-700 text-white rounded-xl text-xs font-semibold shadow-xs transition"
+                      leftIcon={<Check size={15} />}
                     >
-                      ✓ Xác nhận khách đã đến
-                    </button>
+                      Xác nhận khách đã đến
+                    </Button>
                   ) : item.status === 'WAITING_VET' ? (
-                    <button
+                    <Button
+                      variant="warning"
+                      size="sm"
                       onClick={() => handleSendToDoctor(item.id)}
-                      className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-semibold shadow-xs transition"
+                      rightIcon={<ArrowRight size={15} />}
                     >
-                      Mời vào phòng khám →
-                    </button>
+                      Mời vào phòng khám
+                    </Button>
                   ) : item.status === 'IN_EXAM' ? (
-                    <span className="px-3 py-1 rounded-xl text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    <Badge variant="success" size="sm">
                       Đang khám trong {item.room}
-                    </span>
+                    </Badge>
                   ) : (
-                    <span className="px-3 py-1 rounded-xl text-xs font-semibold bg-slate-100 text-slate-500">
+                    <Badge variant="ghost" size="sm">
                       Đã hoàn tất
-                    </span>
+                    </Badge>
                   )}
                 </div>
-              </div>
+              </Card>
             ))}
           </div>
 
           {/* Modal Tiếp đón khách vãng lai */}
-          {showAddWalkinModal && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs animate-fadeIn">
-              <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-200 space-y-4">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                  <h3 className="font-bold text-slate-900 text-base">Tiếp nhận khách vãng lai tại quầy</h3>
-                  <button onClick={() => setShowAddWalkinModal(false)} className="p-1 text-slate-400 hover:text-slate-600 rounded-lg">
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-                <form onSubmit={handleAddWalkin} className="space-y-3.5 text-xs">
-                  <div>
-                    <label className="font-semibold text-slate-700 block mb-1">Họ tên chủ nuôi *</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="Nguyễn Văn A"
-                      value={newWalkin.ownerName}
-                      onChange={e => setNewWalkin({ ...newWalkin, ownerName: e.target.value })}
-                      className="w-full h-9 px-3 border border-slate-200 rounded-xl focus:border-sky-500 focus:outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="font-semibold text-slate-700 block mb-1">Số điện thoại *</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="0912 345 678"
-                      value={newWalkin.phone}
-                      onChange={e => setNewWalkin({ ...newWalkin, phone: e.target.value })}
-                      className="w-full h-9 px-3 border border-slate-200 rounded-xl focus:border-sky-500 focus:outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="font-semibold text-slate-700 block mb-1">Tên thú cưng (Giống loài) *</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="Ví dụ: Cún Lu (Poodle nâu 2kg)"
-                      value={newWalkin.petName}
-                      onChange={e => setNewWalkin({ ...newWalkin, petName: e.target.value })}
-                      className="w-full h-9 px-3 border border-slate-200 rounded-xl focus:border-sky-500 focus:outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="font-semibold text-slate-700 block mb-1">Dịch vụ yêu cầu</label>
-                    <select
-                      value={newWalkin.service}
-                      onChange={e => setNewWalkin({ ...newWalkin, service: e.target.value })}
-                      className="w-full h-9 px-3 border border-slate-200 rounded-xl focus:border-sky-500 focus:outline-none"
-                    >
-                      <option value="Khám bệnh tổng quát">Khám bệnh tổng quát</option>
-                      <option value="Cấp cứu khẩn cấp">Cấp cứu khẩn cấp</option>
-                      <option value="Tiêm phòng vaccine định kỳ">Tiêm phòng vaccine định kỳ</option>
-                      <option value="Tắm spa & Cắt tỉa lông">Tắm spa & Cắt tỉa lông</option>
-                    </select>
-                  </div>
-                  <div className="pt-2 flex justify-end space-x-2">
-                    <button
-                      type="button"
-                      onClick={() => setShowAddWalkinModal(false)}
-                      className="px-4 py-2 border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 font-medium"
-                    >
-                      Hủy
-                    </button>
-                    <button
-                      type="submit"
-                      className="px-4 py-2 bg-sky-600 hover:bg-sky-700 text-white rounded-xl font-semibold shadow-xs"
-                    >
-                      Xác nhận tiếp đón
-                    </button>
-                  </div>
-                </form>
+          <Modal
+            className="pc-light pc-work pc-work-dialog"
+            open={showAddWalkinModal}
+            onClose={() => setShowAddWalkinModal(false)}
+            title="Tiếp nhận khách vãng lai tại quầy"
+            size="md"
+          >
+            <form onSubmit={handleAddWalkin} className="space-y-3.5 text-xs">
+              <Input
+                label="Họ tên chủ nuôi *"
+                required
+                placeholder="Nguyễn Văn A"
+                value={newWalkin.ownerName}
+                onChange={e => setNewWalkin({ ...newWalkin, ownerName: e.target.value })}
+              />
+              <Input
+                label="Số điện thoại *"
+                required
+                type="tel"
+                placeholder="0912 345 678"
+                value={newWalkin.phone}
+                onChange={e => setNewWalkin({ ...newWalkin, phone: e.target.value })}
+              />
+              <Input
+                label="Tên thú cưng (Giống loài) *"
+                required
+                placeholder="Ví dụ: Cún Lu (Poodle nâu 2kg)"
+                value={newWalkin.petName}
+                onChange={e => setNewWalkin({ ...newWalkin, petName: e.target.value })}
+              />
+              <Select
+                label="Dịch vụ yêu cầu"
+                value={newWalkin.service}
+                onChange={e => setNewWalkin({ ...newWalkin, service: e.target.value })}
+                options={[
+                  { value: 'Khám bệnh tổng quát', label: 'Khám bệnh tổng quát' },
+                  { value: 'Cấp cứu khẩn cấp', label: 'Cấp cứu khẩn cấp' },
+                  { value: 'Tiêm phòng vaccine định kỳ', label: 'Tiêm phòng vaccine định kỳ' },
+                  { value: 'Tắm spa & Cắt tỉa lông', label: 'Tắm spa & Cắt tỉa lông' },
+                ]}
+              />
+              <div className="pt-2 flex justify-end space-x-2">
+                <Button
+                  variant="outline"
+                  type="button"
+                  onClick={() => setShowAddWalkinModal(false)}
+                >
+                  Hủy
+                </Button>
+                <Button type="submit">
+                  Xác nhận tiếp đón
+                </Button>
               </div>
-            </div>
-          )}
+            </form>
+          </Modal>
         </div>
       )}
 
       {/* TAB: LỊCH HẸN */}
       {activeTab === 'bookings' && (
         <div className="space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
+          <Card variant="outlined" padding="lg" className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <div className="flex items-center space-x-2">
-                <span className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold">
-                  📅
+                <span className="w-8 h-8 rounded-xl bg-[var(--color-role-staff-bg)] text-[var(--color-role-staff-text)] flex items-center justify-center font-bold">
+                  <CalendarDays size={18} />
                 </span>
-                <h2 className="text-lg font-bold text-slate-900">Quản lý lịch hẹn</h2>
+                <Card.Title className="text-lg font-bold text-[var(--color-fg-primary)]">Quản lý lịch hẹn</Card.Title>
               </div>
-              <p className="text-xs text-slate-500 mt-1">
+              <Card.Description className="text-xs text-slate-500 mt-1">
                 Theo dõi lịch hẹn, thu tiền mặt tại quầy và báo trùng lịch / sự cố cho khách hàng
-              </p>
+              </Card.Description>
             </div>
             <div className="flex items-center space-x-2">
-              <select
+              <Select
                 value={bookingStatusFilter}
                 onChange={e => setBookingStatusFilter(e.target.value)}
-                className="h-9 px-3 border border-slate-200 rounded-xl text-xs focus:border-indigo-500 focus:outline-none"
-              >
-                <option value="ALL">Tất cả trạng thái</option>
-                <option value="PENDING">Chờ xác nhận</option>
-                <option value="CONFIRMED">Đã xác nhận</option>
-                <option value="IN_PROGRESS">Đang thực hiện</option>
-                <option value="COMPLETED">Đã hoàn tất</option>
-                <option value="CANCELLED">Đã hủy</option>
-              </select>
-              <button
+                options={[
+                  { value: 'ALL', label: 'Tất cả trạng thái' },
+                  { value: 'PENDING', label: 'Chờ xác nhận' },
+                  { value: 'CONFIRMED', label: 'Đã xác nhận' },
+                  { value: 'IN_PROGRESS', label: 'Đang thực hiện' },
+                  { value: 'COMPLETED', label: 'Đã hoàn tất' },
+                  { value: 'CANCELLED', label: 'Đã hủy' },
+                ]}
+                className="w-48"
+              />
+              <Button
+                variant="ghost"
+                size="sm"
+                leftIcon={<Search className="w-4 h-4" />}
                 onClick={fetchBookings}
-                className="inline-flex items-center space-x-1.5 px-3 h-9 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold shadow-sm transition active:scale-95"
               >
-                <Search className="w-4 h-4" />
-                <span>Làm mới</span>
-              </button>
+                Làm mới
+              </Button>
             </div>
-          </div>
+          </Card>
 
-          <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="border-b border-slate-200 bg-slate-50/70 text-slate-600">
-                    <th className="py-3 px-4 font-semibold">Mã</th>
-                    <th className="py-3 px-4 font-semibold">Thú cưng</th>
-                    <th className="py-3 px-4 font-semibold">Dịch vụ</th>
-                    <th className="py-3 px-4 font-semibold">Thời gian</th>
-                    <th className="py-3 px-4 font-semibold">Số tiền</th>
-                    <th className="py-3 px-4 font-semibold">Thanh toán</th>
-                    <th className="py-3 px-4 font-semibold">Trạng thái</th>
-                    <th className="py-3 px-4 font-semibold">Thao tác</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {bookingsLoading && (
-                    <tr>
-                      <td colSpan={8} className="py-8 px-4 text-center text-slate-500">Đang tải lịch hẹn...</td>
-                    </tr>
-                  )}
-                  {!bookingsLoading && bookingsError && (
-                    <tr>
-                      <td colSpan={8} className="py-8 px-4 text-center text-rose-600">{bookingsError}</td>
-                    </tr>
-                  )}
-                  {!bookingsLoading && !bookingsError && bookings.length === 0 && (
-                    <tr>
-                      <td colSpan={8} className="py-8 px-4 text-center text-slate-500">Không có lịch hẹn nào.</td>
-                    </tr>
-                  )}
-                  {!bookingsLoading && !bookingsError && bookings.map(b => {
-                    const statusMeta = BOOKING_STATUS[b.status] || { label: b.status, cls: 'bg-slate-100 text-slate-600 border-slate-200' };
-                    const payMeta = BOOKING_PAYMENT[b.paymentStatus] || BOOKING_PAYMENT.UNPAID;
-                    const isPaid = b.paymentStatus === 'PAID';
-                    const isCancelled = b.status === 'CANCELLED';
-                    return (
-                      <tr key={b.id} className="hover:bg-slate-50/80 transition-colors align-top">
-                        <td className="py-3.5 px-4 font-mono font-bold text-slate-900">{b.code}</td>
-                        <td className="py-3.5 px-4 text-slate-700">{b.petName}</td>
-                        <td className="py-3.5 px-4 text-slate-600 max-w-[220px]">
-                          {b.service}
-                          {b.promotionCode && (
-                            <span className="block mt-1 text-[10px] font-semibold text-emerald-700">
-                              Mã: {b.promotionCode}
-                            </span>
-                          )}
-                          {b.staffNote && (
-                            <span className="block mt-1 text-[10px] text-amber-700">Ghi chú: {b.staffNote}</span>
-                          )}
-                        </td>
-                        <td className="py-3.5 px-4 text-slate-600">{b.dateTime}</td>
-                        <td className="py-3.5 px-4 font-bold text-slate-900">{b.amount.toLocaleString('vi-VN')} đ</td>
-                        <td className="py-3.5 px-4">
-                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${payMeta.cls}`}>
-                            {payMeta.label}
-                          </span>
-                        </td>
-                        <td className="py-3.5 px-4">
-                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${statusMeta.cls}`}>
-                            {statusMeta.label}
-                          </span>
-                        </td>
-                        <td className="py-3.5 px-4">
-                          <div className="flex flex-col gap-1.5">
-                            {!isPaid && !isCancelled && (
-                              <button
-                                onClick={() => handleCounterPay(b)}
-                                disabled={bookingActionId === b.id}
-                                className="inline-flex items-center space-x-1 px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg text-[11px] font-semibold shadow-xs"
-                              >
-                                <DollarSign className="w-3.5 h-3.5" />
-                                <span>{bookingActionId === b.id ? 'Đang lưu...' : 'Thu tiền tại quầy'}</span>
-                              </button>
-                            )}
-                            {!isCancelled && (
-                              <button
-                                onClick={() => { setReportingBooking(b); setReportMessage(''); }}
-                                className="inline-flex items-center space-x-1 px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 rounded-lg text-[11px] font-semibold"
-                              >
-                                <AlertCircle className="w-3.5 h-3.5" />
-                                <span>Báo trùng / sự cố</span>
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          <Table
+            columns={[
+              { key: 'code', header: 'Mã', width: '100px' },
+              { key: 'petName', header: 'Thú cưng', width: '140px' },
+              { key: 'service', header: 'Dịch vụ', minWidth: '280px' },
+              { key: 'dateTime', header: 'Thời gian', width: '160px' },
+              { key: 'amount', header: 'Số tiền', width: '140px' },
+              { key: 'paymentStatus', header: 'Thanh toán', width: '140px' },
+              { key: 'status', header: 'Trạng thái', width: '140px' },
+            ]}
+            data={bookings}
+            keyField="id"
+            loading={bookingsLoading}
+            emptyMessage="Không có lịch hẹn nào."
+            striped
+            hoverable
+            className="table-wrapper"
+            renderRow={(b) => {
+              const statusConfig = {
+                PENDING: { label: 'Chờ xác nhận', variant: 'warning' },
+                CONFIRMED: { label: 'Đã xác nhận', variant: 'info' },
+                IN_PROGRESS: { label: 'Đang thực hiện', variant: 'info' },
+                COMPLETED: { label: 'Đã hoàn tất', variant: 'success' },
+                CANCELLED: { label: 'Đã hủy', variant: 'ghost' },
+              };
+              const payConfig = {
+                UNPAID: { label: 'Chưa thanh toán', variant: 'error' },
+                PAID: { label: 'Đã thanh toán', variant: 'success' },
+                REFUNDED: { label: 'Đã hoàn tiền', variant: 'ghost' },
+              };
+              const statusMeta = statusConfig[b.status] || { label: b.status, variant: 'ghost' };
+              const payMeta = payConfig[b.paymentStatus] || payConfig.UNPAID;
+              const isPaid = b.paymentStatus === 'PAID';
+              const isCancelled = b.status === 'CANCELLED';
 
-          {reportingBooking && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs animate-fadeIn">
-              <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-200 space-y-4">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                  <h3 className="font-bold text-slate-900 text-base">Báo trùng lịch / sự cố</h3>
-                  <button onClick={() => setReportingBooking(null)} className="p-1 text-slate-400 hover:text-slate-600 rounded-lg">
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-                <p className="text-xs text-slate-500">
-                  Lịch hẹn <span className="font-semibold text-slate-800">{reportingBooking.code}</span> — khách hàng sẽ nhận được thông báo kèm nội dung bên dưới.
-                </p>
-                <form onSubmit={handleReportIssue} className="space-y-3.5 text-xs">
-                  <div>
-                    <label className="font-semibold text-slate-700 block mb-1">Nội dung thông báo *</label>
-                    <textarea
-                      rows={3}
-                      required
-                      value={reportMessage}
-                      onChange={e => setReportMessage(e.target.value)}
-                      placeholder="VD: Khung giờ này đã có bác sĩ bận, vui lòng chọn giờ khác..."
-                      className="w-full p-2.5 border border-slate-200 rounded-xl focus:border-amber-500 focus:outline-none"
-                    />
-                  </div>
-                  <div className="pt-2 flex justify-end space-x-2">
-                    <button
-                      type="button"
-                      onClick={() => setReportingBooking(null)}
-                      className="px-4 py-2 border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 font-medium"
-                    >
-                      Hủy
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={bookingActionId === reportingBooking.id || !reportMessage.trim()}
-                      className="px-4 py-2 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl font-semibold shadow-xs"
-                    >
-                      {bookingActionId === reportingBooking.id ? 'Đang gửi...' : 'Gửi báo cáo'}
-                    </button>
-                  </div>
-                </form>
+              return (
+                <tr className="hover:bg-slate-50/80 transition-colors align-top">
+                  <td className="py-3.5 px-4 font-mono font-bold text-slate-900">{b.code}</td>
+                  <td className="py-3.5 px-4 text-slate-700">{b.petName}</td>
+                  <td className="py-3.5 px-4 text-slate-600 max-w-[280px]">
+                    <div>{b.service}</div>
+                    {b.promotionCode && (
+                      <span className="block mt-1 text-[10px] font-semibold text-emerald-700">
+                        Mã: {b.promotionCode}
+                      </span>
+                    )}
+                    {b.staffNote && (
+                      <span className="block mt-1 text-[10px] text-amber-700">Ghi chú: {b.staffNote}</span>
+                    )}
+                  </td>
+                  <td className="py-3.5 px-4 text-slate-600">{b.dateTime}</td>
+                  <td className="py-3.5 px-4 font-bold text-slate-900">{b.amount.toLocaleString('vi-VN')} đ</td>
+                  <td className="py-3.5 px-4">
+                    <Badge variant={payMeta.variant} size="xs">
+                      {payMeta.label}
+                    </Badge>
+                  </td>
+                  <td className="py-3.5 px-4">
+                    <Badge variant={statusMeta.variant} size="xs">
+                      {statusMeta.label}
+                    </Badge>
+                  </td>
+                  <td className="py-3.5 px-4">
+                    <div className="flex flex-col gap-1.5">
+                      {!isPaid && !isCancelled && (
+                        <Button
+                          variant="success"
+                          size="xs"
+                          leftIcon={<DollarSign className="w-3.5 h-3.5" />}
+                          onClick={() => handleCounterPay(b)}
+                          disabled={bookingActionId === b.id}
+                          loading={bookingActionId === b.id}
+                        >
+                          Thu tiền tại quầy
+                        </Button>
+                      )}
+                      {!isCancelled && (
+                        <Button
+                          variant="warning"
+                          size="xs"
+                          leftIcon={<AlertCircle className="w-3.5 h-3.5" />}
+                          onClick={() => { setReportingBooking(b); setReportMessage(''); }}
+                        >
+                          Báo trùng / sự cố
+                        </Button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              );
+            }}
+          />
+
+          <Modal
+            className="pc-light pc-work pc-work-dialog"
+            open={Boolean(reportingBooking)}
+            onClose={() => setReportingBooking(null)}
+            title="Báo trùng lịch / sự cố"
+            size="md"
+          >
+            <p className="text-xs text-slate-500 mb-4">
+              Lịch hẹn <span className="font-semibold text-slate-800">{reportingBooking?.code}</span> — khách hàng sẽ nhận được thông báo kèm nội dung bên dưới.
+            </p>
+            <form onSubmit={handleReportIssue} className="space-y-3.5 text-xs">
+              <Input
+                label="Nội dung thông báo *"
+                as="textarea"
+                rows={3}
+                required
+                value={reportMessage}
+                onChange={e => setReportMessage(e.target.value)}
+                placeholder="VD: Khung giờ này đã có bác sĩ bận, vui lòng chọn giờ khác..."
+              />
+              <div className="pt-2 flex justify-end space-x-2">
+                <Button
+                  variant="outline"
+                  type="button"
+                  onClick={() => setReportingBooking(null)}
+                >
+                  Hủy
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={bookingActionId === reportingBooking?.id || !reportMessage.trim()}
+                  loading={bookingActionId === reportingBooking?.id}
+                >
+                  Gửi báo cáo
+                </Button>
               </div>
-            </div>
-          )}
+            </form>
+          </Modal>
         </div>
       )}
 
       {/* TAB 2: HÓA ĐƠN & THU NGÂN */}
       {activeTab === 'invoices' && (
         <div className="space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
+          <Card variant="outlined" padding="lg" className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <div className="flex items-center space-x-2">
-                <span className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
-                  🧾
+                <span className="w-8 h-8 rounded-xl bg-[var(--color-role-staff-bg)] text-[var(--color-role-staff-text)] flex items-center justify-center font-bold">
+                  <FileText size={18} />
                 </span>
-                <h2 className="text-lg font-bold text-slate-900">Quầy Thu ngân & Hóa đơn viện phí</h2>
+                <Card.Title className="text-lg font-bold text-[var(--color-fg-primary)]">Quầy Thu ngân & Hóa đơn viện phí</Card.Title>
               </div>
-              <p className="text-xs text-slate-500 mt-1">
+              <Card.Description className="text-xs text-slate-500 mt-1">
                 Tạo hóa đơn dịch vụ, thanh toán VNPay QR, Tiền mặt, Thẻ và áp dụng giảm giá điểm thưởng
-              </p>
+              </Card.Description>
             </div>
-            <button
+            <Button
+              variant="primary"
+              size="sm"
+              leftIcon={<Plus className="w-4 h-4" />}
               onClick={() => setShowAddInvoiceModal(true)}
-              className="inline-flex items-center space-x-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold shadow-sm transition active:scale-95"
             >
-              <Plus className="w-4 h-4" />
-              <span>Tạo hóa đơn mới</span>
-            </button>
-          </div>
+              Tạo hóa đơn mới
+            </Button>
+          </Card>
 
-          <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="border-b border-slate-200 bg-slate-50/70 text-slate-600">
-                    <th className="py-3 px-4 font-semibold">Số HĐ</th>
-                    <th className="py-3 px-4 font-semibold">Lịch hẹn</th>
-                    <th className="py-3 px-4 font-semibold">Chi tiết dịch vụ & Thuốc</th>
-                    <th className="py-3 px-4 font-semibold">Số tiền</th>
-                    <th className="py-3 px-4 font-semibold">Ngày phát hành</th>
-                    <th className="py-3 px-4 font-semibold">Trạng thái</th>
-                    <th className="py-3 px-4 font-semibold">Thao tác</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {invoicesLoading && (
-                    <tr>
-                      <td colSpan={7} className="py-8 px-4 text-center text-slate-500">Đang tải hóa đơn...</td>
-                    </tr>
-                  )}
-                  {!invoicesLoading && invoicesError && (
-                    <tr>
-                      <td colSpan={7} className="py-8 px-4 text-center text-rose-600">{invoicesError}</td>
-                    </tr>
-                  )}
-                  {!invoicesLoading && !invoicesError && invoices.length === 0 && (
-                    <tr>
-                      <td colSpan={7} className="py-8 px-4 text-center text-slate-500">Chưa có hóa đơn nào.</td>
-                    </tr>
-                  )}
-                  {!invoicesLoading && !invoicesError && invoices.map(inv => {
-                    const statusMeta = INVOICE_STATUS[inv.status] || { label: inv.status, cls: 'bg-slate-100 text-slate-600 border-slate-200' };
-                    return (
-                      <tr key={inv.id} className="hover:bg-slate-50/80 transition-colors">
-                        <td className="py-3.5 px-4 font-mono font-bold text-slate-900">{inv.number}</td>
-                        <td className="py-3.5 px-4 font-mono text-[11px] text-slate-500">#{String(inv.bookingId).slice(0, 8)}</td>
-                        <td className="py-3.5 px-4 text-slate-600 max-w-xs">{inv.items}</td>
-                        <td className="py-3.5 px-4 font-bold text-slate-900">
-                          {inv.total.toLocaleString('vi-VN')} {inv.currency}
-                        </td>
-                        <td className="py-3.5 px-4 text-slate-600">{formatDateTime(inv.issuedAt)}</td>
-                        <td className="py-3.5 px-4">
-                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${statusMeta.cls}`}>
-                            {statusMeta.label}
-                          </span>
-                        </td>
-                        <td className="py-3.5 px-4">
-                          <div className="flex items-center space-x-3">
-                            {inv.status !== 'PAID' && inv.status !== 'CANCELLED' && inv.status !== 'REFUNDED' && (
-                              <button
-                                onClick={() => setPayingInvoice(inv)}
-                                className="inline-flex items-center space-x-1 px-2.5 py-1 bg-sky-600 hover:bg-sky-700 text-white rounded-lg text-[11px] font-semibold shadow-xs"
-                              >
-                                <QrCode className="w-3.5 h-3.5" />
-                                <span>VietQR</span>
-                              </button>
-                            )}
-                            <button
-                              onClick={() => alert(`Đang in hóa đơn điện tử ${inv.number}...`)}
-                              className="inline-flex items-center space-x-1 text-slate-500 hover:text-slate-800 text-xs font-medium"
-                            >
-                              <Printer className="w-3.5 h-3.5" />
-                              <span>In phiếu</span>
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          <Table
+            columns={[
+              { key: 'number', header: 'Số HĐ', width: '140px' },
+              { key: 'bookingId', header: 'Lịch hẹn', width: '120px' },
+              { key: 'items', header: 'Chi tiết dịch vụ & Thuốc', minWidth: '280px' },
+              { key: 'total', header: 'Số tiền', width: '160px' },
+              { key: 'issuedAt', header: 'Ngày phát hành', width: '160px' },
+              { key: 'status', header: 'Trạng thái', width: '140px' },
+            ]}
+            data={invoices.map(inv => ({
+              ...inv,
+              bookingId: `#${String(inv.bookingId).slice(0, 8)}`,
+              total: `${inv.total.toLocaleString('vi-VN')} ${inv.currency}`,
+              issuedAt: formatDateTime(inv.issuedAt),
+            }))}
+            keyField="id"
+            loading={invoicesLoading}
+            emptyMessage="Chưa có hóa đơn nào."
+            striped
+            hoverable
+            className="table-wrapper"
+            renderRow={(inv) => {
+              const statusConfig = {
+                ISSUED: { label: 'Đã phát hành', variant: 'info' },
+                PENDING_PAYMENT: { label: 'Chờ thanh toán', variant: 'warning' },
+                PAID: { label: 'Đã thanh toán', variant: 'success' },
+                PARTIALLY_PAID: { label: 'Thanh toán một phần', variant: 'warning' },
+                CANCELLED: { label: 'Đã hủy', variant: 'ghost' },
+                REFUNDED: { label: 'Đã hoàn tiền', variant: 'ghost' },
+              };
+              const statusMeta = statusConfig[inv.status] || { label: inv.status, variant: 'ghost' };
+
+              return (
+                <tr className="hover:bg-slate-50/80 transition-colors">
+                  <td className="py-3.5 px-4 font-mono font-bold text-slate-900">{inv.number}</td>
+                  <td className="py-3.5 px-4 font-mono text-[11px] text-slate-500">{inv.bookingId}</td>
+                  <td className="py-3.5 px-4 text-slate-600 max-w-xs">{inv.items}</td>
+                  <td className="py-3.5 px-4 font-bold text-slate-900">{inv.total}</td>
+                  <td className="py-3.5 px-4 text-slate-600">{inv.issuedAt}</td>
+                  <td className="py-3.5 px-4">
+                    <Badge variant={statusMeta.variant} size="xs">
+                      {statusMeta.label}
+                    </Badge>
+                  </td>
+                  <td className="py-3.5 px-4">
+                    <div className="flex items-center space-x-3">
+                      {inv.status !== 'PAID' && inv.status !== 'CANCELLED' && inv.status !== 'REFUNDED' && (
+                        <Button
+                          variant="info"
+                          size="xs"
+                          leftIcon={<QrCode className="w-3.5 h-3.5" />}
+                          onClick={() => setPayingInvoice({ ...inv, amount: inv.total })}
+                        >
+                          VietQR
+                        </Button>
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="xs"
+                        leftIcon={<Printer className="w-3.5 h-3.5" />}
+                        onClick={() => alert(`Đang in hóa đơn điện tử ${inv.number}...`)}
+                      >
+                        In phiếu
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            }}
+          />
 
           <VietQrPaymentModal
             open={Boolean(payingInvoice)}
@@ -743,108 +725,98 @@ export default function StaffDashboard({ user, token, activeTab, setActiveTab })
             onPaid={() => fetchInvoices()}
           />
 
-          {/* Modal Tạo hóa đơn */}
-          {showAddInvoiceModal && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs animate-fadeIn">
-              <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-200 space-y-4">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                  <h3 className="font-bold text-slate-900 text-base">Phát hành hóa đơn từ lịch hẹn</h3>
-                  <button onClick={() => setShowAddInvoiceModal(false)} className="p-1 text-slate-400 hover:text-slate-600 rounded-lg">
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-                <form onSubmit={handleCreateInvoice} className="space-y-3.5 text-xs">
-                  <div>
-                    <label className="font-semibold text-slate-700 block mb-1">Lịch hẹn đã hoàn thành *</label>
-                    <select
-                      required
-                      value={newInvoice.bookingId}
-                      onChange={e => setNewInvoice({ bookingId: e.target.value })}
-                      className="w-full h-9 px-3 border border-slate-200 rounded-xl focus:border-emerald-500 focus:outline-none"
-                    >
-                      <option value="">-- Chọn lịch hẹn --</option>
-                      {completedBookings.map(b => (
-                        <option key={b.id} value={b.id}>
-                          #{b.id.slice(0, 8)} • {(b.items || []).map(i => i.serviceName).join(', ') || 'Dịch vụ'} • {(Number(b.totalAmount) || 0).toLocaleString('vi-VN')} đ
-                        </option>
-                      ))}
-                    </select>
-                    {completedBookings.length === 0 && (
-                      <p className="text-[11px] text-amber-600 mt-1">Chưa có lịch hẹn nào ở trạng thái COMPLETED.</p>
-                    )}
-                  </div>
-                  <p className="text-[11px] text-slate-500">
-                    Hóa đơn được tạo tự động từ các dịch vụ của lịch hẹn. Số tiền do hệ thống tính toán.
-                  </p>
-                  <div className="pt-2 flex justify-end space-x-2">
-                    <button
-                      type="button"
-                      onClick={() => setShowAddInvoiceModal(false)}
-                      className="px-4 py-2 border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 font-medium"
-                    >
-                      Hủy
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={invoiceSubmitting || !newInvoice.bookingId}
-                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl font-semibold shadow-xs"
-                    >
-                      {invoiceSubmitting ? 'Đang phát hành...' : 'Phát hành hóa đơn'}
-                    </button>
-                  </div>
-                </form>
+          <Modal
+            className="pc-light pc-work pc-work-dialog"
+            open={showAddInvoiceModal}
+            onClose={() => setShowAddInvoiceModal(false)}
+            title="Phát hành hóa đơn từ lịch hẹn"
+            size="md"
+          >
+            <form onSubmit={handleCreateInvoice} className="space-y-3.5 text-xs">
+              <Select
+                label="Lịch hẹn đã hoàn thành *"
+                required
+                value={newInvoice.bookingId}
+                onChange={e => setNewInvoice({ bookingId: e.target.value })}
+                options={completedBookings.map(b => ({
+                  value: b.id,
+                  label: `#${b.id.slice(0, 8)} • ${(b.items || []).map(i => i.serviceName).join(', ') || 'Dịch vụ'} • ${(Number(b.totalAmount) || 0).toLocaleString('vi-VN')} đ`
+                }))}
+                placeholder="-- Chọn lịch hẹn --"
+              />
+              {completedBookings.length === 0 && (
+                <p className="text-[11px] text-amber-600 mt-1">Chưa có lịch hẹn nào ở trạng thái COMPLETED.</p>
+              )}
+              <p className="text-[11px] text-slate-500">
+                Hóa đơn được tạo tự động từ các dịch vụ của lịch hẹn. Số tiền do hệ thống tính toán.
+              </p>
+              <div className="pt-2 flex justify-end space-x-2">
+                <Button
+                  variant="outline"
+                  type="button"
+                  onClick={() => setShowAddInvoiceModal(false)}
+                >
+                  Hủy
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={invoiceSubmitting || !newInvoice.bookingId}
+                  loading={invoiceSubmitting}
+                >
+                  Phát hành hóa đơn
+                </Button>
               </div>
-            </div>
-          )}
+            </form>
+          </Modal>
         </div>
       )}
 
       {/* TAB 3: TRA CỨU KHÁCH HÀNG & THÚ CƯNG */}
       {activeTab === 'customers' && (
         <div className="space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
+          <Card variant="outlined" padding="lg" className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <div className="flex items-center space-x-2">
-                <span className="w-8 h-8 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center font-bold">
-                  👥
+                <span className="w-8 h-8 rounded-xl bg-[var(--color-role-staff-bg)] text-[var(--color-role-staff-text)] flex items-center justify-center font-bold">
+                  <Users size={18} />
                 </span>
-                <h2 className="text-lg font-bold text-slate-900">Danh bạ Khách hàng & Hồ sơ chủ nuôi</h2>
+                <Card.Title className="text-lg font-bold text-[var(--color-fg-primary)]">Danh bạ Khách hàng & Hồ sơ chủ nuôi</Card.Title>
               </div>
-              <p className="text-xs text-slate-500 mt-1">
+              <Card.Description className="text-xs text-slate-500 mt-1">
                 Tra cứu nhanh thông tin liên lạc, hạng thẻ tích điểm và các thú cưng đang sở hữu
-              </p>
+              </Card.Description>
             </div>
             <div className="relative w-full sm:w-64">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
-              <input
-                type="text"
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <Input
                 placeholder="Tìm theo tên hoặc SĐT..."
                 value={clientSearch}
                 onChange={e => setClientSearch(e.target.value)}
-                className="w-full h-9 pl-9 pr-3 text-xs border border-slate-200 rounded-xl focus:border-purple-500 focus:outline-none"
+                size="sm"
+                className="pl-9"
               />
             </div>
-          </div>
+          </Card>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
             {filteredClients.map(c => (
-              <div key={c.id} className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-3">
+              <Card key={c.id} variant="outlined" padding="lg" className="space-y-3">
                 <div className="flex justify-between items-start border-b border-slate-100 pb-3">
                   <div>
                     <h4 className="font-bold text-sm text-slate-900">{c.fullName}</h4>
                     <p className="text-xs text-slate-500">{c.phone}</p>
                   </div>
-                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                  <Badge variant="warning" size="xs">
                     {c.tier}
-                  </span>
+                  </Badge>
                 </div>
 
                 <div className="space-y-1.5 text-xs">
                   <div className="text-slate-500">Thú cưng đã đăng ký:</div>
                   {c.pets.map((p, idx) => (
-                    <div key={idx} className="font-medium text-slate-800 bg-slate-50 p-2 rounded-lg border border-slate-100">
-                      🐾 {p}
-                    </div>
+                    <Badge key={idx} variant="ghost" size="xs" className="w-full justify-start">
+                      <PawPrint size={13} /> {p}
+                    </Badge>
                   ))}
                 </div>
 
@@ -852,7 +824,7 @@ export default function StaffDashboard({ user, token, activeTab, setActiveTab })
                   <span className="text-slate-400">Tổng chi tiêu:</span>
                   <span className="font-bold text-slate-900">{c.totalSpent}</span>
                 </div>
-              </div>
+              </Card>
             ))}
           </div>
         </div>
