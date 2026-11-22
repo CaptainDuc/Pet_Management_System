@@ -23,6 +23,7 @@ public class UserPrincipal implements UserDetails {
     private final String password;
 
     private final String status;
+    private final int credentialVersion;
     private final Collection<? extends GrantedAuthority> authorities;
 
     @Override

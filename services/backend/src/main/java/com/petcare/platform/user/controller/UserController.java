@@ -8,6 +8,9 @@ import com.petcare.platform.user.dto.UpdateUserRequest;
 import com.petcare.platform.user.dto.UserResponse;
 import com.petcare.platform.user.dto.UserStatusUpdateRequest;
 import com.petcare.platform.user.service.UserService;
+import com.petcare.platform.auth.service.AuthService;
+import com.petcare.platform.auth.dto.AuthResponse;
+import com.petcare.platform.auth.dto.ChangePasswordRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -29,6 +32,7 @@ import java.util.UUID;
 public class UserController {
 
     private final UserService userService;
+    private final AuthService authService;
 
     @GetMapping("/me")
     @Operation(summary = "Get current authenticated user profile")
@@ -45,6 +49,14 @@ public class UserController {
     ) {
         UserResponse response = userService.updateUserProfile(principal.getId(), request);
         return ResponseEntity.ok(ApiResponse.ok(response));
+    }
+
+    @PostMapping("/me/password")
+    @Operation(summary = "Change own password after verifying the current password")
+    public ResponseEntity<ApiResponse<AuthResponse>> changePassword(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @Valid @RequestBody ChangePasswordRequest request) {
+        return ResponseEntity.ok(ApiResponse.ok(authService.changePassword(principal.getId(), request)));
     }
 
     @GetMapping

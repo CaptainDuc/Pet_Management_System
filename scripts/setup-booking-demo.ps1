@@ -28,7 +28,7 @@ function Invoke-PetCare([string]$Method, [string]$Path, $Body = $null) {
 if ($Date.Date -le (Get-Date).Date) { throw 'Choose a future date, for example -Date 2026-11-25.' }
 if ($Bootstrap) {
     if (([uri]$BaseUrl).Host -notin @('localhost', '127.0.0.1')) { throw 'Bootstrap chi danh cho Docker tren may local.' }
-    $Email = 'booking-demo-' + [guid]::NewGuid().ToString('N').Substring(0, 12) + '@petcare.invalid'
+    if (-not $Email) { $Email = Read-Host 'Email nhan ma xac nhan cho tai khoan DEMO moi' }
     Write-Host 'Tao tai khoan quan tri va nhan vien DEMO moi. Tai khoan hien co giu nguyen.'
     $bootstrapPassword = $env:PETCARE_DEMO_PASSWORD
     if (-not $bootstrapPassword) {
@@ -38,7 +38,9 @@ if ($Bootstrap) {
     }
     if ($bootstrapPassword.Length -lt 8) { throw 'Mat khau DEMO can it nhat 8 ky tu.' }
     try {
-        $session = Invoke-PetCare 'POST' '/auth/register' @{ fullName = '[DEMO] Booking administrator'; email = $Email; password = $bootstrapPassword }
+        $challenge = Invoke-PetCare 'POST' '/auth/register' @{ fullName = '[DEMO] Booking administrator'; email = $Email; password = $bootstrapPassword }
+        $verificationCode = Read-Host 'Ma xac nhan trong email'
+        $session = Invoke-PetCare 'POST' '/auth/register/verify' @{ email = $Email; challengeId = $challenge.challengeId; code = $verificationCode }
         $newId = ([guid]$session.user.id).ToString()
         # Only this newly registered account receives ADMIN; no existing role is changed.
         $sql = "INSERT INTO user_roles (user_id, role_id) SELECT '$newId'::uuid, id FROM roles WHERE name = 'ADMIN' ON CONFLICT DO NOTHING;"
@@ -50,7 +52,7 @@ if ($Bootstrap) {
         $demoStaff = Invoke-PetCare 'POST' '/staff' @{ userId = $newId; position = '[DEMO] Booking test staff'; bio = 'Demo only' }
         $StaffId = $demoStaff.id
         Write-Host "Tai khoan quan tri DEMO: $Email (mat khau ban vua nhap)"
-    } finally { $bootstrapPassword = $null; $credential = $null; $securePassword = $null }
+    } finally { $bootstrapPassword = $null; $credential = $null; $securePassword = $null; $verificationCode = $null }
 } elseif (-not $AccessToken) {
     if (-not $Email) { $Email = Read-Host 'Email tai khoan quan tri hien co' }
     $securePassword = Read-Host 'Mat khau (khong hien thi)' -AsSecureString

@@ -76,7 +76,7 @@ const Input = forwardRef(function Input(
           ref={ref}
           id={inputId}
           type={type}
-          className="input"
+          className={`input${rightIcon || error || success || props.loading ? ' input--has-right' : ''}`}
           disabled={disabled}
           readOnly={readOnly}
           required={required}
@@ -90,12 +90,12 @@ const Input = forwardRef(function Input(
             {rightIcon}
           </span>
         )}
-        {error && (
+        {error && !rightIcon && (
           <span className="input__icon input__icon--error" aria-hidden="true">
             <AlertCircle size={18} strokeWidth={2} />
           </span>
         )}
-        {success && !error && (
+        {success && !error && !rightIcon && (
           <span className="input__icon input__icon--success" aria-hidden="true">
             <CheckCircle size={18} strokeWidth={2} />
           </span>
@@ -107,7 +107,7 @@ const Input = forwardRef(function Input(
         )}
       </div>
       {(hint || error || success) && (
-        <div className="input__messages" role="alert" aria-live="polite">
+        <div className="input__messages" role={error ? 'alert' : undefined} aria-live="polite">
           {error && <span id={errorId} className="input__message input__message--error">{error}</span>}
           {success && !error && <span id={successId} className="input__message input__message--success">{success}</span>}
           {hint && !error && <span id={hintId} className="input__message input__message--hint">{hint}</span>}

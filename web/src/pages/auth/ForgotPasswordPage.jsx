@@ -1,123 +1,60 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Info, ArrowLeft, CheckCircle2 } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { ArrowLeft, CheckCircle2 } from 'lucide-react';
 import AuthLayout from '../../components/auth/AuthLayout';
 import AuthForm from '../../components/auth/AuthForm';
 import FormInput from '../../components/auth/FormInput';
+import PasswordInput from '../../components/auth/PasswordInput';
 import SubmitButton from '../../components/auth/SubmitButton';
+import FormError from '../../components/auth/FormError';
+import EmailCodeForm from '../../components/auth/EmailCodeForm';
+import { authApi } from '../../api/auth';
 
 export default function ForgotPasswordPage({ onNavigate }) {
   const [email, setEmail] = useState('');
+  const [challenge, setChallenge] = useState(null);
+  const [password, setPassword] = useState('');
+  const [confirmation, setConfirmation] = useState('');
   const [error, setError] = useState('');
-  const [isSubmitted, setIsSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
-
-  const emailRef = useRef(null);
-
-  useEffect(() => {
-    emailRef.current?.focus();
-  }, []);
-
-  const validate = () => {
-    if (!email.trim()) {
-      setError('Vui lòng nhập địa chỉ email đã đăng ký');
-      return false;
-    }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
-      setError('Định dạng email không hợp lệ');
-      return false;
-    }
-    setError('');
-    return true;
-  };
-
-  const handleSubmit = async () => {
-    if (!validate()) return;
-
-    setLoading(true);
-
-    // Note: Backend currently has no Forgot Password / Reset Password endpoint.
-    // We provide a realistic, informative UX explaining the status without inventing fake APIs.
-    setTimeout(() => {
-      setLoading(false);
-      setIsSubmitted(true);
-    }, 600);
-  };
-
-  return (
-    <AuthLayout
-      heading="Quên mật khẩu"
-      subtitle="Nhập email tài khoản của bạn để nhận hướng dẫn khôi phục"
-    >
-      {isSubmitted ? (
-        <div className="space-y-4">
-          <div className="p-4 rounded-xl bg-blue-50/90 border border-blue-200 text-sm text-[#0F172A] space-y-2">
-            <div className="flex items-center space-x-2 text-[#2563EB] font-medium">
-              <CheckCircle2 className="w-5 h-5 flex-shrink-0 text-[#2563EB]" />
-              <span>Yêu cầu đã được ghi nhận</span>
-            </div>
-            <p className="text-xs text-[#475569] leading-relaxed">
-              Hệ thống đã nhận yêu cầu cho địa chỉ <strong>{email}</strong>.
-            </p>
-            <p className="text-xs text-[#64748B] border-t border-blue-200/60 pt-2 leading-relaxed">
-              <em>Lưu ý hệ thống:</em> Cổng gửi mail tự động (Notification Service) đang trong quá trình bảo trì/triển khai. Nếu bạn không nhận được thư sau ít phút, vui lòng liên hệ trực tiếp lễ tân hoặc quản trị viên phòng khám để được hỗ trợ reset thủ công.
-            </p>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => onNavigate('login')}
-            className="w-full h-11 px-4 text-sm font-medium text-[#0F172A] bg-white border border-[#E2E8F0] hover:bg-slate-50 rounded-xl transition-colors flex items-center justify-center space-x-2 focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
-          >
-            <ArrowLeft className="w-4 h-4 text-[#64748B]" />
-            <span>Quay lại trang Đăng nhập</span>
-          </button>
-        </div>
-      ) : (
-        <AuthForm onSubmit={handleSubmit}>
-          {/* Backend status advisory banner */}
-          <div className="p-3 mb-2 rounded-xl bg-blue-50/80 border border-blue-200/80 text-xs text-[#1E40AF] flex items-start space-x-2">
-            <Info className="w-4 h-4 flex-shrink-0 text-[#2563EB] mt-0.5" />
-            <span className="leading-relaxed">
-              Tính năng khôi phục qua email yêu cầu tài khoản đã được xác thực trong hệ thống PetCare.
-            </span>
-          </div>
-
-          <FormInput
-            ref={emailRef}
-            id="forgot-email"
-            name="email"
-            type="email"
-            label="Email tài khoản"
-            placeholder="name@example.com"
-            autoComplete="email"
-            value={email}
-            onChange={(e) => {
-              setEmail(e.target.value);
-              if (error) setError('');
-            }}
-            error={error}
-            disabled={loading}
-            required
-          />
-
-          <div className="pt-2">
-            <SubmitButton loading={loading} disabled={loading}>
-              Gửi yêu cầu khôi phục
-            </SubmitButton>
-          </div>
-
-          <div className="text-center pt-3 border-t border-[#E2E8F0] mt-6">
-            <button
-              type="button"
-              onClick={() => onNavigate('login')}
-              className="inline-flex items-center text-sm font-medium text-[#D97706] hover:text-[#B45309] transition-colors focus:outline-none focus:underline"
-            >
-              <ArrowLeft className="w-4 h-4 mr-1.5" />
-              <span>Quay lại đăng nhập</span>
-            </button>
-          </div>
-        </AuthForm>
-      )}
-    </AuthLayout>
-  );
+  const [done, setDone] = useState(false);
+  const input = useRef(null);
+  useEffect(() => { if (!challenge && !done) input.current?.focus(); }, [challenge, done]);
+  async function requestCode() {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) { setError('Vui lòng nhập địa chỉ email hợp lệ.'); return; }
+    if (loading) return;
+    setLoading(true); setError('');
+    try { setChallenge(await authApi.requestPasswordReset(email)); }
+    catch (err) { setError(err.message || 'Chưa gửi được mã. Vui lòng thử lại.'); }
+    finally { setLoading(false); }
+  }
+  async function reset(code) {
+    if (password.length < 6) throw new Error('Mật khẩu mới phải có ít nhất 6 ký tự.');
+    if (password !== confirmation) throw new Error('Mật khẩu xác nhận chưa khớp. Vui lòng nhập lại.');
+    await authApi.resetPassword({ email: challenge.email, challengeId: challenge.challengeId, code, newPassword: password });
+    setPassword(''); setConfirmation(''); setDone(true);
+  }
+  const back = <button type="button" onClick={() => onNavigate('login')}
+    className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-[#2563eb] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#2563eb]">
+    <ArrowLeft size={16} aria-hidden="true" />Quay lại đăng nhập
+  </button>;
+  return <AuthLayout heading={done ? 'Mật khẩu đã được cập nhật' : challenge ? 'Đặt lại mật khẩu' : 'Quên mật khẩu'}
+    subtitle={done ? 'Bạn có thể đăng nhập bằng mật khẩu mới.' : challenge ? 'Nhập mã trong email và chọn mật khẩu mới cho tài khoản.' : 'Nhập email tài khoản để nhận mã xác nhận.'}>
+    {done ? <div className="space-y-5"><div role="status" className="flex items-start gap-3 rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sm text-[#171d3f]">
+      <CheckCircle2 size={22} className="shrink-0 text-[#2563eb]" aria-hidden="true" /><p>Đã đặt lại mật khẩu thành công. Vui lòng đăng nhập lại để tiếp tục.</p>
+    </div>{back}</div> : challenge ? <EmailCodeForm challenge={challenge} submitLabel="Xác nhận và đổi mật khẩu" onVerify={reset}
+      onResend={async () => setChallenge(await authApi.requestPasswordReset(challenge.email))}
+      onChangeEmail={() => { setChallenge(null); setPassword(''); setConfirmation(''); setError(''); }}>
+      <PasswordInput id="reset-password" name="newPassword" label="Mật khẩu mới" autoComplete="new-password" maxLength={72} required
+        value={password} onChange={e => setPassword(e.target.value)} />
+      <PasswordInput id="reset-confirm-password" name="confirmPassword" label="Xác nhận mật khẩu mới" autoComplete="new-password" maxLength={72} required
+        value={confirmation} onChange={e => setConfirmation(e.target.value)} />
+    </EmailCodeForm> : <>
+      <FormError message={error} />
+      <AuthForm onSubmit={requestCode}>
+        <FormInput ref={input} id="forgot-email" name="email" type="email" label="Email tài khoản" placeholder="name@example.com"
+          autoComplete="email" value={email} onChange={e => { setEmail(e.target.value); setError(''); }} disabled={loading} required />
+        <SubmitButton loading={loading} disabled={loading}>Gửi mã xác nhận</SubmitButton>
+      </AuthForm><div className="mt-6 border-t border-[#e2e8f0] pt-4">{back}</div>
+    </>}
+  </AuthLayout>;
 }

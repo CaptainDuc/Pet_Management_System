@@ -6,9 +6,12 @@ import PasswordInput from '../../components/auth/PasswordInput';
 import SubmitButton from '../../components/auth/SubmitButton';
 import FormError from '../../components/auth/FormError';
 import { useAuth } from '../../context/AuthContext';
+import { authApi } from '../../api/auth';
+import EmailCodeForm from '../../components/auth/EmailCodeForm';
 
 export default function RegisterPage({ onNavigate, onSuccess }) {
-  const { register } = useAuth();
+  const { register, verifyRegistration } = useAuth();
+  const [challenge, setChallenge] = useState(null);
   const [formData, setFormData] = useState({
     fullName: '',
     email: '',
@@ -79,18 +82,17 @@ export default function RegisterPage({ onNavigate, onSuccess }) {
     setGeneralError('');
 
     try {
-      await register({
+      const pending = await register({
         fullName: formData.fullName,
         email: formData.email,
         password: formData.password,
         phone: formData.phone,
       });
 
-      if (onSuccess) {
-        onSuccess();
-      }
+      setChallenge(pending);
+      setFormData(previous => ({ ...previous, password: '', confirmPassword: '' }));
     } catch (err) {
-      if (err.status === 422 || err.message?.includes('already')) {
+      if (err.message?.includes('Email is already')) {
         setGeneralError('Email này đã được sử dụng. Vui lòng đăng nhập hoặc dùng email khác.');
         setFieldErrors((prev) => ({ ...prev, email: 'Email đã tồn tại trong hệ thống' }));
       } else if (err.fieldErrors && Object.keys(err.fieldErrors).length > 0) {
@@ -102,6 +104,13 @@ export default function RegisterPage({ onNavigate, onSuccess }) {
       setLoading(false);
     }
   };
+
+  if (challenge) return <AuthLayout heading="Xác nhận email" subtitle="Xác nhận email để hoàn tất việc tạo tài khoản của bạn">
+    <EmailCodeForm challenge={challenge} submitLabel="Xác nhận và tạo tài khoản"
+      onVerify={async code => { await verifyRegistration({ email: challenge.email, challengeId: challenge.challengeId, code }); onSuccess?.(); }}
+      onResend={async () => setChallenge(await authApi.resendRegistration(challenge.email))}
+      onChangeEmail={() => { setChallenge(null); setGeneralError(''); }} />
+  </AuthLayout>;
 
   return (
     <AuthLayout
@@ -180,7 +189,7 @@ export default function RegisterPage({ onNavigate, onSuccess }) {
 
         <div className="pt-2">
           <SubmitButton loading={loading} disabled={loading}>
-            Đăng ký tài khoản
+            Gửi mã xác nhận
           </SubmitButton>
         </div>
 

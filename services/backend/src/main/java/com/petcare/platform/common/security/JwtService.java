@@ -104,6 +104,11 @@ public class JwtService {
     public boolean isTokenValid(String token, UserDetails userDetails) {
         try {
             String username = extractUsername(token);
+            Integer tokenVersion = extractClaim(token, c -> c.get("ver", Integer.class));
+            if (userDetails instanceof UserPrincipal principal
+                    && (tokenVersion == null ? 0 : tokenVersion) != principal.getCredentialVersion()) {
+                return false;
+            }
             return username != null
                     && username.equals(userDetails.getUsername())
                     && !isTokenExpired(token);

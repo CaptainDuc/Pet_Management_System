@@ -1,0 +1,139 @@
+XÁC NHẬN EMAIL VÀ ĐẶT LẠI MẬT KHẨU — PETCARE
+
+1. Luồng sử dụng
+
+Đăng ký: nhập thông tin → Gửi mã xác nhận → nhập mã email → Xác nhận và tạo
+tài khoản. Trước bước cuối, users chưa có tài khoản và chưa phát hành token.
+
+Quên mật khẩu: nhập email → nhận mã → nhập mã và mật khẩu mới/xác nhận mật
+khẩu → Xác nhận và đổi mật khẩu → đăng nhập lại. Trang không báo thành công
+trước khi backend xử lý xong. Email không tồn tại nhận phản hồi chung, không
+tạo tài khoản và không gửi thư tới địa chỉ đó.
+
+Mã có 6 chữ số, hiệu lực 10 phút, chỉ dùng một lần, tối đa 5 lần nhập sai.
+Gửi lại cách nhau ít nhất 60 giây, tối đa 5 lần gửi mỗi giờ cho từng email và
+mục đích. Mỗi lần gửi có challengeId riêng: mã/challenge cũ không xác nhận
+được một bản đăng ký đã bị thay thế. Mã đăng ký không dùng để reset mật khẩu.
+Mã và mật khẩu đăng ký tạm được băm BCrypt, không trả mã trong API hay log.
+Bản đăng ký bỏ dở được dọn khi có yêu cầu mới sau 24 giờ.
+
+Reset thành công thu hồi refresh token và tăng credential_version. Core và
+notification kiểm tra phiên hiện tại để từ chối access token cũ. Notification
+cần core đang hoạt động để kiểm tra phiên; nếu core không liên lạc được, API
+notification trả 503 thay vì chấp nhận phiên chưa xác minh.
+
+2. Gmail SMTP
+
+Không cần tạo service gửi thư mới hay mở thêm cổng web. Backend hiện có gọi
+notification service hiện có; notification kết nối ra smtp.gmail.com:587.
+
+Trong .env cục bộ:
+
+MAIL_HOST=smtp.gmail.com
+MAIL_PORT=587
+MAIL_USERNAME=dia_chi_gmail_gui_thu@gmail.com
+MAIL_PASSWORD=mat_khau_ung_dung_google
+MAIL_SMTP_AUTH=true
+MAIL_STARTTLS_ENABLE=true
+MAIL_SSL_ENABLE=false
+
+Để MAIL_FROM trống hoặc không khai báo: Docker sẽ dùng MAIL_USERNAME. Nếu tự
+điền MAIL_FROM, dùng địa chỉ gửi được Gmail cho phép. Mật khẩu ứng dụng cần tài
+khoản đã bật xác minh 2 bước; dùng mật khẩu ứng dụng thay cho mật khẩu đăng
+nhập Gmail. Nhập mã ứng dụng không có dấu cách phân nhóm.
+
+Hướng dẫn chính thức:
+https://support.google.com/accounts/answer/185833?hl=vi
+
+Sau khi đổi .env, chạy từ thư mục dự án:
+
+docker compose up -d --build --wait --wait-timeout 180
+
+Nếu chỉ đổi thông tin Gmail, không đổi source:
+
+docker compose up -d --no-deps --wait notification-service
+
+Không commit .env hay gửi App Password qua chat. Đối với Gmail thật, đăng ký
+bằng địa chỉ nhận thư có thể truy cập và kiểm tra cả mục Spam/Thư rác.
+
+3. Kiểm thử trình duyệt với Gmail
+
+Dùng Edge/Chromium headless riêng mở CDP ở localhost:9222. Chạy tương tác trong
+PowerShell, chọn một email thử chưa đăng ký mà bạn nhận được thư (có thể dùng
+địa chỉ Gmail với hậu tố +petcaretest riêng):
+
+$env:PETCARE_TEST_EMAIL = 'yourname+petcaretest@gmail.com'
+node scripts/check-web-login.mjs --register --reset-password
+
+Script gửi thư qua Gmail đang cấu hình và hỏi mã đăng ký/reset trong terminal.
+Đọc email rồi nhập đúng mã 6 số. Không ghi mã, mật khẩu hay token vào log.
+Tài khoản thử sẽ được tạo; dùng email thử riêng và dọn sau khi kiểm tra. Ảnh
+desktop/mobile nằm trong .impeccable/review/email-*.png.
+
+Các kiểm thử backend/notification tự động dùng mock gửi thư, không cần hộp thư
+hay SMTP local. Hộp thư local và cấu hình Docker tương ứng đã được gỡ bỏ.
+
+4. API
+
+POST /api/v1/auth/register
+  fullName, email, password, phone tùy chọn.
+  HTTP 202: data gồm challengeId, email, expiresInSeconds, resendAfterSeconds,
+  message. Chưa tạo tài khoản hay token.
+
+POST /api/v1/auth/register/verify
+  email, challengeId, code. HTTP 201 tạo user CUSTOMER và trả AuthResponse.
+
+POST /api/v1/auth/register/resend
+  email. HTTP 202 gửi lại mã/challenge mới cho bản đăng ký đang chờ.
+
+POST /api/v1/auth/password/forgot
+  email. HTTP 202 trả challenge và phản hồi chung.
+
+POST /api/v1/auth/password/reset
+  email, challengeId, code, newPassword. HTTP 200 khi đổi mật khẩu thành công.
+
+Notification POST /internal/auth-email là API giữa các service, bắt buộc
+X-Internal-Key, không phải endpoint web công khai qua gateway. Gmail SMTP lỗi
+thì API đăng ký/forgot trả lỗi 503; không báo giả rằng đã gửi mã. Quota lỗi 429.
+
+Lưu ý cho mobile/script cũ: POST /auth/register không còn trả AuthResponse ngay.
+Cần bổ sung bước /register/verify. setup-booking-demo.ps1 đã có bước nhập mã
+trước khi bootstrap tài khoản DEMO; dùng -Email địa chỉ thật khi chạy Gmail.
+
+Gateway giới hạn cache DNS service ở 10 giây để cập nhật địa chỉ sau khi
+Docker tạo lại notification (ví dụ khi đổi cấu hình Gmail), tránh giữ IP cũ.
+
+5. Kiểm thử
+
+Backend: từ services/backend, chạy .\mvnw.cmd test -B bằng JDK 21.
+EmailVerificationTest kiểm tra chưa có user/token trước xác nhận, mã sai, hết
+hạn, khóa sau 5 lần sai, resend/cooldown, giới hạn gửi theo giờ, thay draft,
+xác nhận đồng thời, tách mục đích mã, rollback khi không gửi được thư, reset
+mật khẩu và thu hồi phiên. Fixture các kiểm thử khác cũng xác nhận email.
+
+Notification: từ services/backend, chạy:
+.\mvnw.cmd -f ../notification-service/pom.xml test -B
+
+AuthEmailControllerTest kiểm tra key nội bộ, người nhận/nội dung, dữ liệu không
+hợp lệ và lỗi SMTP. Các test tự động không gửi thư tới email người thật.
+
+Tài liệu tham khảo:
+https://docs.spring.io/spring-boot/reference/io/email.html
+https://cheatsheetseries.owasp.org/cheatsheets/Forgot_Password_Cheat_Sheet.html
+
+Xác minh ngày 21/11/2026 trên máy phát triển:
+- 61/61 kiểm thử backend, 4/4 kiểm thử email notification qua.
+- 42/42 kiểm tra service/gateway/CORS qua; đăng nhập 5 vai trò và 22 tab nội bộ
+  trên desktop/mobile không bị thay đổi bởi luồng xác nhận email.
+- Trình duyệt kiểm tra SMTP local: mã sai bị từ chối, mã đúng mới tạo user,
+  reset thành công, mật khẩu cũ và token cũ của core/notification bị từ chối,
+  mật khẩu mới đăng nhập được. Ảnh desktop/mobile đã xem và sửa khoảng cách
+  vòng focus/hướng dẫn; reviewer xác nhận sửa lỗi này đã đạt.
+- Gmail SMTP thật ở cổng 587 chấp nhận email kiểm tra gửi tới chính địa chỉ
+  MAIL_USERNAME. Không truy cập hộp thư của người dùng hoặc đổi tài khoản thật.
+- Đã dọn các tài khoản/bản đăng ký tạm dùng cho kiểm thử; giữ tài khoản sẵn có.
+  Hộp thư local đã được gỡ, ứng dụng dùng cấu hình Gmail trong .env. Chưa commit/push.
+- Sau khi đổi cấu hình SMTP, đã phát hiện/sửa cache DNS quá lâu của gateway.
+  Kiểm tra tạo lại notification cho kết quả gateway chuyển tiếp đúng (401 cho
+  yêu cầu không có token), không cần khởi động lại gateway. Trong lần tạo lại
+  kiểm chứng cuối, Docker gán lại cùng IP; chưa thực hiện thử ép đổi IP riêng.

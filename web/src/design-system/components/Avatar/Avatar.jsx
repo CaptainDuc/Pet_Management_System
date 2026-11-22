@@ -1,4 +1,4 @@
-import React, { forwardRef, useState } from 'react';
+import React, { forwardRef, useEffect, useState } from 'react';
 import './Avatar.css';
 
 /**
@@ -30,6 +30,7 @@ const Avatar = forwardRef(function Avatar(
 ) {
   const [imageError, setImageError] = useState(false);
   const [isLoading, setIsLoading] = useState(!!src);
+  useEffect(() => { setImageError(false); setIsLoading(Boolean(src)); }, [src]);
 
   const sizeClasses = {
     xs: 'avatar--xs',

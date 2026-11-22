@@ -42,6 +42,7 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final AuthenticationManager authenticationManager;
+    private final EmailCodeService emailCodes;
 
     @Value("${app.jwt.expiration:900000}")
     private long jwtExpirationMs;
@@ -50,19 +51,42 @@ public class AuthService {
     private long refreshExpirationMs;
 
     @Transactional
-    public AuthResponse register(RegisterRequest request) {
-        if (userRepository.existsByEmail(request.email())) {
+    public EmailChallengeResponse register(RegisterRequest request) {
+        String email = EmailCodeService.normalize(request.email());
+        checkRegistrationAvailable(email, request.phone());
+        validatePassword(request.password());
+        return emailCodes.issue(email, "REGISTER", new EmailCodeService.Draft(
+                request.fullName().strip(), passwordEncoder.encode(request.password()), cleanPhone(request.phone())));
+    }
+
+    private void checkRegistrationAvailable(String email, String phone) {
+        if (userRepository.existsByEmailIgnoreCase(email)) {
             throw new BusinessException("Email is already registered");
         }
-        if (request.phone() != null && !request.phone().isBlank() && userRepository.existsByPhone(request.phone())) {
+        if (phone != null && !phone.isBlank() && userRepository.existsByPhone(phone.strip())) {
             throw new BusinessException("Phone number is already registered");
         }
+    }
+
+    private String cleanPhone(String phone) { return phone == null || phone.isBlank() ? null : phone.strip(); }
+
+    private void validatePassword(String password) {
+        if (password.getBytes(StandardCharsets.UTF_8).length > 72) {
+            throw new BusinessException("Mật khẩu quá dài. Vui lòng dùng tối đa 72 byte UTF-8.");
+        }
+    }
+
+    @Transactional(noRollbackFor = InvalidEmailCodeException.class)
+    public AuthResponse verifyRegistration(VerifyEmailRequest request) {
+        String email = EmailCodeService.normalize(request.email());
+        EmailCodeService.Draft draft = emailCodes.consume(email, "REGISTER", request.challengeId(), request.code());
+        checkRegistrationAvailable(email, draft.phone());
 
         User user = User.builder()
-                .fullName(request.fullName())
-                .email(request.email())
-                .password(passwordEncoder.encode(request.password()))
-                .phone(request.phone())
+                .fullName(draft.fullName())
+                .email(email)
+                .password(draft.passwordHash())
+                .phone(draft.phone())
                 .role("CUSTOMER")
                 .status("ACTIVE")
                 .build();
@@ -76,9 +100,51 @@ public class AuthService {
     }
 
     @Transactional
+    public EmailChallengeResponse requestPasswordReset(EmailRequest request) {
+        String email = EmailCodeService.normalize(request.email());
+        User user = userRepository.findByEmailIgnoreCase(email).filter(u -> "ACTIVE".equals(u.getStatus())).orElse(null);
+        return emailCodes.issue(email, "RESET", user == null ? null
+                : new EmailCodeService.Draft(null, user.getPassword(), null));
+    }
+
+    @Transactional(noRollbackFor = InvalidEmailCodeException.class)
+    public void resetPassword(ResetPasswordRequest request) {
+        validatePassword(request.newPassword());
+        String email = EmailCodeService.normalize(request.email());
+        EmailCodeService.Draft draft = emailCodes.consume(email, "RESET", request.challengeId(), request.code());
+        User user = userRepository.findByEmailIgnoreCase(email).orElseThrow(InvalidEmailCodeException::new);
+        if (!"ACTIVE".equals(user.getStatus()) || !user.getPassword().equals(draft.passwordHash())) {
+            throw new InvalidEmailCodeException();
+        }
+        replacePassword(user, request.newPassword(), "Password reset");
+    }
+
+    @Transactional
+    public AuthResponse changePassword(UUID userId, ChangePasswordRequest request) {
+        User user = userRepository.findById(userId).orElseThrow(() -> new BusinessException("User not found"));
+        if (!passwordEncoder.matches(request.currentPassword(), user.getPassword())) {
+            throw new BusinessException("Mật khẩu hiện tại không chính xác.");
+        }
+        if (!request.newPassword().equals(request.confirmPassword())) {
+            throw new BusinessException("Mật khẩu xác nhận không khớp với mật khẩu mới.");
+        }
+        validatePassword(request.newPassword());
+        replacePassword(user, request.newPassword(), "Password changed");
+        // Re-authentication keeps this browser signed in; older sessions are revoked.
+        return createAuthSession(user, UUID.randomUUID());
+    }
+
+    private void replacePassword(User user, String password, String reason) {
+        user.setPassword(passwordEncoder.encode(password));
+        user.setCredentialVersion(user.getCredentialVersion() + 1);
+        userRepository.saveAndFlush(user);
+        refreshTokenRepository.revokeAllForUser(user.getId(), Instant.now(), reason);
+    }
+
+    @Transactional
     public AuthResponse login(LoginRequest request) {
         Authentication auth = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(request.email(), request.password())
+                new UsernamePasswordAuthenticationToken(EmailCodeService.normalize(request.email()), request.password())
         );
 
         UserPrincipal principal = (UserPrincipal) auth.getPrincipal();
@@ -145,7 +211,8 @@ public class AuthService {
         Map<String, Object> extraClaims = Map.of(
                 "typ", "access",
                 "userId", user.getId().toString(),
-                "role", user.getRole()
+                "role", user.getRole(),
+                "ver", user.getCredentialVersion()
         );
 
         String accessToken = jwtService.generateToken(extraClaims, principal);

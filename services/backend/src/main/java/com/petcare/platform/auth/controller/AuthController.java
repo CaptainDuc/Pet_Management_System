@@ -2,6 +2,7 @@ package com.petcare.platform.auth.controller;
 
 import com.petcare.platform.auth.dto.*;
 import com.petcare.platform.auth.service.AuthService;
+import com.petcare.platform.auth.service.EmailCodeService;
 import com.petcare.platform.common.dto.ApiResponse;
 import com.petcare.platform.common.security.UserPrincipal;
 import io.swagger.v3.oas.annotations.Operation;
@@ -20,12 +21,34 @@ import org.springframework.web.bind.annotation.*;
 public class AuthController {
 
     private final AuthService authService;
+    private final EmailCodeService emailCodes;
 
     @PostMapping("/register")
-    @Operation(summary = "Register new user account with default CUSTOMER role")
-    public ResponseEntity<ApiResponse<AuthResponse>> register(@Valid @RequestBody RegisterRequest request) {
-        AuthResponse response = authService.register(request);
+    @Operation(summary = "Send email code; account is created only after verification")
+    public ResponseEntity<ApiResponse<EmailChallengeResponse>> register(@Valid @RequestBody RegisterRequest request) {
+        return ResponseEntity.accepted().body(ApiResponse.ok(authService.register(request)));
+    }
+
+    @PostMapping("/register/verify")
+    public ResponseEntity<ApiResponse<AuthResponse>> verifyRegistration(@Valid @RequestBody VerifyEmailRequest request) {
+        AuthResponse response = authService.verifyRegistration(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.created(response));
+    }
+
+    @PostMapping("/register/resend")
+    public ResponseEntity<ApiResponse<EmailChallengeResponse>> resend(@Valid @RequestBody EmailRequest request) {
+        return ResponseEntity.accepted().body(ApiResponse.ok(emailCodes.resendRegistration(request.email())));
+    }
+
+    @PostMapping("/password/forgot")
+    public ResponseEntity<ApiResponse<EmailChallengeResponse>> forgotPassword(@Valid @RequestBody EmailRequest request) {
+        return ResponseEntity.accepted().body(ApiResponse.ok(authService.requestPasswordReset(request)));
+    }
+
+    @PostMapping("/password/reset")
+    public ResponseEntity<ApiResponse<Void>> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
+        authService.resetPassword(request);
+        return ResponseEntity.ok(ApiResponse.ok(null));
     }
 
     @PostMapping("/login")

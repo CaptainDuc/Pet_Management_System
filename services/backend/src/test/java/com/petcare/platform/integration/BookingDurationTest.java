@@ -44,6 +44,10 @@ class BookingDurationTest extends IntegrationTestBase {
         TestUser admin = newUser("ADMIN");
         ResponseEntity<String> registered = send(HttpMethod.POST, "/api/v1/auth/register", null, Map.of(
                 "fullName", "Care schedule test", "email", "staff.test@petcare.invalid", "password", PASSWORD));
+        assertThat(registered.getStatusCode()).as(registered.getBody()).isEqualTo(HttpStatus.ACCEPTED);
+        registered = send(HttpMethod.POST, "/api/v1/auth/register/verify", null, Map.of(
+                "email", "staff.test@petcare.invalid", "challengeId", json(registered).path("data").path("challengeId").asText(),
+                "code", emailedCode("staff.test@petcare.invalid", "REGISTER")));
         assertThat(registered.getStatusCode()).as(registered.getBody()).isEqualTo(HttpStatus.CREATED);
         UUID userId = UUID.fromString(json(registered).path("data").path("user").path("id").asText());
         UUID staffId = idOf(send(HttpMethod.POST, "/api/v1/staff", admin.token(), Map.of("userId", userId)));

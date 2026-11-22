@@ -19,15 +19,29 @@ spring:
     username: ${RABBITMQ_USER:petcare}
     password: ${RABBITMQ_PASSWORD:petcare123}
   mail:
-    host: ${MAIL_HOST:localhost}
-    port: ${MAIL_PORT:1025}
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
     username: ${MAIL_USERNAME:}
     password: ${MAIL_PASSWORD:}
+    default-encoding: UTF-8
+    properties:
+      mail.smtp.auth: ${MAIL_SMTP_AUTH:true}
+      mail.smtp.starttls.enable: ${MAIL_STARTTLS_ENABLE:true}
+      mail.smtp.starttls.required: ${MAIL_STARTTLS_ENABLE:true}
+      mail.smtp.ssl.enable: ${MAIL_SSL_ENABLE:false}
+      mail.smtp.ssl.checkserveridentity: true
+      mail.smtp.connectiontimeout: 3000
+      mail.smtp.timeout: 5000
+      mail.smtp.writetimeout: 5000
 
 server:
   port: ${NOTIFICATION_SERVICE_PORT:8083}
 
 app:
+  internal:
+    api-key: ${INTERNAL_API_KEY:petcare_internal_dev_key}
+  mail:
+    from: ${MAIL_FROM:no-reply@petcare.local}
   cors:
     allowed-origin-patterns: ${CORS_ALLOWED_ORIGIN_PATTERNS:http://localhost:*,http://127.0.0.1:*}
 

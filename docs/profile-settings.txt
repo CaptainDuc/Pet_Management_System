@@ -1,0 +1,19 @@
+HỒ SƠ CÁ NHÂN
+
+Áp dụng cho khách hàng, quản trị viên, chủ cơ sở, lễ tân và bác sĩ.
+Đăng nhập, mở Bảng điều khiển > Hồ sơ cá nhân (Tài khoản trên điện thoại).
+
+- Sửa họ tên và số điện thoại; có thể xóa số điện thoại đã lưu.
+- Email đăng nhập cố định; API cũng không cho phép thay email, vai trò hoặc trạng thái qua thao tác sửa hồ sơ.
+- Kéo thả ảnh hoặc nhấn chọn ảnh JPG/PNG/WebP tối đa 5 MB. Ảnh đại diện được thu nhỏ thành JPEG tối đa 256 px và lưu vào PostgreSQL cùng hồ sơ.
+- Nhấn Lưu thông tin để lưu ảnh, họ tên và số điện thoại. Tên/ảnh trên thanh điều hướng cập nhật ngay.
+- Đổi mật khẩu yêu cầu mật khẩu hiện tại đúng, mật khẩu mới từ 6 ký tự và xác nhận trùng khớp. Backend giới hạn mật khẩu mới tối đa 72 byte UTF-8 theo BCrypt.
+- Sau khi đổi mật khẩu, trình duyệt hiện tại tiếp tục đăng nhập; phiên đăng nhập cũ mất hiệu lực.
+- Quên mật khẩu hiện tại: dùng Quên mật khẩu tại trang đăng nhập và mã xác nhận gửi qua email.
+
+API đã xác thực:
+PUT /api/v1/users/me: fullName, phone, avatarUrl.
+POST /api/v1/users/me/password: currentPassword, newPassword, confirmPassword.
+
+Kiểm thử tự động: services/backend/src/test/java/com/petcare/platform/integration/UserProfileTest.java.
+Chạy trong services/backend: .\mvnw.cmd -Dtest=UserProfileTest test -B.

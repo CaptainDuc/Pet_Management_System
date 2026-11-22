@@ -1,6 +1,7 @@
 import React from 'react';
 import { PawPrint, LayoutDashboard, CalendarDays, Gift, MessageCircle, UserRound, Home, LogOut, ArrowUpRight } from 'lucide-react';
 import NotificationBell from './NotificationBell';
+import { Avatar } from '../design-system/components';
 import '../customer.css';
 
 const tabs = [
@@ -14,14 +15,13 @@ export function CustomerBrand({ href = '/' }) {
 }
 
 export default function CustomerPortal({ user, token, activeTab, setActiveTab, onLogout, children }) {
-  const initials = (user?.fullName || 'Bạn').split(' ').slice(-2).map(word => word[0]).join('');
   return <div className="pc-light pc-app">
-    <header className="pc-topbar"><CustomerBrand /><div className="pc-topbar-right"><a className="pc-home-link" href="/"><Home size={16} />Về trang chủ</a><NotificationBell token={token} /><span className="pc-avatar" aria-label={user?.fullName}>{initials}</span></div></header>
+    <header className="pc-topbar"><CustomerBrand /><div className="pc-topbar-right"><a className="pc-home-link" href="/"><Home size={16} />Về trang chủ</a><NotificationBell token={token} /><Avatar className="pc-avatar" src={user?.avatarUrl} name={user?.fullName} aria-label="Mở hồ sơ cá nhân" onClick={() => setActiveTab('profile')} /></div></header>
     <div className="pc-frame">
       <aside className="pc-sidebar" aria-label="Điều hướng khách hàng">
         <div className="pc-sidebar-intro"><strong>Và những người bạn nhỏ.</strong></div>
         <nav className="pc-nav">{tabs.map(([id, label, Icon]) => <button key={id} type="button" aria-current={activeTab === id ? 'page' : undefined} onClick={() => setActiveTab(id)}><Icon size={19} />{label}</button>)}</nav>
-        <div className="pc-sidebar-bottom"><a href="/#dich-vu">Khám phá dịch vụ<ArrowUpRight size={15} /></a><div className="pc-user"><span className="pc-avatar">{initials}</span><div><strong>{user?.fullName}</strong><small>Khách hàng Pet Service</small></div></div><button className="pc-text-button" onClick={onLogout}><LogOut size={15} />Đăng xuất</button></div>
+        <div className="pc-sidebar-bottom"><a href="/#dich-vu">Khám phá dịch vụ<ArrowUpRight size={15} /></a><div className="pc-user"><Avatar className="pc-avatar" src={user?.avatarUrl} name={user?.fullName} /><div><strong>{user?.fullName}</strong><small>Khách hàng Pet Service</small></div></div><button className="pc-text-button" onClick={onLogout}><LogOut size={15} />Đăng xuất</button></div>
       </aside>
       <main className="pc-main"><div className="pc-content">{children}</div></main>
     </div>

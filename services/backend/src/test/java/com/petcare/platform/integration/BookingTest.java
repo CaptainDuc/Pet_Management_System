@@ -59,10 +59,20 @@ class BookingTest extends IntegrationTestBase {
         Path script = Path.of("..", "..", "scripts", "setup-booking-demo.ps1").toAbsolutePath().normalize();
         ProcessBuilder builder = new ProcessBuilder("powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass",
                 "-File", script.toString(), "-BaseUrl", "http://localhost:" + localPort + "/api/v1", "-Bootstrap",
+                "-Email", "booking-demo-" + UUID.randomUUID() + "@petcare.invalid",
                 "-DatabaseContainer", POSTGRES.getContainerId(), "-DatabaseUser", POSTGRES.getUsername(),
                 "-DatabaseName", POSTGRES.getDatabaseName());
         builder.environment().put("PETCARE_DEMO_PASSWORD", PASSWORD);
+        var emailCode = new java.util.concurrent.atomic.AtomicReference<String>();
+        CountDownLatch codeSent = new CountDownLatch(1);
+        org.mockito.Mockito.doAnswer(invocation -> {
+            emailCode.set(invocation.getArgument(2)); codeSent.countDown(); return null;
+        }).when(emailSender).send(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.eq("REGISTER"),
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyInt());
         Process process = builder.redirectErrorStream(true).start();
+        assertThat(codeSent.await(20, TimeUnit.SECONDS)).as("bootstrap requests verification email").isTrue();
+        process.getOutputStream().write((emailCode.get() + System.lineSeparator()).getBytes(StandardCharsets.UTF_8));
+        process.getOutputStream().flush();
         boolean done = process.waitFor(45, TimeUnit.SECONDS);
         if (!done) process.destroyForcibly();
         assertThat(done).as("bootstrap completes within 45 seconds").isTrue();

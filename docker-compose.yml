@@ -134,6 +134,7 @@ services:
       AI_RAG_URL: http://ai-rag:8002
       AI_VISION_URL: http://ai-vision:8003
       AI_RECOMMENDATION_URL: http://ai-recommendation:8004
+      NOTIFICATION_SERVICE_URL: http://notification-service:8083
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:-petcare_internal_dev_key}
       CORS_ALLOWED_ORIGIN_PATTERNS: ${CORS_ALLOWED_ORIGIN_PATTERNS:-http://localhost,http://localhost:*,http://127.0.0.1,http://127.0.0.1:*}
     ports:
@@ -222,14 +223,20 @@ services:
       NOTIFICATION_DB_NAME: ${NOTIFICATION_DB_NAME:-petcare_notification}
       NOTIFICATION_DB_USER: ${NOTIFICATION_DB_USER:-petcare_notification}
       NOTIFICATION_DB_PASSWORD: ${NOTIFICATION_DB_PASSWORD:-petcare_notification123}
+      CORE_SERVICE_URL: http://backend:8080
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_PORT: 5672
       RABBITMQ_USER: ${RABBITMQ_USER:-petcare}
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-petcare123}
-      MAIL_HOST: ${MAIL_HOST:-localhost}
-      MAIL_PORT: ${MAIL_PORT:-1025}
+      MAIL_HOST: ${MAIL_HOST:-smtp.gmail.com}
+      MAIL_PORT: ${MAIL_PORT:-587}
       MAIL_USERNAME: ${MAIL_USERNAME:-}
       MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      MAIL_FROM: ${MAIL_FROM:-${MAIL_USERNAME:-no-reply@petcare.local}}
+      MAIL_SMTP_AUTH: ${MAIL_SMTP_AUTH:-true}
+      MAIL_STARTTLS_ENABLE: ${MAIL_STARTTLS_ENABLE:-true}
+      MAIL_SSL_ENABLE: ${MAIL_SSL_ENABLE:-false}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-petcare_internal_dev_key}
       JWT_SECRET: ${JWT_SECRET:-your-256-bit-secret-key-change-in-production}
       CORS_ALLOWED_ORIGIN_PATTERNS: ${CORS_ALLOWED_ORIGIN_PATTERNS:-http://localhost,http://localhost:*,http://127.0.0.1,http://127.0.0.1:*}
     ports:

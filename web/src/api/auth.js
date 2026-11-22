@@ -92,10 +92,37 @@ export const authApi = {
     return res.data;
   },
 
-  /**
-   * POST /api/v1/auth/refresh
-   * @param {string} refreshToken
-   */
+  /** Verification completes registration and returns the first authenticated session. */
+  async verifyRegistration(payload) {
+    const res = await request('/auth/register/verify', { method: 'POST', body: JSON.stringify(payload) });
+    return res.data;
+  },
+
+  async resendRegistration(email) {
+    const res = await request('/auth/register/resend', { method: 'POST', body: JSON.stringify({ email }) });
+    return res.data;
+  },
+
+  async requestPasswordReset(email) {
+    const res = await request('/auth/password/forgot', { method: 'POST', body: JSON.stringify({ email: email.trim() }) });
+    return res.data;
+  },
+
+  async resetPassword(payload) {
+    await request('/auth/password/reset', { method: 'POST', body: JSON.stringify(payload) });
+  },
+
+  async updateProfile(payload, accessToken) {
+    const res = await request('/users/me', { method:'PUT', headers:{Authorization:`Bearer ${accessToken}`}, body:JSON.stringify(payload) });
+    return res.data;
+  },
+
+  async changePassword(payload, accessToken) {
+    const res = await request('/users/me/password', { method:'POST', headers:{Authorization:`Bearer ${accessToken}`}, body:JSON.stringify(payload) });
+    return res.data;
+  },
+
+  /** POST /api/v1/auth/refresh */
   async refreshToken(refreshToken) {
     const res = await request("/auth/refresh", {
       method: "POST",

@@ -6,6 +6,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import com.petcare.platform.auth.service.AuthEmailSender;
+import org.mockito.ArgumentCaptor;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -73,6 +76,17 @@ public abstract class IntegrationTestBase {
     @Autowired
     protected JdbcTemplate jdbc;
 
+    @MockBean
+    protected AuthEmailSender emailSender;
+
+    protected String emailedCode(String email, String purpose) {
+        ArgumentCaptor<String> code = ArgumentCaptor.forClass(String.class);
+        org.mockito.Mockito.verify(emailSender, org.mockito.Mockito.atLeastOnce()).send(
+                org.mockito.ArgumentMatchers.eq(email), org.mockito.ArgumentMatchers.eq(purpose),
+                code.capture(), org.mockito.ArgumentMatchers.anyInt());
+        return code.getValue();
+    }
+
     protected record TestUser(UUID id, String email, String fullName, String token) {}
 
     protected record Scenario(TestUser admin, TestUser customer, TestUser staffUser,
@@ -122,6 +136,10 @@ public abstract class IntegrationTestBase {
                 Map.of("fullName", fullName, "email", email, "password", PASSWORD, "phone", phone));
         assertThat(register.getStatusCode().is2xxSuccessful())
                 .as("register: " + register.getBody()).isTrue();
+        ResponseEntity<String> verified = send(HttpMethod.POST, "/api/v1/auth/register/verify", null,
+                Map.of("email", email, "challengeId", json(register).path("data").path("challengeId").asText(),
+                        "code", emailedCode(email, "REGISTER")));
+        assertThat(verified.getStatusCode()).as(verified.getBody()).isEqualTo(HttpStatus.CREATED);
 
         if (!"CUSTOMER".equals(role)) {
             promote(email, role);

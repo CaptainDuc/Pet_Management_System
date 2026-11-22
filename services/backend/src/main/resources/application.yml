@@ -107,6 +107,11 @@ app:
   internal:
     # Shared secret used by payment-service to fetch the authoritative amount.
     api-key: ${INTERNAL_API_KEY:petcare_internal_dev_key}
+  notification:
+    base-url: ${NOTIFICATION_SERVICE_URL:http://localhost:8083}
+  email-code:
+    ttl-seconds: 600
+    resend-seconds: 60
   ai:
     agent-url: ${AI_AGENT_URL:http://localhost:8001}
     rag-url: ${AI_RAG_URL:http://localhost:8002}

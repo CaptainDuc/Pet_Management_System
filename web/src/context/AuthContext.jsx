@@ -89,9 +89,26 @@ export function AuthProvider({ children }) {
   };
 
   const register = async (payload) => {
-    const authData = await authApi.register(payload);
+    return authApi.register(payload);
+  };
+
+  const verifyRegistration = async (payload) => {
+    const authData = await authApi.verifyRegistration(payload);
     saveAuthSession(authData);
     return authData;
+  };
+
+  const updateProfile = async (payload) => {
+    const profile = await authApi.updateProfile(payload, token);
+    setUser(profile);
+    localStorage.setItem('user', JSON.stringify(profile));
+    return profile;
+  };
+
+  const changePassword = async (payload) => {
+    const session = await authApi.changePassword(payload, token);
+    saveAuthSession(session);
+    return session;
   };
 
   const logout = async (logoutAll = false) => {
@@ -112,6 +129,9 @@ export function AuthProvider({ children }) {
     isInitializing,
     login,
     register,
+    verifyRegistration,
+    updateProfile,
+    changePassword,
     logout,
     saveAuthSession,
   };

@@ -104,24 +104,15 @@
   padding-left: 52px;
 }
 
-.input--sm .input__icon--right ~ .input,
-.input--sm .input__icon--error ~ .input,
-.input--sm .input__icon--success ~ .input,
-.input--sm .input__icon--loading ~ .input {
+.input--sm .input--has-right {
   padding-right: 36px;
 }
 
-.input--md .input__icon--right ~ .input,
-.input--md .input__icon--error ~ .input,
-.input--md .input__icon--success ~ .input,
-.input--md .input__icon--loading ~ .input {
+.input--md .input--has-right {
   padding-right: 44px;
 }
 
-.input--lg .input__icon--right ~ .input,
-.input--lg .input__icon--error ~ .input,
-.input--lg .input__icon--success ~ .input,
-.input--lg .input__icon--loading ~ .input {
+.input--lg .input--has-right {
   padding-right: 52px;
 }
 

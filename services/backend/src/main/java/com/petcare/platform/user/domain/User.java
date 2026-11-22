@@ -23,13 +23,16 @@ public class User extends BaseEntity {
     @Column(nullable = false)
     private String password;
 
+    @Column(name = "credential_version", nullable = false)
+    private int credentialVersion;
+
     @Column(name = "full_name", nullable = false)
     private String fullName;
 
     @Column(unique = true)
     private String phone;
 
-    @Column(name = "avatar_url")
+    @Column(name = "avatar_url", columnDefinition = "text")
     private String avatarUrl;
 
     @Column(nullable = false)

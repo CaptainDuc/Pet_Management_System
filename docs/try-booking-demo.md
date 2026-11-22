@@ -23,7 +23,9 @@ Lệnh cuối tạo tài khoản quản trị DEMO mới, hồ sơ nhân viên D
 10:00 vào hai ngày sau ngày chạy. Script chỉ dùng với Docker local, không đổi
 mật khẩu, quyền hoặc lịch của tài khoản đang có. Dữ liệu DEMO dùng để kiểm thử.
 
-Khi được hỏi, tự nhập mật khẩu DEMO từ 8 ký tự trở lên. Mật khẩu không hiển thị.
+Khi được hỏi, nhập email thử chưa đăng ký mà bạn nhận được thư, rồi đặt mật khẩu
+DEMO từ 8 ký tự trở lên. Mật khẩu không hiển thị. Nhập mã xác nhận gửi về email
+để hoàn tất tạo tài khoản; SMTP Gmail cần được cấu hình trong `.env`.
 Cuối lệnh, ghi lại email quản trị DEMO và ngày đặt lịch được in ra; dùng email
 này cùng mật khẩu vừa nhập nếu muốn thử giao diện quản trị/khuyến mãi.
 Không chạy lại `-Bootstrap` nếu chỉ muốn dùng lại dữ liệu; mỗi lần bootstrap

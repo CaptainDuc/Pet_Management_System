@@ -13,6 +13,10 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
+import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import javax.crypto.SecretKey;
@@ -25,12 +29,18 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
     private final SecretKey key;
     private final ObjectMapper objectMapper;
+    private final RestClient core;
 
     public JwtAuthFilter(
             @Value("${JWT_SECRET:your-256-bit-secret-key-change-this-in-production-must-be-at-least-256-bits}")
             String secret,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            @Value("${CORE_SERVICE_URL:http://localhost:8080}") String coreUrl) {
         this.objectMapper = objectMapper;
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(3000);
+        factory.setReadTimeout(3000);
+        core = RestClient.builder().baseUrl(coreUrl).requestFactory(factory).build();
         byte[] keyBytes;
         try {
             keyBytes = Decoders.BASE64.decode(secret);
@@ -81,13 +91,29 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             reject(response, "Invalid or expired token");
             return;
         }
+        // Core checks the current credential version, so a password reset also
+        // invalidates an old JWT on this independently deployed service.
+        try {
+            core.get().uri("/api/v1/users/me").header("Authorization", header).retrieve().toBodilessEntity();
+        } catch (RestClientResponseException ex) {
+            reject(response, ex.getStatusCode().is4xxClientError() ? 401 : 503,
+                    ex.getStatusCode().is4xxClientError() ? "Session no longer valid" : "Authentication service unavailable");
+            return;
+        } catch (RestClientException ex) {
+            reject(response, 503, "Authentication service unavailable");
+            return;
+        }
         chain.doFilter(request, response);
     }
 
     private void reject(HttpServletResponse response, String message) throws IOException {
-        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+        reject(response, HttpServletResponse.SC_UNAUTHORIZED, message);
+    }
+
+    private void reject(HttpServletResponse response, int status, String message) throws IOException {
+        response.setStatus(status);
         response.setContentType("application/json;charset=UTF-8");
-        ApiResponse<Void> apiResponse = ApiResponse.error(HttpServletResponse.SC_UNAUTHORIZED, message);
+        ApiResponse<Void> apiResponse = ApiResponse.error(status, message);
         objectMapper.writeValue(response.getWriter(), apiResponse);
     }
 }

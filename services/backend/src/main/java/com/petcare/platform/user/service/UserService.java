@@ -65,17 +65,23 @@ public class UserService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User", userId));
 
-        if (request.fullName() != null && !request.fullName().isBlank()) {
-            user.setFullName(request.fullName());
+        if (request.fullName() != null) {
+            String name = request.fullName().strip();
+            if (name.length() < 2) throw new BusinessException("Họ và tên phải có ít nhất 2 ký tự.");
+            user.setFullName(name);
         }
-        if (request.phone() != null && !request.phone().isBlank()) {
-            if (!request.phone().equals(user.getPhone()) && userRepository.existsByPhone(request.phone())) {
-                throw new BusinessException("Phone number is already in use");
+        if (request.phone() != null) {
+            String phone = request.phone().replaceAll("[\\s-]", "");
+            if (!phone.isEmpty() && !phone.matches("\\+?[0-9]{9,15}")) {
+                throw new BusinessException("Số điện thoại phải có từ 9 đến 15 chữ số, có thể bắt đầu bằng dấu +.");
             }
-            user.setPhone(request.phone());
+            if (!phone.isEmpty() && !phone.equals(user.getPhone()) && userRepository.existsByPhone(phone)) {
+                throw new BusinessException("Số điện thoại này đã được sử dụng.");
+            }
+            user.setPhone(phone.isEmpty() ? null : phone);
         }
         if (request.avatarUrl() != null) {
-            user.setAvatarUrl(request.avatarUrl());
+            user.setAvatarUrl(request.avatarUrl().isEmpty() ? null : request.avatarUrl());
         }
 
         User updated = userRepository.save(user);

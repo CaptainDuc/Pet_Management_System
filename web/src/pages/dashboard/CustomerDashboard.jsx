@@ -5,7 +5,7 @@ import { Modal } from '../../design-system/components';
 import BookingWizard, { formatMoney, formatTime, localDate } from '../../components/BookingWizard';
 import VietQrPaymentModal from '../../components/VietQrPaymentModal';
 import CustomerExtras from './CustomerExtras';
-import PetPhotoInput from '../../components/PetPhotoInput';
+import PhotoInput from '../../components/PhotoInput';
 
 const emptyPet = { name: '', species: 'Chó', gender: 'Đực', dateOfBirth: '', weight: '', photoUrl: '', notes: '' };
 const statuses = { PENDING: 'Chờ xác nhận', CONFIRMED: 'Đã xác nhận', IN_PROGRESS: 'Đang thực hiện', COMPLETED: 'Đã hoàn thành', CANCELLED: 'Đã hủy' };
@@ -168,7 +168,7 @@ export default function CustomerDashboard({ user, token, activeTab, setActiveTab
         <label className="pc-field">Tên của bé<input name="petName" required maxLength={100} value={petDraft.name} placeholder="Ví dụ: Bông, Milo..." onChange={event => setPetDraft({ ...petDraft, name: event.target.value })} /></label>
         <div className="pc-form-grid"><label className="pc-field">Loài<select name="petSpecies" value={petDraft.species} onChange={event => setPetDraft({ ...petDraft, species: event.target.value })}>{[...new Set(['Chó', 'Mèo', 'Chim', 'Thỏ / Hamster', petDraft.species])].map(value => <option key={value}>{value}</option>)}</select></label><label className="pc-field">Giới tính<select name="petGender" value={petDraft.gender || ''} onChange={event => setPetDraft({ ...petDraft, gender: event.target.value })}><option value="">Chưa cập nhật</option>{[...new Set(['Đực', 'Cái', petDraft.gender].filter(Boolean))].map(value => <option key={value}>{value}</option>)}</select></label></div>
         <div className="pc-form-grid"><label className="pc-field">Ngày sinh<input name="petBirthday" type="date" max={localDate()} value={petDraft.dateOfBirth} onChange={event => setPetDraft({ ...petDraft, dateOfBirth: event.target.value })} /></label><label className="pc-field">Cân nặng (kg)<input name="petWeight" type="number" min="0.01" step="0.01" placeholder="Ví dụ: 4.5" value={petDraft.weight} onChange={event => setPetDraft({ ...petDraft, weight: event.target.value })} /></label></div>
-        <PetPhotoInput value={petDraft.photoUrl} onChange={photoUrl => setPetDraft(current => ({ ...current, photoUrl }))} disabled={savingPet} onBusyChange={setPreparingPhoto} />
+        <PhotoInput label="Ảnh của bé" emptyLabel="Kéo ảnh của bé vào đây" name="petPhoto" value={petDraft.photoUrl} onChange={photoUrl => setPetDraft(current => ({ ...current, photoUrl }))} disabled={savingPet} onBusyChange={setPreparingPhoto} />
         <label className="pc-field">Giống, dị ứng và điều cần lưu ý<textarea name="petNotes" maxLength={2000} value={petDraft.notes} onChange={event => setPetDraft({ ...petDraft, notes: event.target.value })} placeholder="Giống Poodle, dị ứng hải sản, thói quen chăm sóc..." /></label>
         <div className="pc-form-actions"><button type="button" className="pc-button pc-button--line" disabled={savingPet || preparingPhoto} onClick={() => setPetEditor(null)}>Để sau</button><button type="submit" className="pc-button" disabled={savingPet || preparingPhoto}>{savingPet ? 'Đang lưu...' : preparingPhoto ? 'Đang chuẩn bị ảnh...' : <><Check />Lưu hồ sơ</>}</button></div>
       </form>
