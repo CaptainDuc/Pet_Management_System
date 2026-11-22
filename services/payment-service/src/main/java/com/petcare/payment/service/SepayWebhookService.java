@@ -31,7 +31,7 @@ public class SepayWebhookService {
         if (payload.id() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "id is required");
         }
-        if (payload.transferAmount() == null) {
+        if (payload.transferAmount() == null || payload.transferAmount().signum() <= 0) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "transferAmount is required");
         }
         if (!"in".equalsIgnoreCase(payload.transferType())) {
@@ -52,6 +52,9 @@ public class SepayWebhookService {
             }
             return WebhookResponse.ok("Transaction processed", result.orderCode(), result.status());
         } catch (DataIntegrityViolationException ex) {
+            if (!transactionRepository.existsBySepayTransactionId(payload.id())) {
+                throw ex;
+            }
             // Concurrent delivery of the same SePay id: the unique index rejected
             // the second insert, so acknowledge it as a duplicate instead of 500.
             log.debug("Duplicate SePay transaction {} ignored", payload.id());

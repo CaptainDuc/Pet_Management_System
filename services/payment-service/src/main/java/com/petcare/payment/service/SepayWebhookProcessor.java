@@ -36,8 +36,8 @@ public class SepayWebhookProcessor {
                 : orderRepository.findByOrderCodeForUpdate(orderCode).orElse(null);
 
         boolean becamePaid = false;
-        if (order != null && order.getStatus() == OrderStatus.PENDING) {
-            BigDecimal received = payload.transferAmount();
+        if (order != null && (order.getStatus() == OrderStatus.PENDING || order.getStatus() == OrderStatus.PARTIALLY_PAID)) {
+            BigDecimal received = transactionRepository.received(order.getId()).add(payload.transferAmount());
             if (received.compareTo(order.getTotalAmount()) >= 0) {
                 order.setStatus(OrderStatus.PAID);
                 order.setPaidAt(Instant.now());
@@ -54,7 +54,7 @@ public class SepayWebhookProcessor {
             data.put("invoiceId", order.getInvoiceId());
             data.put("orderCode", order.getOrderCode());
             data.put("reference", order.getInvoiceCode());
-            data.put("amount", payload.transferAmount());
+            data.put("amount", order.getTotalAmount());
             data.put("paidAt", order.getPaidAt());
             eventOutbox.append(order.getId(), "payment.completed",
                     "petcare.payment", "payment.completed", data);

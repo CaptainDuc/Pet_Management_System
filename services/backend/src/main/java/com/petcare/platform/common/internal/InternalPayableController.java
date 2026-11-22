@@ -41,6 +41,7 @@ public class InternalPayableController {
         requireKey(key);
         Booking booking = bookingRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Booking not found"));
+        rejectCancelled(booking);
         boolean paid = booking.getPaymentStatus() == PaymentStatus.PAID;
         return new PayableResponse(booking.getId(), null, bookingReference(booking.getId()),
                 booking.getTotalAmount(), booking.getPaymentStatus().name(), paid);
@@ -53,9 +54,16 @@ public class InternalPayableController {
         requireKey(key);
         Invoice invoice = invoiceRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Invoice not found"));
+        bookingRepository.findById(invoice.getBookingId()).ifPresent(this::rejectCancelled);
         boolean paid = invoice.getStatus() == InvoiceStatus.PAID;
         return new PayableResponse(invoice.getBookingId(), invoice.getId(), invoice.getInvoiceNumber(),
                 invoice.getTotalAmount(), invoice.getStatus().name(), paid);
+    }
+
+    private void rejectCancelled(Booking booking) {
+        if ("CANCELLED".equals(booking.getStatus().name())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Booking cancelled");
+        }
     }
 
     private void requireKey(String key) {

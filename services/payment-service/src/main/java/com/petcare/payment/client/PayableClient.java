@@ -28,6 +28,29 @@ public class PayableClient {
                 .build();
     }
 
+    public String requireAccess(UUID booking, UUID invoice, String authorization) {
+        if (authorization == null || !authorization.startsWith("Bearer ")) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Login required");
+        }
+        if (invoice == null && booking == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Booking or invoice required");
+        }
+        try {
+            String path = invoice == null ? "/api/v1/bookings/{id}" : "/api/v1/invoices/{id}";
+            var response = client.get().uri(path, invoice == null ? booking : invoice)
+                    .header("Authorization", authorization).retrieve().body(com.fasterxml.jackson.databind.JsonNode.class);
+            if (response == null || !response.path("success").asBoolean()) {
+                throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Core unavailable");
+            }
+            return response.path("data").path("status").asText();
+        } catch (RestClientResponseException ex) {
+            throw new ResponseStatusException(ex.getStatusCode().is4xxClientError()
+                    ? ex.getStatusCode() : HttpStatus.SERVICE_UNAVAILABLE, "Payment access unavailable");
+        } catch (RestClientException ex) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Core unavailable");
+        }
+    }
+
     public PayableInfo booking(UUID bookingId) {
         return fetch("/api/v1/internal/bookings/{id}/payable", bookingId);
     }
@@ -45,6 +68,7 @@ public class PayableClient {
             }
             return info;
         } catch (RestClientResponseException ex) {
+            if (ex.getStatusCode().value() == 409) throw new ResponseStatusException(HttpStatus.CONFLICT, "Booking cancelled");
             if (ex.getStatusCode().value() == HttpStatus.NOT_FOUND.value()) {
                 throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Payable not found");
             }

@@ -25,6 +25,7 @@ import java.util.UUID;
 public class PaymentCompletedListener {
 
     private final BookingService bookingService;
+    private final com.petcare.platform.invoice.repository.InvoiceRepository invoiceRepository;
 
     @RabbitListener(queues = RabbitMQQueues.PAYMENT_COMPLETED)
     @SuppressWarnings("unchecked")
@@ -35,11 +36,13 @@ public class PaymentCompletedListener {
         }
 
         Object bookingIdRaw = data.get("bookingId");
-        if (bookingIdRaw == null) {
-            return; // Invoice-only payment; nothing to update on the booking side.
-        }
-
         try {
+            if (bookingIdRaw == null && data.get("invoiceId") != null) {
+                var invoice = invoiceRepository.findById(UUID.fromString(data.get("invoiceId").toString()));
+                bookingIdRaw = invoice.orElseThrow(() ->
+                        new AmqpRejectAndDontRequeueException("Unknown invoice")).getBookingId();
+            }
+            if (bookingIdRaw == null) return;
             UUID bookingId = UUID.fromString(bookingIdRaw.toString());
             String orderCode = data.get("orderCode") == null ? null : data.get("orderCode").toString();
             BigDecimal amount = parseAmount(data.get("amount"));

@@ -45,7 +45,7 @@ export default function VietQrPaymentModal({ open, invoice, booking, onClose, on
           : `Thanh toan hoa don ${reference || ''}`.trim(),
       })
       .then((data) => {
-        if (!cancelled) setPayment(data);
+        if (!cancelled) { setPayment(data); setStatus(data.status); }
       })
       .catch((err) => {
         if (!cancelled) setError(err.message || 'Không tạo được mã thanh toán.');
@@ -67,6 +67,10 @@ export default function VietQrPaymentModal({ open, invoice, booking, onClose, on
       try {
         const data = await paymentApi.orderStatus(orderCode);
         if (data?.status) setStatus(data.status);
+        if (data?.status === 'PARTIALLY_PAID') {
+          setPayment(current => current?.orderCode === orderCode
+            ? { ...current, amount: data.remainingAmount, qrUrl: data.qrUrl } : current);
+        }
         if (data?.status === 'PAID') {
           paidRef.current = true;
           clearInterval(timer);
@@ -81,6 +85,7 @@ export default function VietQrPaymentModal({ open, invoice, booking, onClose, on
   }, [open, orderCode, onPaid]);
 
   const isPaid = status === 'PAID';
+  const closed = ['CANCELLED', 'REFUND_REVIEW', 'EXPIRED'].includes(status);
   const bankInfo = payment?.bankInfo;
 
   const copy = async (value, field) => {
@@ -100,6 +105,8 @@ export default function VietQrPaymentModal({ open, invoice, booking, onClose, on
         return { label: 'Đã thanh toán', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
       case 'PARTIALLY_PAID':
         return { label: 'Thanh toán một phần', cls: 'bg-amber-50 text-amber-700 border-amber-200' };
+      case 'REFUND_REVIEW':
+        return { label: 'Chờ đối soát hoàn tiền', cls: 'bg-amber-50 text-amber-700' };
       case 'CANCELLED':
         return { label: 'Đã hủy', cls: 'bg-slate-100 text-slate-500 border-slate-200' };
       case 'EXPIRED':
@@ -170,7 +177,7 @@ export default function VietQrPaymentModal({ open, invoice, booking, onClose, on
                 </span>
               </div>
 
-              <div className="flex flex-col sm:flex-row gap-5 items-center">
+              {closed ? <p role="status">Lịch đã hủy. Vui lòng liên hệ lễ tân nếu bạn đã chuyển tiền.</p> : <div className="flex flex-col sm:flex-row gap-5 items-center">
                 <div className={`shrink-0 rounded-2xl border p-2 ${isPaid ? 'border-emerald-200 bg-emerald-50' : 'border-slate-200 bg-white'}`}>
                   {isPaid ? (
                     <div className="w-44 h-44 flex flex-col items-center justify-center text-emerald-600">
@@ -189,7 +196,7 @@ export default function VietQrPaymentModal({ open, invoice, booking, onClose, on
                 <div className="flex-1 w-full space-y-2.5 text-xs">
                   <div className="rounded-xl bg-slate-50 border border-slate-100 p-3 space-y-2">
                     <div className="flex items-center justify-between">
-                      <span className="text-slate-500">Số tiền</span>
+                      <span className="text-slate-500">{status === 'PARTIALLY_PAID' ? 'Còn cần chuyển' : 'Số tiền'}</span>
                       <span className="font-bold text-slate-900">{formatCurrency(payment.amount)}</span>
                     </div>
                     <div className="flex items-center justify-between">
@@ -222,15 +229,15 @@ export default function VietQrPaymentModal({ open, invoice, booking, onClose, on
                   <p className="text-[11px] text-amber-600">
                     Vui lòng chuyển đúng số tiền và nội dung để hệ thống tự xác nhận.
                   </p>
-                  {isBooking && !isPaid && (
+                  {isBooking && !isPaid && !closed && (
                     <p className="text-[11px] text-slate-500">
                       Nếu chưa chuyển khoản được, bạn có thể đóng cửa sổ này và thanh toán tại quầy lễ tân.
                     </p>
                   )}
                 </div>
-              </div>
+              </div>}
 
-              {!isPaid && (
+              {!isPaid && !closed && (
                 <div className="flex items-center justify-center space-x-2 text-[11px] text-slate-500">
                   <Loader2 className="w-3.5 h-3.5 animate-spin text-sky-500" />
                   <span>Đang chờ xác nhận từ SePay... (tự động kiểm tra mỗi 3 giây)</span>

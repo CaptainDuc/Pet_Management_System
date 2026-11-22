@@ -13,13 +13,16 @@ import java.util.UUID;
 
 public interface OrderRepository extends JpaRepository<Order, UUID> {
 
+    @Query(value = "select 1 from pg_advisory_xact_lock(hashtextextended(:target,0))", nativeQuery = true)
+    int lockPayable(@Param("target") String target);
+
     Optional<Order> findByOrderCode(String orderCode);
 
-    Optional<Order> findFirstByBookingIdAndStatusOrderByCreatedAtDesc(
-            UUID bookingId, OrderStatus status);
+    Optional<Order> findFirstByBookingIdAndStatusInOrderByCreatedAtDesc(
+            UUID bookingId, java.util.List<OrderStatus> statuses);
 
-    Optional<Order> findFirstByInvoiceIdAndStatusOrderByCreatedAtDesc(
-            UUID invoiceId, OrderStatus status);
+    Optional<Order> findFirstByInvoiceIdAndStatusInOrderByCreatedAtDesc(
+            UUID invoiceId, java.util.List<OrderStatus> statuses);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select o from Order o where o.orderCode = :orderCode")

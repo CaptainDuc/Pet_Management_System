@@ -7,6 +7,8 @@ public record OrderStatusResponse(
         String orderCode,
         String status,
         BigDecimal amount,
+        BigDecimal remainingAmount,
+        String qrUrl,
         Instant paidAt
 ) {
 }

@@ -58,7 +58,7 @@ for port in (80, 3000):
     check(f"http://localhost:{port}/api/v1/services", field="success", value=True)
     check(f"http://localhost:{port}/api/v1/notifications", 401,
           field="success", value=False)
-    check(f"http://localhost:{port}/api/v1/orders/service-health-check/status", 404)
+    check(f"http://localhost:{port}/api/v1/orders/service-health-check/status", 401)
 
 for port in (8080, 8000):
     base = f"http://localhost:{port}"
@@ -80,7 +80,7 @@ for port in (8083, 8000):
     check(f"http://localhost:{port}/api/v1/notifications", 401,
           field="success", value=False)
 for port in (8082, 8000):
-    check(f"http://localhost:{port}/api/v1/orders/service-health-check/status", 404)
+    check(f"http://localhost:{port}/api/v1/orders/service-health-check/status", 401)
 
 print(f"\n{checks - failures}/{checks} checks passed")
 sys.exit(1 if failures else 0)

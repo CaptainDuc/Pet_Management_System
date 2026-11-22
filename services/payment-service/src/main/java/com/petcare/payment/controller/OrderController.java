@@ -16,7 +16,8 @@ public class OrderController {
     private final OrderService orderService;
 
     @GetMapping("/{orderCode}/status")
-    public OrderStatusResponse status(@PathVariable String orderCode) {
-        return orderService.getStatus(orderCode);
+    public OrderStatusResponse status(@PathVariable String orderCode,
+            @org.springframework.web.bind.annotation.RequestHeader(value="Authorization", required=false) String authorization) {
+        return orderService.getStatus(orderCode, authorization);
     }
 }

@@ -393,7 +393,8 @@ public class BookingService {
         }
 
         if (to == BookingStatus.CANCELLED) {
-            if (booking.getPaymentStatus() == PaymentStatus.PAID) {
+            if (booking.getPaymentStatus() == PaymentStatus.PAID
+                    && !SecurityUtils.hasAnyRole("OWNER", "ADMIN")) {
                 throw new ConflictException("BOOKING_ALREADY_PAID");
             }
             if (from == BookingStatus.IN_PROGRESS && !SecurityUtils.hasRole("ADMIN")) {

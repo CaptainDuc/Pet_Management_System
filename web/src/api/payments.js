@@ -2,7 +2,8 @@ const PAYMENT_BASE =
   import.meta.env.VITE_PAYMENT_URL || "http://localhost:8000/api/v1";
 
 async function request(endpoint, { method = "GET", body } = {}) {
-  const headers = {};
+  const token = localStorage.getItem("accessToken");
+  const headers = token ? { Authorization: `Bearer ${token}` } : {};
   if (body !== undefined) {
     headers["Content-Type"] = "application/json";
   }

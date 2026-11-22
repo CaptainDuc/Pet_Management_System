@@ -20,7 +20,8 @@ public class PaymentController {
     private final OrderService orderService;
 
     @PostMapping("/create")
-    public ResponseEntity<CreatePaymentResponse> create(@Valid @RequestBody CreatePaymentRequest request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(orderService.create(request));
+    public ResponseEntity<CreatePaymentResponse> create(@Valid @RequestBody CreatePaymentRequest request,
+            @org.springframework.web.bind.annotation.RequestHeader(value="Authorization", required=false) String authorization) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(orderService.create(request, authorization));
     }
 }
