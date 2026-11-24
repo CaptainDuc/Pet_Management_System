@@ -53,7 +53,71 @@ function query(params) {
   return qs ? `?${qs}` : "";
 }
 
+async function listAll(endpoint, token) {
+  const rows = [];
+  let page = 0;
+  let result;
+  do {
+    result = await request(`${endpoint}${query({ page, size: 50 })}`, { token });
+    rows.push(...result.content);
+    page += 1;
+  } while (page < result.totalPages);
+  return rows;
+}
+
 export const clinicApi = {
+  doctorRoster(token) {
+    return request('/staff/doctors', { token });
+  },
+
+  staffBranches(token) {
+    return listAll('/branches', token);
+  },
+
+  createStaffProfile(body, token) {
+    return request('/staff', { method: 'POST', body, token });
+  },
+
+  getBooking(id, token) {
+    return request(`/bookings/${id}`, { token });
+  },
+
+  pendingAssignments(token) {
+    return request('/bookings/queue/pending', { token });
+  },
+
+  assignmentOptions(visit, token) {
+    return request(`/bookings/queue/${visit.bookingId}/${visit.itemId}/candidates`, { token });
+  },
+
+  assignVisit(visit, targetSlotId, customerAgreed, token) {
+    return request(`/bookings/queue/${visit.bookingId}/${visit.itemId}/assign`, {
+      method: 'POST', token, body: { expectedSlotId: visit.slotId, targetSlotId, customerAgreed },
+    });
+  },
+
+  visitQueue(date, mine, token) {
+    return request(`/bookings/queue${mine ? '/mine' : ''}${query({ date })}`, { token });
+  },
+
+  findClientPets(contact, token) {
+    return request('/bookings/queue/client-pets', { method: 'POST', body: { contact }, token });
+  },
+
+  walkIn(customerId, body, token) {
+    return request(`/bookings/queue/walk-in/${customerId}`, { method: 'POST', body, token });
+  },
+
+  visitAction(visit, action, token) {
+    return request(`/bookings/queue/${visit.bookingId}/${visit.itemId}/${action}`, {
+      method: 'POST', body: action === 'check-in' ? { slotId: visit.slotId } : undefined, token,
+    });
+  },
+
+  ownerReport(token) {
+    return request('/analytics/dashboard', { token });
+  },
+
   listPets(token) {
     return request(`/pets${query({ page: 0, size: 50 })}`, { token });
   },
@@ -82,6 +146,36 @@ export const clinicApi = {
 
   availableSlots(params, token) {
     return request(`/schedules/slots/available${query(params)}`, { token });
+  },
+
+  moveOptions(bookingId, itemId, date, token) {
+    return request(`/bookings/${bookingId}/items/${itemId}/slots${query({ date })}`, { token });
+  },
+
+  reschedule(bookingId, itemId, expectedSlotId, timeSlotId, token) {
+    return request(`/bookings/${bookingId}/items/${itemId}/reschedule`, {
+      method: 'POST', token, body: { expectedSlotId, timeSlotId },
+    });
+  },
+
+  shiftStaff(token) {
+    return request('/schedules/staff', { token });
+  },
+
+  shifts(date, token) {
+    return request(`/schedules${query({ dateFrom: date, dateTo: date })}`, { token });
+  },
+
+  createShift(body, token) {
+    return request('/schedules', { method: 'POST', body, token });
+  },
+
+  setShiftAvailability(id, available, token) {
+    return request(`/schedules/${id}/availability`, { method: 'PATCH', body: { available }, token });
+  },
+
+  shiftBookings(id, token) {
+    return request(`/bookings/by-shift/${id}`, { token });
   },
 
   validatePromotion(code, bookingTotal, token) {

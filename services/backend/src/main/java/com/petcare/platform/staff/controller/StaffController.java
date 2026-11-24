@@ -21,6 +21,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import com.petcare.platform.staff.repository.StaffRepository;
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -48,6 +50,12 @@ public class StaffController {
                 Math.max(page, 0), Math.min(Math.max(size, 1), 50),
                 Sort.by("createdAt").descending());
         return ResponseEntity.ok(ApiResponse.ok(PageResponse.from(staffService.list(pageable))));
+    }
+
+    @GetMapping("/doctors")
+    @PreAuthorize("hasAnyRole('OWNER','ADMIN') and hasAuthority('staff:read')")
+    public ApiResponse<List<StaffRepository.DoctorEntry>> doctors() {
+        return ApiResponse.ok(staffService.doctors());
     }
 
     @GetMapping("/{id}")

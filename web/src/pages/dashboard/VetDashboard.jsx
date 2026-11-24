@@ -19,6 +19,8 @@ import {
 } from "lucide-react";
 import { Card, Button, Badge, Input, Select, Modal, Table, Avatar } from '../../design-system/components';
 
+import ClinicVisitQueue from '../../components/ClinicVisitQueue';
+
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1";
 
 export default function VetDashboard({
@@ -77,46 +79,6 @@ export default function VetDashboard({
     treatment: "",
     nextFollowUp: "",
   });
-
-  // Doctor Schedule state
-  const [vetSchedule, setVetSchedule] = useState([
-    {
-      id: "SCH-01",
-      time: "08:30 - 09:15",
-      pet: "Milu (Poodle trắng - 1.5 tuổi)",
-      owner: "Chị Mai Lan",
-      service: "Khám da liễu & Cắt móng",
-      room: "Phòng khám số 1",
-      status: "IN_PROGRESS",
-    },
-    {
-      id: "SCH-02",
-      time: "09:30 - 10:15",
-      pet: "Lu Lu (Husky - 2 tuổi)",
-      owner: "Anh Minh Anh",
-      service: "Tái khám viêm da & Tiêm nhắc dại",
-      room: "Phòng khám số 1",
-      status: "PENDING",
-    },
-    {
-      id: "SCH-03",
-      time: "10:30 - 11:30",
-      pet: "Tom (Mèo Ba Tư - 3 tuổi)",
-      owner: "Bác Hùng",
-      service: "Siêu âm ổ bụng & Xét nghiệm máu",
-      room: "Phòng Chẩn đoán hình ảnh",
-      status: "PENDING",
-    },
-    {
-      id: "SCH-04",
-      time: "14:00 - 14:45",
-      pet: "Cún Đen (Chó cỏ - 8 tháng)",
-      owner: "Chị Thanh Nga",
-      service: "Tư vấn dinh dưỡng & Tẩy giun sán",
-      room: "Phòng khám số 1",
-      status: "PENDING",
-    },
-  ]);
 
   // Prescriptions state
   const [prescriptions, setPrescriptions] = useState([
@@ -181,14 +143,6 @@ export default function VetDashboard({
   ]);
   const [aiDiagInput, setAiDiagInput] = useState("");
   const [aiDiagLoading, setAiDiagLoading] = useState(false);
-
-  const handleUpdateScheduleStatus = (id, newStatus) => {
-    setVetSchedule((prev) =>
-      prev.map((item) =>
-        item.id === id ? { ...item, status: newStatus } : item
-      )
-    );
-  };
 
   const handleCreateRecord = (e) => {
     e.preventDefault();
@@ -287,7 +241,7 @@ export default function VetDashboard({
 
   return (
     <div className="space-y-6">
-      {['medical', 'schedule', 'prescriptions'].includes(activeTab) && <p className="pc-demo-note">Màn hình đang dùng hồ sơ minh họa. Các thao tác ở đây chưa lưu thành dữ liệu khám bệnh thực tế.</p>}
+      {['medical', 'prescriptions'].includes(activeTab) && <p className="pc-demo-note">Màn hình đang dùng hồ sơ minh họa. Các thao tác ở đây chưa lưu thành dữ liệu khám bệnh thực tế.</p>}
       {/* TAB 1: BỆNH ÁN ĐIỆN TỬ */}
       {activeTab === "medical" && (
         <div className="space-y-6">
@@ -447,81 +401,7 @@ export default function VetDashboard({
         </div>
       )}
 
-      {/* TAB 2: LỊCH KHÁM & CA TRỰC HÔM NAY */}
-      {activeTab === "schedule" && (
-        <div className="space-y-6">
-          <Card variant="outlined" padding="lg" className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <div className="flex items-center space-x-2">
-                <span className="w-8 h-8 rounded-xl bg-[var(--color-role-veterinarian-bg)] text-[var(--color-role-veterinarian-text)] flex items-center justify-center font-bold">
-                  <Calendar size={18} />
-                </span>
-                <Card.Title className="text-lg font-bold text-[var(--color-fg-primary)]">
-                  Lịch khám phụ trách hôm nay
-                </Card.Title>
-              </div>
-              <Card.Description className="text-xs text-slate-500 mt-1">
-                Danh sách thú cưng đăng ký khám với Bác sĩ {user?.fullName || "Trưởng khoa"}
-              </Card.Description>
-            </div>
-            <Badge variant="info" size="sm">
-              Tổng số ca: {vetSchedule.length}
-            </Badge>
-          </Card>
-
-          <div className="space-y-3">
-            {vetSchedule.map((item) => (
-              <Card
-                key={item.id}
-                variant="outlined"
-                padding="md"
-                className="flex flex-col sm:flex-row sm:items-center justify-between gap-4"
-              >
-                <div className="flex items-center space-x-3.5">
-                  <div className="w-14 h-12 rounded-xl bg-slate-100 border border-slate-200 flex flex-col items-center justify-center text-center">
-                    <Clock className="w-3.5 h-3.5 text-slate-500 mb-0.5" />
-                    <span className="font-mono text-[10px] font-bold text-slate-700 leading-tight">
-                      {item.time.split(" - ")[0]}
-                    </span>
-                  </div>
-                  <div>
-                    <div className="flex items-center space-x-2">
-                      <h4 className="font-bold text-sm text-slate-900">{item.pet}</h4>
-                      <span className="text-xs text-slate-400">({item.owner})</span>
-                    </div>
-                    <p className="text-xs text-slate-600 mt-0.5">
-                      {item.service} •{" "}
-                      <span className="text-teal-600 font-medium">{item.room}</span>
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-center space-x-2 self-end sm:self-center">
-                  {item.status === "IN_PROGRESS" ? (
-                    <Button
-                      variant="success"
-                      size="sm"
-                      onClick={() => handleUpdateScheduleStatus(item.id, "COMPLETED")}
-                    >
-                      <CheckCircle2 className="inline mr-1" size={15} />Hoàn tất ca khám
-                    </Button>
-                  ) : item.status === "COMPLETED" ? (
-                    <Badge variant="ghost" size="sm">Đã hoàn tất</Badge>
-                  ) : (
-                    <Button
-                      variant="primary"
-                      size="sm"
-                      onClick={() => handleUpdateScheduleStatus(item.id, "IN_PROGRESS")}
-                    >
-                      Tiếp nhận khám
-                    </Button>
-                  )}
-                </div>
-              </Card>
-            ))}
-          </div>
-        </div>
-      )}
+      {activeTab === 'schedule' && <ClinicVisitQueue token={token} />}
 
       {/* TAB 3: KÊ ĐƠN THUỐC */}
       {activeTab === "prescriptions" && (

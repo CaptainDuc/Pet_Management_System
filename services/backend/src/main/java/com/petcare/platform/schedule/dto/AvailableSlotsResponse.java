@@ -14,6 +14,9 @@ public record AvailableSlotsResponse(
     public record StaffSlots(
             UUID staffId,
             UUID scheduleId,
+            String staffName,
+            UUID branchId,
+            String branchName,
             LocalTime workStart,
             LocalTime workEnd,
             List<SlotView> slots

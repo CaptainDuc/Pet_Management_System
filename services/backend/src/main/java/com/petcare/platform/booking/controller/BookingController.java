@@ -21,6 +21,10 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import com.petcare.platform.schedule.dto.AvailableSlotsResponse;
+import jakarta.validation.constraints.NotNull;
+import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -61,6 +65,28 @@ public class BookingController {
     public ResponseEntity<ApiResponse<BookingResponse>> get(
             @AuthenticationPrincipal UserPrincipal principal, @PathVariable UUID id) {
         return ResponseEntity.ok(ApiResponse.ok(bookingService.get(principal.getId(), id)));
+    }
+
+    public record MoveRequest(@NotNull UUID expectedSlotId, @NotNull UUID timeSlotId) {}
+
+    @GetMapping("/by-shift/{shiftId}")
+    @PreAuthorize("hasAuthority('schedule:write') and hasAuthority('booking:update')")
+    public ApiResponse<List<BookingResponse>> forShift(@PathVariable UUID shiftId) {
+        return ApiResponse.ok(bookingService.forShift(shiftId));
+    }
+
+    @GetMapping("/{id}/items/{itemId}/slots")
+    @PreAuthorize("hasAnyAuthority('booking:create','booking:update')")
+    public ApiResponse<AvailableSlotsResponse> moveOptions(@AuthenticationPrincipal UserPrincipal principal,
+            @PathVariable UUID id, @PathVariable UUID itemId, @RequestParam LocalDate date) {
+        return ApiResponse.ok(bookingService.moveOptions(principal.getId(), id, itemId, date));
+    }
+
+    @PostMapping("/{id}/items/{itemId}/reschedule")
+    @PreAuthorize("hasAnyAuthority('booking:create','booking:update')")
+    public ApiResponse<BookingResponse> reschedule(@AuthenticationPrincipal UserPrincipal principal,
+            @PathVariable UUID id, @PathVariable UUID itemId, @Valid @RequestBody MoveRequest body) {
+        return ApiResponse.ok(bookingService.reschedule(principal.getId(), id, itemId, body.expectedSlotId(), body.timeSlotId()));
     }
 
     @PostMapping("/{id}/confirm")

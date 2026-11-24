@@ -37,7 +37,7 @@ public class StaffService {
 
     @Transactional
     public StaffResponse create(CreateStaffRequest request) {
-        if (!userRepository.existsById(request.userId())) {
+        if (userRepository.lockIdForStaffCreation(request.userId()).isEmpty()) {
             throw new ResourceNotFoundException("User", request.userId());
         }
         if (staffRepository.existsByUserId(request.userId())) {
@@ -49,6 +49,11 @@ public class StaffService {
         staff.setPosition(request.position());
         staff.setBio(request.bio());
         return toResponse(staffRepository.save(staff));
+    }
+
+    @Transactional(readOnly = true)
+    public List<StaffRepository.DoctorEntry> doctors() {
+        return staffRepository.doctors();
     }
 
     @Transactional(readOnly = true)

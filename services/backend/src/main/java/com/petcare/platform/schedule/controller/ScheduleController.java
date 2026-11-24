@@ -14,6 +14,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import com.petcare.platform.staff.repository.StaffRepository;
+import jakarta.validation.constraints.NotNull;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
@@ -25,6 +27,21 @@ import java.util.UUID;
 public class ScheduleController {
 
     private final ScheduleService scheduleService;
+    private final StaffRepository staffRepository;
+
+    public record Availability(@NotNull Boolean available) {}
+
+    @GetMapping("/staff")
+    @PreAuthorize("hasAuthority('schedule:write')")
+    public ApiResponse<List<StaffRepository.DirectoryEntry>> staff() {
+        return ApiResponse.ok(staffRepository.directory());
+    }
+
+    @PatchMapping("/{id}/availability")
+    @PreAuthorize("hasAuthority('schedule:write')")
+    public ApiResponse<ScheduleResponse> setAvailability(@PathVariable UUID id, @Valid @RequestBody Availability body) {
+        return ApiResponse.ok(scheduleService.setAvailability(id, body.available()));
+    }
 
     @PostMapping
     @PreAuthorize("hasAuthority('schedule:write')")

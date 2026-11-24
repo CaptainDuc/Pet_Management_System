@@ -170,6 +170,8 @@ public abstract class IntegrationTestBase {
 
     // ─── Kịch bản đặt lịch: dịch vụ 30 phút, nhân viên, ca sáng ngày mai (4 khung) ─────
 
+    private final UUID scenarioBranch = UUID.randomUUID();
+
     protected Scenario newScenario(String staffRole) {
         TestUser admin = newUser("ADMIN");
         TestUser customer = newUser("CUSTOMER");
@@ -179,13 +181,17 @@ public abstract class IntegrationTestBase {
         UUID serviceId = idOf(send(HttpMethod.POST, "/api/v1/services", admin.token(),
                 Map.of("name", "Kham tong quat", "description", "Test",
                         "basePrice", 150000, "durationMinutes", 30)));
+        jdbc.update("insert into branches(id, name, address) values (?, ?, ?) on conflict (id) do nothing",
+                scenarioBranch, "Test clinic", "Test address");
         UUID staffId = idOf(send(HttpMethod.POST, "/api/v1/staff", admin.token(),
-                Map.of("userId", staffUser.id().toString())));
+                Map.of("userId", staffUser.id().toString(), "branchId", scenarioBranch)));
 
-        ResponseEntity<String> skills = send(HttpMethod.POST, "/api/v1/staff/" + staffId + "/skills",
-                admin.token(), Map.of("serviceIds", List.of(serviceId.toString()),
-                        "proficiencyLevel", "EXPERT"));
-        assertThat(skills.getStatusCode().is2xxSuccessful()).as(skills.getBody()).isTrue();
+        if (!"VETERINARIAN".equals(staffRole)) {
+            ResponseEntity<String> skills = send(HttpMethod.POST, "/api/v1/staff/" + staffId + "/skills",
+                    admin.token(), Map.of("serviceIds", List.of(serviceId.toString()),
+                            "proficiencyLevel", "EXPERT"));
+            assertThat(skills.getStatusCode().is2xxSuccessful()).as(skills.getBody()).isTrue();
+        }
 
         LocalDate date = LocalDate.now().plusDays(1);
         ResponseEntity<String> schedule = send(HttpMethod.POST, "/api/v1/schedules", admin.token(),
@@ -201,7 +207,7 @@ public abstract class IntegrationTestBase {
 
     protected List<UUID> availableSlotIds(Scenario s) {
         ResponseEntity<String> response = send(HttpMethod.GET,
-                "/api/v1/schedules/slots/available?date=" + s.date() + "&serviceId=" + s.serviceId(),
+                "/api/v1/schedules/slots/available?date=" + s.date() + "&serviceId=" + s.serviceId() + "&staffId=" + s.staffId(),
                 s.customer().token(), null);
         assertThat(response.getStatusCode()).as(response.getBody()).isEqualTo(HttpStatus.OK);
         List<UUID> ids = new ArrayList<>();
@@ -219,6 +225,18 @@ public abstract class IntegrationTestBase {
                         "timeSlotId", slotId.toString())));
     }
 
+    protected void assignReserved(UUID bookingId, TestUser operator) {
+        JsonNode items = json(send(HttpMethod.GET, "/api/v1/bookings/" + bookingId, operator.token(), null))
+                .at("/data/items");
+        for (JsonNode item : items) {
+            String slot = item.path("timeSlotId").asText();
+            var result = send(HttpMethod.POST, "/api/v1/bookings/queue/" + bookingId + "/"
+                    + item.path("id").asText() + "/assign", operator.token(),
+                    Map.of("expectedSlotId", slot, "targetSlotId", slot));
+            assertThat(result.getStatusCode()).as(result.getBody()).isEqualTo(HttpStatus.OK);
+        }
+    }
+
     // ─── Chờ điều kiện (dùng cho việc gửi sự kiện bất đồng bộ) ────────────────
 
         // Đưa một lịch hẹn qua đủ các bước đến COMPLETED, trả về mã lịch hẹn
@@ -227,9 +245,7 @@ public abstract class IntegrationTestBase {
         UUID bookingId = idOf(send(HttpMethod.POST, "/api/v1/bookings", s.customer().token(),
                 bookingBody(s.petId(), s.serviceId(), slot)));
 
-        ResponseEntity<String> confirm = send(HttpMethod.POST, "/api/v1/bookings/" + bookingId + "/confirm",
-                s.admin().token(), null);
-        assertThat(confirm.getStatusCode()).as(confirm.getBody()).isEqualTo(HttpStatus.OK);
+        assignReserved(bookingId, s.admin());
 
         // Kéo giờ khung về hiện tại để được phép bắt đầu
         jdbc.update("update time_slots set start_time = now() - interval '10 minutes', "

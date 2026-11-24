@@ -8,5 +8,6 @@ public record BookingItemRequest(
         @NotNull UUID serviceId,
         @NotNull UUID timeSlotId,
         UUID staffId,
+        UUID preferredStaffId,
         String notes
 ) {}

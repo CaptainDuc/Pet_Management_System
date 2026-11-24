@@ -95,6 +95,12 @@ public class NotificationService {
             case "booking.created" -> new String[]{
                     "Đặt lịch thành công",
                     "Lịch hẹn " + services + " lúc " + time + " đã được ghi nhận và đang chờ xác nhận."};
+            case "booking.assigned" -> new String[]{
+                    "Đã phân công người phụ trách",
+                    reason + " sẽ phụ trách " + services + " lúc " + time + "."};
+            case "booking.rescheduled" -> new String[]{
+                    "Lịch hẹn đã được đổi",
+                    "Giờ hẹn mới cho " + services + " là " + time + "."};
             case "booking.confirmed" -> new String[]{
                     "Lịch hẹn đã được xác nhận",
                     "Phòng khám đã xác nhận lịch hẹn " + services + " lúc " + time + "."};

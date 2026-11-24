@@ -12,6 +12,12 @@ import java.util.UUID;
 
 public interface BookingItemRepository extends JpaRepository<BookingItem, UUID> {
 
+    @Query("""
+            select distinct i.bookingId from BookingItem i join TimeSlot t on t.id = i.timeSlotId
+            where t.scheduleId = :shiftId and i.status in :statuses
+            """)
+    List<UUID> openBookingIdsForShift(UUID shiftId, Collection<BookingStatus> statuses);
+
     List<BookingItem> findByBookingId(UUID bookingId);
 
     List<BookingItem> findByBookingIdIn(Collection<UUID> bookingIds);
@@ -24,7 +30,7 @@ public interface BookingItemRepository extends JpaRepository<BookingItem, UUID> 
               and i.staffId = s.id
               and s.userId = :userId
               and b.petId = :petId
-              and b.status in :statuses
+              and i.status in :statuses
             """)
     boolean existsAssignedAccess(@Param("userId") UUID userId,
                                  @Param("petId") UUID petId,

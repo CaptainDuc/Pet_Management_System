@@ -5,7 +5,7 @@ import com.petcare.platform.analytics.service.AnalyticsService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.Map;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 @RestController
 @RequestMapping("/api/v1/analytics")
@@ -15,7 +15,8 @@ public class AnalyticsController {
     private final AnalyticsService analyticsService;
 
     @GetMapping("/dashboard")
-    public ApiResponse<Map<String, Object>> getStats() {
+    @PreAuthorize("hasAnyRole('OWNER','ADMIN')")
+    public ApiResponse<AnalyticsService.Dashboard> getStats() {
         return ApiResponse.ok(analyticsService.getDashboardStats());
     }
 }

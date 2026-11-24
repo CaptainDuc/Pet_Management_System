@@ -37,7 +37,6 @@ import com.petcare.platform.servicecatalog.domain.CareService;
 import com.petcare.platform.servicecatalog.repository.CareServiceRepository;
 import com.petcare.platform.staff.domain.Staff;
 import com.petcare.platform.staff.repository.StaffRepository;
-import com.petcare.platform.staff.repository.StaffSkillRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -50,6 +49,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import com.petcare.platform.schedule.service.ScheduleService;
+import com.petcare.platform.schedule.dto.AvailableSlotsResponse;
+import com.petcare.platform.schedule.dto.AvailableSlotsResponse.StaffSlots;
+import java.time.Duration;
+import java.time.LocalDate;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
@@ -82,7 +86,7 @@ public class BookingService {
     private final PetRepository petRepository;
     private final CareServiceRepository careServiceRepository;
     private final StaffRepository staffRepository;
-    private final StaffSkillRepository skillRepository;
+    private final ScheduleService scheduleService;
     private final ScheduleRepository scheduleRepository;
     private final TimeSlotRepository timeSlotRepository;
     private final OutboxService outboxService;
@@ -92,12 +96,16 @@ public class BookingService {
     @Value("${app.booking.cancel-cutoff-hours:2}")
     private int cancelCutoffHours;
 
-    private record PlannedItem(CareService service, UUID slotId, List<UUID> reservedSlots, UUID staffId, String notes) {}
+    private record PlannedItem(CareService service, UUID slotId, List<UUID> reservedSlots, UUID staffId, UUID preference, String notes) {}
 
     // ─── Đặt lịch ──────────────────────────────────────────────────────────
 
     @Transactional
     public BookingResponse create(UUID customerId, CreateBookingRequest request) {
+        return create(customerId, request, false);
+    }
+
+    private BookingResponse create(UUID customerId, CreateBookingRequest request, boolean walkIn) {
         Pet pet = petRepository.findByIdAndActiveTrue(request.petId())
                 .orElseThrow(() -> new ResourceNotFoundException("Pet", request.petId()));
         if (!pet.getOwnerId().equals(customerId)) {
@@ -119,7 +127,7 @@ public class BookingService {
             if (slot.getScheduleId() == null) {
                 throw new BusinessException("Slot does not belong to a schedule");
             }
-            Schedule schedule = scheduleRepository.findById(slot.getScheduleId())
+            Schedule schedule = scheduleRepository.lockForBooking(slot.getScheduleId())
                     .orElseThrow(() -> new ResourceNotFoundException("Schedule", slot.getScheduleId()));
             if (!schedule.isAvailable()) {
                 throw new BusinessException("Schedule is not available");
@@ -129,16 +137,10 @@ public class BookingService {
             if (!staffId.equals(schedule.getStaffId())) {
                 throw new BusinessException("Slot does not belong to the requested staff");
             }
-            Staff staff = staffRepository.findById(staffId)
-                    .orElseThrow(() -> new ResourceNotFoundException("Staff", staffId));
-            if (!staff.isActive()) {
-                throw new BusinessException("Staff is not active");
-            }
+            Staff staff = staffRepository.findBookable(staffId, service.getId())
+                    .orElseThrow(() -> new BusinessException("Nhân viên không thể nhận dịch vụ này."));
             if (request.branchId() != null && !request.branchId().equals(staff.getBranchId())) {
                 throw new BusinessException("Staff does not belong to this branch");
-            }
-            if (skillRepository.findByStaffIdAndServiceId(staffId, service.getId()).isEmpty()) {
-                throw new BusinessException("Staff does not provide this service");
             }
             List<TimeSlot> window = SlotWindow.covering(
                     timeSlotRepository.findByScheduleIdInOrderByStartTimeAsc(List.of(schedule.getId())),
@@ -146,7 +148,22 @@ public class BookingService {
             if (window.isEmpty()) {
                 throw new BusinessException("Not enough consecutive slots for this service");
             }
-            planned.add(new PlannedItem(service, slot.getId(), window.stream().map(TimeSlot::getId).toList(), staffId, item.notes()));
+            UUID preference = item.preferredStaffId() != null ? item.preferredStaffId() : item.staffId();
+            if (preference != null && !preference.equals(staffId)) {
+                throw new BusinessException("Khung giờ không thuộc người được yêu cầu.");
+            }
+            List<UUID> ids = window.stream().map(TimeSlot::getId).toList();
+            if (!walkIn && preference == null && request.items().size() == 1) {
+                // Lock whole windows before choosing: simultaneous requests can use different clinicians at the same hour.
+                var chosen = windowsAt(slot, staff.getBranchId(), service.getId(), service.getDurationMinutes(), Set.of())
+                        .stream().filter(w -> scheduleRepository.lockForBooking(w.scheduleId()).orElseThrow().isAvailable())
+                        .filter(w -> timeSlotRepository.lockFreeSlots(w.ids()).size() == w.ids().size())
+                        .findFirst().orElseThrow(() -> new ConflictException("SLOT_ALREADY_BOOKED"));
+                planned.add(new PlannedItem(service, chosen.slotId(), chosen.ids(), null, null, item.notes()));
+            } else {
+                planned.add(new PlannedItem(service, slot.getId(), ids, walkIn ? staffId : null,
+                        walkIn ? null : preference, item.notes()));
+            }
         }
 
         // 2. Giữ chỗ nguyên tử, theo thứ tự id để tránh khóa chéo giữa hai giao dịch
@@ -188,6 +205,7 @@ public class BookingService {
             item.setBookingId(booking.getId());
             item.setServiceId(p.service().getId());
             item.setStaffId(p.staffId());
+            item.setPreferredStaffId(p.preference());
             item.setTimeSlotId(p.slotId());
             item.setReservedSlotIds(new java.util.HashSet<>(p.reservedSlots()));
             item.setUnitPrice(p.service().getBasePrice());
@@ -360,6 +378,79 @@ public class BookingService {
         return autoConfirm;
     }
 
+    @Transactional
+    public BookingResponse walkIn(UUID receptionist, UUID customer, CreateBookingRequest request) {
+        if (request.items().size() != 1) throw new BusinessException("Mỗi lượt tiếp nhận tại quầy cần chọn một dịch vụ.");
+        BookingResponse created = create(customer, request, true);
+        ItemResponse item = created.items().getFirst();
+        checkIn(receptionist, created.id(), item.id(), item.timeSlotId());
+        return get(receptionist, created.id());
+    }
+
+    private Booking lockVisit(UUID id) {
+        return bookingRepository.findByIdForUpdate(id).orElseThrow(() -> new ResourceNotFoundException("Booking", id));
+    }
+
+    private BookingItem visitItem(List<BookingItem> items, UUID itemId) {
+        return items.stream().filter(i -> i.getId().equals(itemId)).findFirst()
+                .orElseThrow(() -> new ResourceNotFoundException("Booking item", itemId));
+    }
+
+    @Transactional
+    public void checkIn(UUID userId, UUID id, UUID itemId, UUID expectedSlot) {
+        Booking booking = lockVisit(id);
+        BookingItem item = visitItem(itemRepository.findByBookingId(id), itemId);
+        if (!expectedSlot.equals(item.getTimeSlotId()) || item.getStatus() == BookingStatus.CANCELLED) {
+            throw new ConflictException("Lịch đã thay đổi. Vui lòng tải lại hàng đợi.");
+        }
+        if (item.getStaffId() == null) throw new ConflictException("Cần phân công trước khi tiếp đón.");
+        if (item.getCheckedInAt() != null) return;
+        if (!Set.of(BookingStatus.PENDING, BookingStatus.CONFIRMED).contains(item.getStatus())) {
+            throw new ConflictException("Dịch vụ đã bắt đầu hoặc kết thúc.");
+        }
+        TimeSlot slot = timeSlotRepository.findById(expectedSlot)
+                .orElseThrow(() -> new ResourceNotFoundException("Time slot", expectedSlot));
+        if (!slot.getStartTime().atZone(ZONE).toLocalDate().equals(LocalDate.now(ZONE))) {
+            throw new BusinessException("Chỉ tiếp đón vào ngày đã hẹn.");
+        }
+        if (booking.getStatus() == BookingStatus.PENDING) {
+            transition(userId, id, BookingStatus.CONFIRMED, null);
+        }
+        item.setCheckedInAt(Instant.now());
+        item.setCheckedInBy(userId);
+    }
+
+    @Transactional
+    public void attend(UUID userId, UUID id, UUID itemId, boolean complete) {
+        Booking booking = lockVisit(id);
+        List<BookingItem> items = itemRepository.findByBookingId(id);
+        BookingItem item = visitItem(items, itemId);
+        if (item.getStaffId() == null || staffRepository.findByIdAndActiveTrue(item.getStaffId())
+                .filter(s -> userId.equals(s.getUserId())).isEmpty()) {
+            throw new AccessDeniedException("Bạn chưa được phân công dịch vụ này.");
+        }
+        BookingStatus next = complete ? BookingStatus.COMPLETED : BookingStatus.IN_PROGRESS;
+        if (item.getStatus() == next) return;
+        if (complete) {
+            if (item.getStatus() != BookingStatus.IN_PROGRESS) throw new ConflictException("Dịch vụ chưa bắt đầu.");
+            item.setCompletedAt(Instant.now());
+        } else {
+            if (item.getStatus() != BookingStatus.CONFIRMED || item.getCheckedInAt() == null) {
+                throw new ConflictException("Lễ tân cần xác nhận khách đã đến trước khi bắt đầu.");
+            }
+            TimeSlot slot = timeSlotRepository.findById(item.getTimeSlotId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Time slot", item.getTimeSlotId()));
+            if (slot.getStartTime().isAfter(Instant.now())) throw new BusinessException("Chưa đến giờ hẹn.");
+            item.setStartedAt(Instant.now());
+        }
+        item.setStatus(next);
+        BookingStatus from = booking.getStatus();
+        if (from == next || (complete && items.stream().anyMatch(i -> i.getStatus() != BookingStatus.COMPLETED))) return;
+        booking.setStatus(next);
+        historyRepository.save(new BookingStatusHistory(id, from, next, userId, null));
+        recordEvent(toResponses(List.of(booking)).getFirst(), routingKeyFor(next), null);
+    }
+
     private BookingResponse transition(UUID userId, UUID id, BookingStatus to, String reason) {
         Booking booking = bookingRepository.findByIdForUpdate(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Booking", id));
@@ -379,6 +470,17 @@ public class BookingService {
         }
 
         List<BookingItem> items = itemRepository.findByBookingId(id);
+        if (to == BookingStatus.IN_PROGRESS || to == BookingStatus.COMPLETED) {
+            if (items.stream().anyMatch(i -> i.getStaffId() == null)) {
+                throw new ConflictException("Cần phân công trước khi bắt đầu dịch vụ.");
+            }
+            boolean vet = SecurityUtils.hasRole("VETERINARIAN") && !SecurityUtils.hasAnyRole("OWNER", "ADMIN");
+            if (vet || items.stream().anyMatch(i -> i.getCheckedInAt() != null)) {
+                if (items.size() != 1) throw new ConflictException("Vui lòng cập nhật từng dịch vụ trong lịch khám.");
+                attend(userId, id, items.getFirst().getId(), to == BookingStatus.COMPLETED);
+                return toResponses(List.of(booking)).getFirst();
+            }
+        }
         List<UUID> slotIds = items.stream()
                 .flatMap(i -> reservedSlots(i).stream())
                 .distinct()
@@ -426,11 +528,204 @@ public class BookingService {
 
     // ─── Hàm phụ ───────────────────────────────────────────────────────────
 
+    @Transactional(readOnly = true)
+    public List<BookingResponse> forShift(UUID shiftId) {
+        return toResponses(bookingRepository.findAllById(itemRepository.openBookingIdsForShift(shiftId,
+                Set.of(BookingStatus.PENDING, BookingStatus.CONFIRMED))));
+    }
+
+    private record MoveContext(BookingItem item, Set<UUID> held, int minutes,
+                               UUID branchId, List<TimeSlot> otherSlots) {}
+
+    private MoveContext prepareMove(Booking booking, UUID userId, UUID itemId) {
+        boolean operator = isClinicSide() && SecurityUtils.hasPermission("booking:update");
+        if (!operator && !booking.getCustomerId().equals(userId)) {
+            throw new ResourceNotFoundException("Booking", booking.getId());
+        }
+        if (!Set.of(BookingStatus.PENDING, BookingStatus.CONFIRMED).contains(booking.getStatus())) {
+            throw new ConflictException("Chỉ có thể đổi lịch đang chờ hoặc đã xác nhận.");
+        }
+        List<BookingItem> items = itemRepository.findByBookingId(booking.getId());
+        BookingItem item = items.stream().filter(i -> i.getId().equals(itemId)).findFirst()
+                .orElseThrow(() -> new ResourceNotFoundException("Booking item", itemId));
+        if (item.getCheckedInAt() != null) throw new ConflictException("Dịch vụ đã được tiếp đón.");
+        Set<UUID> held = Set.copyOf(reservedSlots(item));
+        List<TimeSlot> original = timeSlotRepository.findAllById(held);
+        Instant start = original.stream().map(TimeSlot::getStartTime).min(Instant::compareTo)
+                .orElseThrow(() -> new BusinessException("Lịch hẹn thiếu khung giờ gốc."));
+        Instant now = Instant.now();
+        if (!start.isAfter(now)) throw new BusinessException("Dịch vụ này đã đến giờ hẹn.");
+        if (!operator && start.isBefore(now.plus(cancelCutoffHours, ChronoUnit.HOURS))) {
+            throw new BusinessException("Vui lòng liên hệ lễ tân để đổi lịch trong vòng "
+                    + cancelCutoffHours + " giờ trước buổi hẹn.");
+        }
+        int minutes = Math.toIntExact(original.stream()
+                .mapToLong(s -> Duration.between(s.getStartTime(), s.getEndTime()).toMinutes()).sum());
+        List<UUID> otherIds = items.stream().filter(i -> !i.getId().equals(itemId))
+                .flatMap(i -> reservedSlots(i).stream()).toList();
+        UUID branchId = booking.getBranchId();
+        if (branchId == null) branchId = reservedBranch(original.getFirst());
+        return new MoveContext(item, held, minutes, branchId, timeSlotRepository.findAllById(otherIds));
+    }
+
+    private AvailableSlotsResponse choices(MoveContext move, LocalDate date, UUID staffId) {
+        var result = scheduleService.availableSlots(date, staffId, move.branchId(), move.item().getServiceId(),
+                false, move.minutes(), move.held());
+        List<StaffSlots> staff = new ArrayList<>();
+        for (StaffSlots group : result.staff()) {
+            var slots = group.slots().stream().filter(slot -> !slot.slotId().equals(move.item().getTimeSlotId()))
+                    .filter(slot -> move.otherSlots().stream().noneMatch(other ->
+                            slot.startTime().toInstant().isBefore(other.getEndTime())
+                            && slot.endTime().toInstant().isAfter(other.getStartTime()))).toList();
+            if (!slots.isEmpty()) staff.add(new StaffSlots(group.staffId(), group.scheduleId(), group.staffName(),
+                    group.branchId(), group.branchName(), group.workStart(), group.workEnd(), slots));
+        }
+        return new AvailableSlotsResponse(date, result.timezone(), staff);
+    }
+
+    @Transactional(readOnly = true)
+    public AvailableSlotsResponse moveOptions(UUID userId, UUID id, UUID itemId, LocalDate date) {
+        Booking booking = bookingRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Booking", id));
+        return choices(prepareMove(booking, userId, itemId), date, null);
+    }
+
+    @Transactional
+    public BookingResponse reschedule(UUID userId, UUID id, UUID itemId, UUID expectedSlotId, UUID targetId) {
+        Booking booking = bookingRepository.findByIdForUpdate(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Booking", id));
+        MoveContext move = prepareMove(booking, userId, itemId);
+        BookingItem item = move.item();
+        if (!expectedSlotId.equals(item.getTimeSlotId())) {
+            throw new ConflictException("Lịch hẹn đã thay đổi. Vui lòng tải lại lịch hẹn.");
+        }
+        TimeSlot target = timeSlotRepository.findById(targetId)
+                .orElseThrow(() -> new ResourceNotFoundException("Time slot", targetId));
+        if (target.getScheduleId() == null) throw new BusinessException("Khung giờ chưa được phân ca.");
+        Schedule shift = scheduleRepository.lockForBooking(target.getScheduleId())
+                .orElseThrow(() -> new ResourceNotFoundException("Schedule", target.getScheduleId()));
+        boolean offered = choices(move, shift.getWorkDate(), shift.getStaffId()).staff().stream()
+                .flatMap(group -> group.slots().stream()).anyMatch(slot -> slot.slotId().equals(targetId));
+        if (!offered) throw new ConflictException("Khung giờ này không còn khả dụng.");
+
+        List<UUID> next = SlotWindow.covering(
+                timeSlotRepository.findByScheduleIdInOrderByStartTimeAsc(List.of(shift.getId())), target,
+                move.minutes()).stream().map(TimeSlot::getId).toList();
+        replaceWindow(item, move.held(), next, targetId);
+        if (!isClinicSide()) {
+            item.setStaffId(null);
+            item.setPreferredStaffId(shift.getStaffId());
+        } else if (item.getStaffId() != null) {
+            boolean needsConsent = item.getPreferredStaffId() != null && !item.getStaffId().equals(shift.getStaffId())
+                    && !item.getPreferredStaffId().equals(shift.getStaffId());
+            item.setStaffId(needsConsent ? null : shift.getStaffId());
+        }
+        historyRepository.save(new BookingStatusHistory(id, booking.getStatus(), booking.getStatus(), userId,
+                "Reschedule " + itemId + ": " + expectedSlotId + " -> " + targetId));
+        BookingResponse response = toResponses(List.of(booking)).getFirst();
+        itemEvent(booking, response, itemId, "booking.rescheduled", null);
+        return response;
+    }
+
+    private void replaceWindow(BookingItem item, Set<UUID> old, List<UUID> next, UUID targetId) {
+        next.stream().filter(slot -> !old.contains(slot)).sorted().forEach(slot -> {
+            if (timeSlotRepository.markBooked(slot) == 0) throw new ConflictException("Khung giờ vừa có người đặt.");
+        });
+        List<UUID> release = old.stream().filter(slot -> !next.contains(slot)).toList();
+        if (!release.isEmpty()) timeSlotRepository.release(release);
+        item.setTimeSlotId(targetId);
+        item.getReservedSlotIds().clear();
+        item.getReservedSlotIds().addAll(next);
+    }
+
+    private void itemEvent(Booking booking, BookingResponse response, UUID itemId, String type, String reason) {
+        ItemResponse changed = response.items().stream().filter(i -> i.id().equals(itemId)).findFirst().orElseThrow();
+        outboxService.append("Booking", booking.getId(), RabbitMQQueues.BOOKING_EXCHANGE, type,
+                new BookingEventData(booking.getId(), booking.getCustomerId(), booking.getPetId(), response.status(),
+                        response.totalAmount(), changed.startTime(), List.of(changed.serviceName()), reason));
+    }
+
+    private UUID reservedBranch(TimeSlot slot) {
+        return scheduleRepository.findById(slot.getScheduleId()).flatMap(s -> staffRepository.findById(s.getStaffId()))
+                .map(Staff::getBranchId).orElse(null);
+    }
+
+    private record Window(UUID slotId, UUID scheduleId, UUID staffId, String name, List<UUID> ids) {}
+    public record WorkerOption(UUID slotId, UUID staffId, String name) {}
+
+    private List<Window> windowsAt(TimeSlot first, UUID branch, UUID serviceId, int minutes, Set<UUID> held) {
+        var candidates = timeSlotRepository.candidates(first.getStartTime(), serviceId).stream()
+                .filter(c -> Objects.equals(branch, c.getBranchId())).toList();
+        if (candidates.isEmpty()) return List.of();
+        var ordered = timeSlotRepository.findByScheduleIdInOrderByStartTimeAsc(
+                candidates.stream().map(c -> c.getScheduleId()).distinct().toList()).stream()
+                .collect(Collectors.groupingBy(TimeSlot::getScheduleId));
+        List<Window> result = new ArrayList<>();
+        for (var c : candidates) {
+            var slots = ordered.get(c.getScheduleId());
+            var start = slots.stream().filter(t -> t.getId().equals(c.getSlotId())).findFirst().orElseThrow();
+            var window = SlotWindow.covering(slots, start, minutes);
+            if (!window.isEmpty() && window.stream().noneMatch(t -> t.isBooked() && !held.contains(t.getId()))) {
+                result.add(new Window(c.getSlotId(), c.getScheduleId(), c.getStaffId(), c.getStaffName(),
+                        window.stream().map(TimeSlot::getId).toList()));
+            }
+        }
+        return result;
+    }
+
+    private List<Window> assignmentWindows(Booking booking, BookingItem item) {
+        if (item.getStaffId() != null || !Set.of(BookingStatus.PENDING, BookingStatus.CONFIRMED).contains(item.getStatus())) {
+            throw new ConflictException("Dịch vụ này không còn chờ phân công.");
+        }
+        if (item.getTimeSlotId() == null) throw new BusinessException("Dịch vụ chưa có khung giờ để phân công.");
+        var start = timeSlotRepository.findById(item.getTimeSlotId()).orElseThrow();
+        if (start.getStartTime().atZone(ZONE).toLocalDate().isBefore(LocalDate.now(ZONE))) {
+            throw new BusinessException("Ngày hẹn đã qua.");
+        }
+        var held = reservedSlots(item);
+        int minutes = Math.toIntExact(timeSlotRepository.findAllById(held).stream()
+                .mapToLong(t -> Duration.between(t.getStartTime(), t.getEndTime()).toMinutes()).sum());
+        UUID branch = booking.getBranchId() == null ? reservedBranch(start) : booking.getBranchId();
+        return windowsAt(start, branch, item.getServiceId(), minutes, held);
+    }
+
+    @Transactional(readOnly = true)
+    public List<WorkerOption> assignmentOptions(UUID id, UUID itemId) {
+        Booking booking = bookingRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Booking", id));
+        BookingItem item = visitItem(itemRepository.findByBookingId(id), itemId);
+        return assignmentWindows(booking, item).stream().map(w -> new WorkerOption(w.slotId(), w.staffId(), w.name())).toList();
+    }
+
+    @Transactional
+    public BookingResponse assign(UUID userId, UUID id, UUID itemId, UUID expected, UUID target, boolean customerAgreed) {
+        Booking booking = lockVisit(id);
+        List<BookingItem> items = itemRepository.findByBookingId(id);
+        BookingItem item = visitItem(items, itemId);
+        if (!expected.equals(item.getTimeSlotId())) throw new ConflictException("Lịch hẹn đã thay đổi.");
+        var window = assignmentWindows(booking, item).stream().filter(w -> w.slotId().equals(target)).findFirst()
+                .orElseThrow(() -> new ConflictException("Nhân viên không còn trống vào giờ hẹn."));
+        if (item.getPreferredStaffId() != null && !window.staffId().equals(item.getPreferredStaffId()) && !customerAgreed) {
+            throw new BusinessException("Cần trao đổi và có sự đồng ý của khách trước khi đổi người phụ trách.");
+        }
+        if (!scheduleRepository.lockForBooking(window.scheduleId()).orElseThrow().isAvailable()) {
+            throw new ConflictException("Ca làm đã đóng.");
+        }
+        replaceWindow(item, Set.copyOf(reservedSlots(item)), window.ids(), target);
+        item.setStaffId(window.staffId());
+        historyRepository.save(new BookingStatusHistory(id, booking.getStatus(), booking.getStatus(), userId,
+                "Assigned " + itemId + " to " + window.staffId() + (customerAgreed ? " (customer agreed)" : "")));
+        if (booking.getStatus() == BookingStatus.PENDING && items.stream().allMatch(i -> i.getStaffId() != null)) {
+            transition(userId, id, BookingStatus.CONFIRMED, null);
+        }
+        var response = toResponses(List.of(booking)).getFirst();
+        itemEvent(booking, response, itemId, "booking.assigned", window.name());
+        return response;
+    }
+
     private boolean isClinicSide() {
         return SecurityUtils.hasAnyRole("ADMIN", "OWNER", "STAFF", "VETERINARIAN");
     }
 
-        private void recordEvent(BookingResponse r, String routingKey, String reason) {
+    private void recordEvent(BookingResponse r, String routingKey, String reason) {
         OffsetDateTime start = r.items().stream()
                 .map(ItemResponse::startTime)
                 .filter(Objects::nonNull)
@@ -477,6 +772,11 @@ public class BookingService {
                         .filter(Objects::nonNull).distinct().toList())
                 .stream().collect(Collectors.toMap(Promotion::getId, p -> p));
 
+        var personIds = all.stream().flatMap(i -> java.util.stream.Stream.of(i.getStaffId(), i.getPreferredStaffId()))
+                .filter(Objects::nonNull).distinct().toList();
+        Map<UUID, String> names = personIds.isEmpty() ? Map.of() : staffRepository.directoryById(personIds).stream()
+                .collect(Collectors.toMap(StaffRepository.DirectoryEntry::getId, StaffRepository.DirectoryEntry::getFullName));
+
         return bookings.stream().map(b -> {
             List<ItemResponse> itemResponses = itemsByBooking.getOrDefault(b.getId(), List.of())
                     .stream().map(i -> {
@@ -487,7 +787,9 @@ public class BookingService {
                         return new ItemResponse(
                                 i.getId(), i.getServiceId(),
                                 service == null ? null : service.getName(),
-                                i.getStaffId(), i.getTimeSlotId(),
+                                i.getStaffId(), i.getStaffId() == null ? null : names.get(i.getStaffId()),
+                                i.getPreferredStaffId(), i.getPreferredStaffId() == null ? null : names.get(i.getPreferredStaffId()),
+                                slot == null ? null : slot.getScheduleId(), i.getTimeSlotId(),
                                 slot == null ? null : slot.getStartTime().atZone(ZONE).toOffsetDateTime(),
                                 endTime == null ? null : endTime.atZone(ZONE).toOffsetDateTime(),
                                 i.getStatus().name(), i.getUnitPrice(), i.getNotes());

@@ -7,12 +7,13 @@ export const formatMoney = value => new Intl.NumberFormat('vi-VN', { style: 'cur
 export const localDate = (date = new Date()) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 export const formatTime = value => new Date(value).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
 
-export default function BookingWizard({ pets, services, initialPetId, suggestion, token, onClose, onBooked }) {
+export default function BookingWizard({ pets, services, initialPetId, suggestion, token, onClose, onBooked, walkInCustomerId, visitDate }) {
   const [step, setStep] = useState(0);
   const [petId, setPetId] = useState(initialPetId || pets[0]?.id || '');
   const [serviceId, setServiceId] = useState(services.some(item => item.id === suggestion?.serviceId) ? suggestion.serviceId : '');
-  const [date, setDate] = useState(/^\d{4}-\d{2}-\d{2}$/.test(suggestion?.date || '') && suggestion.date >= localDate() ? suggestion.date : localDate());
+  const [date, setDate] = useState(visitDate || (/^\d{4}-\d{2}-\d{2}$/.test(suggestion?.date || '') && suggestion.date >= localDate() ? suggestion.date : localDate()));
   const [slots, setSlots] = useState([]);
+  const [preference, setPreference] = useState('');
   const [slot, setSlot] = useState(null);
   const [loading, setLoading] = useState(false);
   const [retry, setRetry] = useState(0);
@@ -23,20 +24,24 @@ export default function BookingWizard({ pets, services, initialPetId, suggestion
   const [checking, setChecking] = useState(false);
   const [saving, setSaving] = useState(false);
   const service = services.find(item => item.id === serviceId);
+  const staffOptions = [...new Map(slots.map(s => [s.staffId, s.staffName])).entries()];
+  const matching = slots.filter(s => !preference || s.staffId === preference);
+  const times = walkInCustomerId ? slots : [...new Map(matching.map(s => [`${s.branchId || ''}/${s.startTime}`, s])).values()]
+    .sort((a, b) => Date.parse(a.startTime) - Date.parse(b.startTime));
   const pet = pets.find(item => item.id === petId);
   const discount = promotion?.checkedCode === code.trim() && promotion.checkedServiceId === serviceId && promotion.valid ? promotion : null;
 
   useEffect(() => {
     setSlot(null);
     setSlots([]);
-    setError('');
+    setPreference('');
     if (!serviceId || !date) return;
     let alive = true;
     setLoading(true);
     clinicApi.availableSlots({ date, serviceId }, token).then(data => {
       if (alive) setSlots((data?.staff || []).flatMap(group => (group.slots || [])
         .filter(item => item.available && new Date(item.startTime) > new Date())
-        .map(item => ({ ...item, staffId: group.staffId }))));
+        .map(item => ({ ...item, staffId: group.staffId, staffName: group.staffName, branchId: group.branchId, branchName: group.branchName }))));
     }).catch(err => { if (alive) setError(err.message); })
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
@@ -62,16 +67,22 @@ export default function BookingWizard({ pets, services, initialPetId, suggestion
     setSaving(true);
     setError('');
     try {
-      const booking = await clinicApi.createBooking({
-        petId, notes: notes.trim() || null, promotionCode: code.trim() || null,
-        items: [{ serviceId, timeSlotId: slot.slotId, staffId: slot.staffId }],
-      }, token);
+      const payload = {
+        petId, branchId: slot.branchId || null, notes: notes.trim() || null, promotionCode: code.trim() || null,
+        items: [{ serviceId, timeSlotId: slot.slotId, ...(walkInCustomerId
+          ? { staffId: slot.staffId } : { preferredStaffId: preference || null }) }],
+      };
+      const booking = walkInCustomerId ? await clinicApi.walkIn(walkInCustomerId, payload, token)
+        : await clinicApi.createBooking(payload, token);
       onBooked(booking);
-    } catch (err) { setError(err.message || 'Chưa thể đặt lịch. Vui lòng chọn lại giờ trống và thử lại.'); }
+    } catch (err) {
+      if (err.status === 409) { setStep(1); setSlot(null); setRetry(n => n + 1); }
+      setError(err.status === 409 ? 'Khung giờ vừa được đặt. Vui lòng chọn lại người và giờ còn trống.' : err.message || 'Chưa thể đặt lịch. Vui lòng thử lại.');
+    }
     finally { setSaving(false); }
   }
 
-  return <Modal isOpen onClose={saving ? undefined : onClose} title="Đặt một buổi hẹn cho bé" size="lg" className="pc-light pc-dialog">
+  return <Modal isOpen onClose={saving ? undefined : onClose} title={walkInCustomerId ? "Tiếp nhận khách tại quầy" : "Đặt một buổi hẹn cho bé"} size="lg" className="pc-light pc-dialog">
     <div className="pc-steps" aria-label={`Bước ${step + 1} trên 3`}>
       {['Bé & dịch vụ', 'Ngày & giờ', 'Xác nhận'].map((label, index) => <div className="pc-step" key={label} aria-current={step === index ? 'step' : undefined}><span>{index < step ? <Check size={14} /> : index + 1}</span>{label}</div>)}
     </div>
@@ -83,13 +94,20 @@ export default function BookingWizard({ pets, services, initialPetId, suggestion
       </>}
       {step === 1 && <>
         <p className="pc-muted">{pet?.name} · {service?.name} · {service?.durationMinutes} phút</p>
-        <label className="pc-field">Ngày bạn muốn đến<input type="date" name="bookingDate" min={localDate()} required value={date} onChange={event => setDate(event.target.value)} /></label>
-        <div><p className="pc-field mb-3">Chọn giờ phù hợp</p>{loading ? <p className="pc-muted" role="status">Đang tìm khung giờ trống...</p> : slots.length === 0 ? <div className="pc-empty"><CalendarDays /><h3>Ngày này chưa có giờ trống</h3><p>Bạn thử chọn một ngày khác hoặc gọi phòng khám nhé.</p><button type="button" className="pc-text-button" onClick={() => setRetry(value => value + 1)}><RefreshCw size={15} />Tải lại khung giờ</button></div> : <div className="pc-slot-grid">{slots.map(item => <button type="button" key={item.slotId} className="pc-choice" aria-pressed={slot?.slotId === item.slotId} onClick={() => setSlot(item)}>{formatTime(item.startTime)} – {formatTime(item.endTime)}</button>)}</div>}</div>
+        <label className="pc-field">Ngày bạn muốn đến<input type="date" name="bookingDate" disabled={Boolean(walkInCustomerId)} min={localDate()} required value={date} onChange={event => { setError(''); setDate(event.target.value); }} /></label>
+        {!walkInCustomerId && <label className="pc-field">Bác sĩ hoặc nhân viên mong muốn
+          <select name="preferredStaff" value={preference} onChange={e => { setPreference(e.target.value); setSlot(null); }}>
+            <option value="">Để phòng khám sắp xếp</option>
+            {staffOptions.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+          </select></label>}
+        <div><p className="pc-field mb-3">Chọn giờ phù hợp</p>{loading ? <p className="pc-muted" role="status">Đang tìm khung giờ trống...</p> : times.length === 0 ? <div className="pc-empty"><CalendarDays /><h3>Ngày này chưa có giờ trống</h3><p>Bạn thử chọn một ngày khác hoặc gọi phòng khám nhé.</p><button type="button" className="pc-text-button" onClick={() => setRetry(value => value + 1)}><RefreshCw size={15} />Tải lại khung giờ</button></div> : <div className="pc-slot-grid">{times.map(item => <button type="button" key={item.slotId} className="pc-choice" aria-pressed={slot?.slotId === item.slotId} onClick={() => setSlot(item)}>{formatTime(item.startTime)} – {formatTime(item.endTime)}{item.branchName && <small>{item.branchName}</small>}{walkInCustomerId && item.staffName && <small>{item.staffName}</small>}</button>)}</div>}</div>
       </>}
       {step === 2 && <>
         <dl className="pc-summary">
           <div><dt>Thú cưng</dt><dd>{pet?.name}</dd></div><div><dt>Dịch vụ</dt><dd>{service?.name}</dd></div>
           <div><dt>Buổi hẹn</dt><dd>{slot && new Date(slot.startTime).toLocaleDateString('vi-VN')} · {slot && formatTime(slot.startTime)}</dd></div>
+          {slot?.branchName && <div><dt>Chi nhánh</dt><dd>{slot.branchName}</dd></div>}
+          {!walkInCustomerId && <div><dt>Người mong muốn</dt><dd>{preference ? slot?.staffName : 'Để phòng khám sắp xếp'}</dd></div>}
           <div><dt>Thời lượng</dt><dd>{service?.durationMinutes} phút</dd></div><div><dt>Giá dịch vụ</dt><dd>{formatMoney(service?.basePrice)}</dd></div>
           {discount && <div><dt>Ưu đãi</dt><dd>−{formatMoney(discount.discountAmount)}</dd></div>}
           <div className="pc-summary-total"><dt>Tổng tạm tính</dt><dd>{formatMoney(discount ? discount.finalAmount : service?.basePrice)}</dd></div>
@@ -98,7 +116,7 @@ export default function BookingWizard({ pets, services, initialPetId, suggestion
         {promotion?.checkedCode === code.trim() && promotion.checkedServiceId === serviceId && <p className="pc-muted" role="status">{promotion.valid ? 'Mã ưu đãi đã được áp dụng.' : promotion.message || promotion.reason || 'Mã ưu đãi không khả dụng.'}</p>}
         {code.trim() && !checking && !discount && <p className="pc-muted">Hãy áp dụng mã ưu đãi trước khi xác nhận, hoặc xóa mã để tiếp tục.</p>}
         <label className="pc-field">Điều gì bạn muốn phòng khám lưu ý?<textarea name="bookingNotes" maxLength={2000} value={notes} onChange={event => setNotes(event.target.value)} placeholder="Thói quen, dị ứng hoặc yêu cầu chăm sóc của bé..." /></label>
-        <p className="pc-muted">Lịch hẹn sẽ được gửi đến phòng khám để xác nhận. Bạn có thể theo dõi tại mục Lịch hẹn.</p>
+        <p className="pc-muted">{walkInCustomerId ? 'Khách sẽ được ghi nhận đã đến và xuất hiện trong lịch của nhân viên phụ trách.' : 'Giờ hẹn được giữ ngay sau khi đặt thành công. Phòng khám sẽ thông báo tên người phụ trách sau khi phân công.'}</p>
       </>}
       <div className="pc-form-actions">
         <button type="button" className="pc-button pc-button--line" disabled={saving} onClick={step ? () => setStep(step - 1) : onClose}>{step ? <><ArrowLeft />Quay lại</> : 'Để sau'}</button>

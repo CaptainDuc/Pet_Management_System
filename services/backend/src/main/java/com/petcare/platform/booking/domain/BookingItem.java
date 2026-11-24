@@ -34,6 +34,9 @@ public class BookingItem extends BaseEntity {
     @Column(name = "staff_id")
     private UUID staffId;
 
+    @Column(name = "preferred_staff_id")
+    private UUID preferredStaffId;
+
     @Column(name = "time_slot_id")
     private UUID timeSlotId;
 
@@ -49,6 +52,11 @@ public class BookingItem extends BaseEntity {
     // Giá chụp lại tại thời điểm đặt
     @Column(name = "unit_price", nullable = false)
     private BigDecimal unitPrice;
+
+    private java.time.Instant checkedInAt;
+    private UUID checkedInBy;
+    private java.time.Instant startedAt;
+    private java.time.Instant completedAt;
 
     private String notes;
 }

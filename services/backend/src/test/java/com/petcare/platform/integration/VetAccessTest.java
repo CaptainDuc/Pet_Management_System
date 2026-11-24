@@ -71,9 +71,7 @@ class VetAccessTest extends IntegrationTestBase {
         assertThat(readRecords(vet.token(), s.petId()).getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
 
         // 2. Lịch đã xác nhận: được xem, nhưng chưa được ghi
-        ResponseEntity<String> confirm = send(HttpMethod.POST, "/api/v1/bookings/" + bookingId + "/confirm",
-                s.admin().token(), null);
-        assertThat(confirm.getStatusCode()).as(confirm.getBody()).isEqualTo(HttpStatus.OK);
+        assignReserved(bookingId, s.admin());
         assertThat(readRecords(vet.token(), s.petId()).getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(writeRecord(vet.token(), s.petId()).getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
 

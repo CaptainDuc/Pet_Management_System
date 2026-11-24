@@ -67,6 +67,100 @@ class BookingDurationTest extends IntegrationTestBase {
                 bookingBody(s.petId(), s.serviceId(), slot));
     }
 
+    @Test
+    void paidBookingMovesAcrossOverlappingWindowsAndSurvivesConflictOrClosure() {
+        Scenario s = newScenario("STAFF");
+        idOf(book(s, s.slotIds().get(3)));
+        jdbc.update("update services set duration_minutes=60 where id=?", s.serviceId());
+        var created = book(s, s.slotIds().getFirst());
+        String booking = "/api/v1/bookings/" + idOf(created);
+        String item = booking + "/items/" + json(created).at("/data/items/0/id").asText();
+        assertThat(send(HttpMethod.POST, booking + "/mark-paid", s.staffUser().token(), null)
+                .getStatusCode()).isEqualTo(HttpStatus.OK);
+        UUID shift = jdbc.queryForObject("select schedule_id from time_slots where id=?", UUID.class, s.slotIds().getFirst());
+        var move = Map.of("expectedSlotId", s.slotIds().getFirst(), "timeSlotId", s.slotIds().get(1));
+        String toggle = "/api/v1/schedules/" + shift + "/availability";
+        assertThat(send(HttpMethod.PATCH, toggle, s.customer().token(), Map.of("available", false))
+                .getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(send(HttpMethod.PATCH, toggle, s.admin().token(), Map.of("available", false))
+                .getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(json(send(HttpMethod.GET, "/api/v1/bookings/by-shift/" + shift, s.admin().token(), null))
+                .path("data")).hasSize(2);
+        assertThat(send(HttpMethod.POST, item + "/reschedule", s.customer().token(), move)
+                .getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(heldSlots(s)).isEqualTo(3);
+        assertThat(send(HttpMethod.PATCH, toggle, s.admin().token(), Map.of("available", true))
+                .getStatusCode()).isEqualTo(HttpStatus.OK);
+        var stranger = newUser("CUSTOMER");
+        assertThat(send(HttpMethod.POST, item + "/reschedule", stranger.token(), move)
+                .getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        jdbc.update("update services set duration_minutes=30 where id=?", s.serviceId());
+        assertThat(json(send(HttpMethod.GET, item + "/slots?date=" + s.date(), s.customer().token(), null))
+                .at("/data/staff/0/slots")).hasSize(1);
+        var clash = Map.of("expectedSlotId", s.slotIds().getFirst(), "timeSlotId", s.slotIds().get(2));
+        assertThat(send(HttpMethod.POST, item + "/reschedule", s.customer().token(), clash)
+                .getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        var moved = send(HttpMethod.POST, item + "/reschedule", s.customer().token(), move);
+        assertThat(moved.getStatusCode()).as(moved.getBody()).isEqualTo(HttpStatus.OK);
+        assertThat(json(moved).at("/data/items/0/timeSlotId").asText()).isEqualTo(s.slotIds().get(1).toString());
+        assertThat(json(moved).at("/data/paymentStatus").asText()).isEqualTo("PAID");
+        assertThat(json(moved).at("/data/totalAmount")).isEqualTo(json(created).at("/data/totalAmount"));
+        assertThat(send(HttpMethod.POST, item + "/reschedule", s.staffUser().token(), move)
+                .getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(heldSlots(s)).isEqualTo(3);
+        assertThat(availableSlotIds(s)).containsExactly(s.slotIds().getFirst());
+    }
+
+    @Test
+    void concurrentMovesToOneSlotLeaveTheOtherBookingIntact() throws Exception {
+        Scenario s = newScenario("STAFF");
+        var first = book(s, s.slotIds().getFirst());
+        var second = book(s, s.slotIds().get(1));
+        CountDownLatch start = new CountDownLatch(1);
+        try (var pool = Executors.newFixedThreadPool(2)) {
+            List<Future<HttpStatus>> results = new ArrayList<>();
+            for (var response : List.of(first, second)) {
+                JsonNode data = json(response).path("data");
+                JsonNode item = data.path("items").get(0);
+                results.add(pool.submit(() -> {
+                    start.await();
+                    var result = send(HttpMethod.POST, "/api/v1/bookings/" + data.path("id").asText()
+                            + "/items/" + item.path("id").asText() + "/reschedule", s.staffUser().token(),
+                            Map.of("expectedSlotId", item.path("timeSlotId").asText(), "timeSlotId", s.slotIds().get(2)));
+                    return HttpStatus.valueOf(result.getStatusCode().value());
+                }));
+            }
+            start.countDown();
+            assertThat(List.of(results.getFirst().get(), results.getLast().get()))
+                    .containsExactlyInAnyOrder(HttpStatus.OK, HttpStatus.CONFLICT);
+        }
+        assertThat(heldSlots(s)).isEqualTo(2);
+        assertThat(availableSlotIds(s)).hasSize(2).doesNotContain(s.slotIds().get(2));
+    }
+
+    @Test
+    void reassignmentRequiresSkillAndClinicCanMoveACloseAppointment() {
+        Scenario s = newScenario("STAFF");
+        Scenario alternate = newScenario("STAFF");
+        var created = book(s, s.slotIds().getFirst());
+        assignReserved(idOf(created), s.admin());
+        String path = "/api/v1/bookings/" + idOf(created) + "/items/"
+                + json(created).at("/data/items/0/id").asText() + "/reschedule";
+        var move = Map.of("expectedSlotId", s.slotIds().getFirst(), "timeSlotId", alternate.slotIds().getFirst());
+        assertThat(send(HttpMethod.POST, path, s.staffUser().token(), move).getStatusCode())
+                .isEqualTo(HttpStatus.CONFLICT);
+        assertThat(send(HttpMethod.POST, "/api/v1/staff/" + alternate.staffId() + "/skills", s.admin().token(),
+                Map.of("serviceIds", List.of(s.serviceId()))).getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        jdbc.update("update time_slots set start_time=now()+interval '30 minutes', "
+                + "end_time=now()+interval '60 minutes' where id=?", s.slotIds().getFirst());
+        assertThat(send(HttpMethod.POST, path, s.customer().token(), move).getStatusCode())
+                .isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+        var moved = send(HttpMethod.POST, path, s.staffUser().token(), move);
+        assertThat(moved.getStatusCode()).as(moved.getBody()).isEqualTo(HttpStatus.OK);
+        assertThat(json(moved).at("/data/items/0/staffId").asText()).isEqualTo(alternate.staffId().toString());
+        assertThat(heldSlots(s)).isZero();
+    }
+
     private int heldSlots(Scenario s) {
         return jdbc.queryForObject("select count(*) from time_slots t join schedules s on s.id=t.schedule_id "
                 + "where s.staff_id=? and s.work_date=? and t.is_booked", Integer.class, s.staffId(), s.date());
