@@ -23,7 +23,7 @@ class DoctorRosterTest extends IntegrationTestBase {
 
     @Test
     void newDoctorReceivesAllActiveServicesFromTheirRole() throws Exception {
-        Scenario s = newScenario("STAFF");
+        Scenario s = newScenario("VETERINARIAN");
         TestUser owner = newUser("OWNER"), vet = newUser("VETERINARIAN");
         jdbc.update("update users set role='CUSTOMER' where id=?", vet.id());
         assertThat(doctor(owner, vet.id()).path("staffId").asText("")).isEmpty();

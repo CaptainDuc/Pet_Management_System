@@ -46,4 +46,10 @@ public interface TimeSlotRepository extends JpaRepository<TimeSlot, UUID> {
     @Modifying
     @Query("update TimeSlot t set t.booked = false where t.id in :ids")
     int release(@Param("ids") Collection<UUID> ids);
+
+    // Tìm các slot đã được đặt trong khoảng thời gian
+    @Query("select t.id from TimeSlot t where t.scheduleId in :scheduleIds and t.booked = true and t.startTime >= :start and t.endTime <= :end")
+    List<UUID> findBookedSlotsInRange(@Param("scheduleIds") Collection<UUID> scheduleIds,
+                                       @Param("start") java.time.Instant start,
+                                       @Param("end") java.time.Instant end);
 }

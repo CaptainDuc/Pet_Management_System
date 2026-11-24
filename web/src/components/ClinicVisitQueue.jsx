@@ -3,6 +3,7 @@ import { clinicApi } from '../api/clinic';
 import { Modal } from '../design-system/components';
 import AssignVisitDialog from './AssignVisitDialog';
 import BookingWizard from './BookingWizard';
+import MedicalExamDialog from './MedicalExamDialog';
 
 const zone = 'Asia/Ho_Chi_Minh';
 const clinicDate = () => new Intl.DateTimeFormat('sv-SE', { timeZone: zone }).format(new Date());
@@ -42,9 +43,10 @@ function WalkIn({ token, onClose, onSaved }) {
 export default function ClinicVisitQueue({ token, reception = false }) {
   const [date, setDate] = useState(clinicDate);
   const [view, setView] = useState(reception ? 'all' : 'mine');
-  const mine = view === 'mine';
-  const pendingAssignments = view === 'pending';
+  const mine = !reception;
+  const pendingAssignments = reception && view === 'pending';
   const [assignment, setAssignment] = useState(null);
+  const [examVisit, setExamVisit] = useState(null);
   const [visits, setVisits] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -94,7 +96,7 @@ export default function ClinicVisitQueue({ token, reception = false }) {
         onChange={e => { if (e.target.value) { setDate(e.target.value); setFeedback(''); setActionError(''); } }} /></label>}
       {reception && <label className="pc-field">Danh sách<select value={view} disabled={busy}
         onChange={e => { setView(e.target.value); setFeedback(''); setActionError(''); }}>
-        <option value="all">Tất cả lượt tiếp đón</option><option value="pending">Chờ phân công · Từ hôm nay</option><option value="mine">Dịch vụ tôi phụ trách</option>
+        <option value="all">Tất cả lượt tiếp đón</option><option value="pending">Chờ phân công · Từ hôm nay</option>
       </select></label>}
       <button className="pc-text-button" disabled={busy || loading} onClick={refresh}>Làm mới</button>
     </div>
@@ -111,15 +113,53 @@ export default function ClinicVisitQueue({ token, reception = false }) {
         <div><strong>{pendingAssignments && new Date(v.startTime).toLocaleDateString('vi-VN', { timeZone: zone }) + ' · '}{time.format(new Date(v.startTime))} · {v.petName}</strong><p>{v.serviceName} · {v.customerName}</p>
           <p className="pc-muted">{v.staffName || ('Mong muốn: ' + (v.preferredStaffName || 'Để phòng khám sắp xếp'))} · BK-{v.bookingId.slice(0, 8).toUpperCase()}</p></div>
         <div className="flex flex-wrap items-center gap-2"><span className="pc-status">{status}</span>
-          {!mine && !v.staffName && !working && !done && <button className="pc-button pc-button--small"
-            disabled={busy} onClick={() => setAssignment(v)}>Phân công</button>}
-          {!mine && v.staffName && !v.checkedInAt && !working && !done && date === clinicDate() &&
-            <button className="pc-button pc-button--small" disabled={busy} onClick={() => act(v, 'check-in')}>Xác nhận khách đã đến</button>}
-          {mine && v.checkedInAt && !working && !done &&
-            <button className="pc-button pc-button--small" disabled={busy || !due} onClick={() => act(v, 'start')}>
-              {due ? 'Bắt đầu dịch vụ' : 'Chưa đến giờ hẹn'}</button>}
-          {mine && working && <button className="pc-button pc-button--small" disabled={busy}
-            onClick={() => act(v, 'complete')}>Hoàn tất dịch vụ</button>}
+          {/* Tác vụ của Lễ tân tiếp đón */}
+          {reception && !v.staffName && !working && !done && (
+            <button className="pc-button pc-button--small" disabled={busy} onClick={() => setAssignment(v)}>
+              Phân công
+            </button>
+          )}
+          {reception && v.staffName && !v.checkedInAt && !working && !done && date === clinicDate() && (
+            <button className="pc-button pc-button--small" disabled={busy} onClick={() => act(v, 'check-in')}>
+              Xác nhận khách đã đến
+            </button>
+          )}
+
+          {/* Tác vụ lâm sàng dành riêng cho Bác sĩ thú y */}
+          {!reception && v.checkedInAt && !working && !done && (
+            <button
+              className="pc-button pc-button--small"
+              disabled={busy || !due}
+              onClick={() => {
+                act(v, 'start').then(() => setExamVisit({ ...v, status: 'IN_PROGRESS' }));
+              }}
+            >
+              {due ? 'Bắt đầu khám' : 'Chưa đến giờ hẹn'}
+            </button>
+          )}
+          {!reception && working && (
+            <button
+              className="pc-button pc-button--small !bg-sky-600 hover:!bg-sky-700 !text-white flex items-center gap-1"
+              disabled={busy}
+              onClick={() => setExamVisit(v)}
+            >
+              🩺 Vào khám & Kê đơn
+            </button>
+          )}
+          {!reception && done && (
+            <button
+              className="pc-button pc-button--small !bg-slate-100 hover:!bg-slate-200 !text-slate-700 flex items-center gap-1"
+              disabled={busy}
+              onClick={() => setExamVisit(v)}
+            >
+              🩺 Xem bệnh án
+            </button>
+          )}
+          {!reception && working && (
+            <button className="pc-button pc-button--small" disabled={busy} onClick={() => act(v, 'complete')}>
+              Hoàn tất dịch vụ
+            </button>
+          )}
         </div>
       </article>;
     })}
@@ -128,5 +168,7 @@ export default function ClinicVisitQueue({ token, reception = false }) {
     {walkIn && <WalkIn token={token} onClose={() => setWalkIn(false)} onSaved={() => {
       setWalkIn(false); setDate(clinicDate()); setView('all'); setFeedback('Đã tiếp đón khách tại quầy.'); setActionError(''); refresh();
     }} />}
+    {!reception && examVisit && <MedicalExamDialog visit={examVisit} token={token} onClose={() => setExamVisit(null)}
+      onSaved={message => { setExamVisit(null); setActionError(''); setFeedback(message); refresh(); }} />}
   </section>;
 }

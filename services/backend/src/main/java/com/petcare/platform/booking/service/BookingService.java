@@ -701,9 +701,11 @@ public class BookingService {
         List<BookingItem> items = itemRepository.findByBookingId(id);
         BookingItem item = visitItem(items, itemId);
         if (!expected.equals(item.getTimeSlotId())) throw new ConflictException("Lịch hẹn đã thay đổi.");
-        var window = assignmentWindows(booking, item).stream().filter(w -> w.slotId().equals(target)).findFirst()
+        var available = assignmentWindows(booking, item);
+        var window = available.stream().filter(w -> w.slotId().equals(target)).findFirst()
                 .orElseThrow(() -> new ConflictException("Nhân viên không còn trống vào giờ hẹn."));
-        if (item.getPreferredStaffId() != null && !window.staffId().equals(item.getPreferredStaffId()) && !customerAgreed) {
+        if (!window.staffId().equals(item.getPreferredStaffId()) && !customerAgreed
+                && available.stream().anyMatch(w -> w.staffId().equals(item.getPreferredStaffId()))) {
             throw new BusinessException("Cần trao đổi và có sự đồng ý của khách trước khi đổi người phụ trách.");
         }
         if (!scheduleRepository.lockForBooking(window.scheduleId()).orElseThrow().isAvailable()) {

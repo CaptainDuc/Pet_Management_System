@@ -66,6 +66,12 @@ async function listAll(endpoint, token) {
 }
 
 export const clinicApi = {
+  myAttendance(token) {
+    return request('/schedules/attendance/me', { token });
+  },
+  clockShift(token, body) {
+    return request('/schedules/attendance/me', { method: 'PUT', token, body });
+  },
   doctorRoster(token) {
     return request('/staff/doctors', { token });
   },
@@ -122,6 +128,10 @@ export const clinicApi = {
     return request(`/pets${query({ page: 0, size: 50 })}`, { token });
   },
 
+  getPet(id, token) {
+    return request(`/pets/${id}`, { token });
+  },
+
   createPet(payload, token) {
     return request("/pets", { method: "POST", token, body: payload });
   },
@@ -146,6 +156,10 @@ export const clinicApi = {
 
   availableSlots(params, token) {
     return request(`/schedules/slots/available${query(params)}`, { token });
+  },
+
+  availableDoctors(params, token) {
+    return request(`/schedules/doctors/available${query(params)}`, { token });
   },
 
   moveOptions(bookingId, itemId, date, token) {
@@ -254,5 +268,39 @@ export const promotionApi = {
       token,
       body: { code, bookingTotal },
     });
+  },
+};
+
+export const medicalApi = {
+  listRecordsByPet(petId, token) {
+    return request(`/medical/records/pet/${petId}`, { token });
+  },
+
+  getRecord(id, token) {
+    return request(`/medical/records/${id}`, { token });
+  },
+
+  createRecord(body, token) {
+    return request('/medical/records', { method: 'POST', body, token });
+  },
+
+  updateRecord(id, body, token) {
+    return request(`/medical/records/${id}`, { method: 'PUT', body, token });
+  },
+
+  listVaccinationsByPet(petId, token) {
+    return request(`/medical/vaccinations/pet/${petId}`, { token });
+  },
+
+  listDueVaccinations(days = 30, token) {
+    return request(`/medical/vaccinations/due${query({ days })}`, { token });
+  },
+
+  createVaccination(body, token) {
+    return request('/medical/vaccinations', { method: 'POST', body, token });
+  },
+
+  updateVaccination(id, body, token) {
+    return request(`/medical/vaccinations/${id}`, { method: 'PUT', body, token });
   },
 };

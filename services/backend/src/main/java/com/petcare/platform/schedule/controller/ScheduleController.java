@@ -15,8 +15,11 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import com.petcare.platform.staff.repository.StaffRepository;
+import com.petcare.platform.common.security.UserPrincipal;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import jakarta.validation.constraints.NotNull;
 import java.time.LocalDate;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -30,6 +33,29 @@ public class ScheduleController {
     private final StaffRepository staffRepository;
 
     public record Availability(@NotNull Boolean available) {}
+
+    public record ClockRequest(@NotNull UUID shiftId, @NotNull Boolean working, boolean confirmEarly) {}
+
+    public record AvailableDoctorsRequest(
+            @NotNull @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            @NotNull Instant slotStart,
+            @NotNull Instant slotEnd,
+            UUID serviceId,
+            UUID branchId
+    ) {}
+
+    @GetMapping("/attendance/me")
+    @PreAuthorize("hasRole('VETERINARIAN')")
+    public ApiResponse<ScheduleService.Attendance> attendance(@AuthenticationPrincipal UserPrincipal user) {
+        return ApiResponse.ok(scheduleService.today(user.getId()));
+    }
+
+    @PutMapping("/attendance/me")
+    @PreAuthorize("hasRole('VETERINARIAN')")
+    public ApiResponse<ScheduleService.Attendance> clock(@AuthenticationPrincipal UserPrincipal user,
+            @Valid @RequestBody ClockRequest request) {
+        return ApiResponse.ok(scheduleService.clock(user.getId(), request.shiftId(), request.working(), request.confirmEarly()));
+    }
 
     @GetMapping("/staff")
     @PreAuthorize("hasAuthority('schedule:write')")
@@ -71,5 +97,20 @@ public class ScheduleController {
             @RequestParam(defaultValue = "false") boolean includeBooked) {
         return ResponseEntity.ok(ApiResponse.ok(
                 scheduleService.availableSlots(date, staffId, branchId, serviceId, includeBooked)));
+    }
+
+    // Lấy bác sĩ khả dụng cho một khung giờ cụ thể (sau khi khách chọn giờ)
+    @GetMapping("/doctors/available")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<List<ScheduleService.AvailableDoctor>>> availableDoctors(
+            @Valid AvailableDoctorsRequest request) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                scheduleService.availableDoctorsForSlot(
+                        request.date(),
+                        request.slotStart(),
+                        request.slotEnd(),
+                        request.serviceId(),
+                        request.branchId()
+                )));
     }
 }

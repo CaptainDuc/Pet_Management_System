@@ -32,7 +32,7 @@ public interface StaffRepository extends JpaRepository<Staff, UUID> {
     String IS_DOCTOR = "(u.role = 'VETERINARIAN' or exists (select 1 from User doctor join doctor.roles role "
             + "where doctor.id = u.id and role.name = 'VETERINARIAN'))";
     String SERVICE_SKILL_JOIN = " left join StaffSkill skill on skill.staffId = st.id and skill.serviceId = c.id ";
-    String PROVIDES_SERVICE = "(" + IS_DOCTOR + " or skill.id is not null)";
+    String PROVIDES_SERVICE = IS_DOCTOR;
 
     interface StaffServiceEntry {
         UUID getStaffId();

@@ -22,12 +22,14 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -39,10 +41,122 @@ public class ScheduleService {
     private static final ZoneId ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
     private static final int MAX_SLOTS_PER_SCHEDULE = 200;
 
+    // Ca làm việc chuẩn hóa cho tất cả bác sĩ
+    private static final List<LocalTime[]> STANDARD_SHIFTS = List.of(
+            new LocalTime[]{LocalTime.of(8, 0), LocalTime.of(12, 0)},   // Sáng
+            new LocalTime[]{LocalTime.of(13, 0), LocalTime.of(17, 0)},  // Chiều
+            new LocalTime[]{LocalTime.of(17, 0), LocalTime.of(21, 0)}   // Tối
+    );
+
     private final ScheduleRepository scheduleRepository;
     private final TimeSlotRepository timeSlotRepository;
     private final StaffRepository staffRepository;
     private final CareServiceRepository careServiceRepository;
+
+    public record Attendance(UUID shiftId, Instant start, Instant end, Instant clockIn, Instant clockOut, boolean open) {}
+
+    private Attendance attendance(Schedule shift) {
+        var day = shift.getWorkDate();
+        return new Attendance(shift.getId(), day.atTime(shift.getStartTime()).atZone(ZONE).toInstant(),
+                day.atTime(shift.getEndTime()).atZone(ZONE).toInstant(), shift.getClockedInAt(),
+                shift.getClockedOutAt(), shift.isAvailable());
+    }
+
+    public Attendance today(UUID user) {
+        return scheduleRepository.personalShift(user, LocalDate.now(ZONE)).map(this::attendance).orElse(null);
+    }
+
+    @Transactional
+    public Attendance clock(UUID user, UUID shiftId, boolean working, boolean confirmEarly) {
+        var shift = scheduleRepository.lockForUpdate(shiftId).orElseThrow(() -> new ResourceNotFoundException("Schedule", shiftId));
+        if (scheduleRepository.personalShift(user, LocalDate.now(ZONE)).filter(s -> s.getId().equals(shiftId)).isEmpty()) {
+            throw new BusinessException("Ca làm không thuộc lịch hôm nay của bạn.");
+        }
+        var state = attendance(shift);
+        var now = Instant.now();
+        if (working) {
+            if (!state.open() || now.isBefore(state.start()) || !now.isBefore(state.end()) || state.clockOut() != null) {
+                throw new BusinessException("Ca làm chưa bắt đầu hoặc đã kết thúc.");
+            }
+            if (state.clockIn() == null) shift.setClockedInAt(now);
+        } else if (state.clockIn() != null && state.clockOut() == null) {
+            if (now.isBefore(state.end())) {
+                if (!confirmEarly) throw new BusinessException("Vui lòng xác nhận tan ca sớm.");
+                shift.setAvailable(false);
+                shift.setClockedOutAt(now);
+            } else shift.setClockedAtEnd(state.end());
+        }
+        return attendance(shift);
+    }
+
+    /**
+     * Lấy các ca làm việc chuẩn hóa cho một ngày
+     */
+    public List<LocalTime[]> getStandardShifts() {
+        return STANDARD_SHIFTS;
+    }
+
+    /**
+     * Tự động tạo lịch làm việc chuẩn cho tất cả bác sĩ hoạt động trong ngày
+     */
+    @Transactional
+    public void ensureStandardShiftsForDate(LocalDate date) {
+        var doctors = staffRepository.doctors().stream()
+                .filter(d -> d.getStaffActive() && "ACTIVE".equals(d.getAccountStatus()))
+                .toList();
+
+        for (var doctor : doctors) {
+            for (var shiftTimes : STANDARD_SHIFTS) {
+                var startTime = shiftTimes[0];
+                var endTime = shiftTimes[1];
+
+                if (!scheduleRepository.existsByStaffIdAndWorkDateAndStartTimeAndEndTime(doctor.getStaffId(), date, startTime, endTime)) {
+                    var schedule = new Schedule();
+                    schedule.setStaffId(doctor.getStaffId());
+                    schedule.setWorkDate(date);
+                    schedule.setStartTime(startTime);
+                    schedule.setEndTime(endTime);
+                    schedule.setAvailable(true);
+                    scheduleRepository.save(schedule);
+
+                    // Tạo time slots cho ca này (mặc định 30 phút/slot)
+                    createTimeSlotsForSchedule(schedule, 30);
+                }
+            }
+        }
+    }
+
+    private void createTimeSlotsForSchedule(Schedule schedule, int slotDurationMinutes) {
+        List<TimeSlot> slots = new ArrayList<>();
+        LocalDateTime cursor = LocalDateTime.of(schedule.getWorkDate(), schedule.getStartTime());
+        LocalDateTime end = LocalDateTime.of(schedule.getWorkDate(), schedule.getEndTime());
+        while (!cursor.plusMinutes(slotDurationMinutes).isAfter(end)) {
+            TimeSlot slot = new TimeSlot();
+            slot.setScheduleId(schedule.getId());
+            slot.setStartTime(cursor.atZone(ZONE).toInstant());
+            slot.setEndTime(cursor.plusMinutes(slotDurationMinutes).atZone(ZONE).toInstant());
+            slots.add(slot);
+            cursor = cursor.plusMinutes(slotDurationMinutes);
+        }
+        timeSlotRepository.saveAll(slots);
+    }
+
+    @org.springframework.scheduling.annotation.Scheduled(fixedDelay = 15000)
+    @Transactional
+    public void closeEndedShifts() {
+        scheduleRepository.finishDueAttendance();
+    }
+
+    /**
+     * Tự động tạo ca làm việc chuẩn cho 7 ngày tới (chạy hàng ngày lúc 00:05)
+     */
+    @org.springframework.scheduling.annotation.Scheduled(cron = "0 5 0 * * *", zone = "Asia/Ho_Chi_Minh")
+    @Transactional
+    public void ensureStandardShiftsForUpcomingDays() {
+        for (int i = 0; i < 7; i++) {
+            ensureStandardShiftsForDate(LocalDate.now(ZONE).plusDays(i));
+        }
+    }
 
     // Tạo ca làm việc và sinh các khung giờ trong cùng một giao dịch
     @Transactional
@@ -151,7 +265,7 @@ public class ScheduleService {
         }
 
         Map<UUID, List<TimeSlot>> slotsBySchedule = timeSlotRepository
-                .findByScheduleIdInOrderByStartTimeAsc(usable.stream().map(Schedule::getId).toList())
+                .findByScheduleIdInOrderByStartTimeAsc(usable.stream().map(s -> s.getId()).toList())
                 .stream()
                 .collect(Collectors.groupingBy(TimeSlot::getScheduleId));
 
@@ -188,6 +302,84 @@ public class ScheduleService {
         }
         return new AvailableSlotsResponse(date, ZONE.getId(), result);
     }
+
+    /**
+     * Lấy danh sách bác sĩ khả dụng cho một khung giờ cụ thể
+     * Chỉ trả về bác sĩ có slot trống (chưa được đặt) tại thời điểm đó
+     */
+    @Transactional(readOnly = true)
+    public List<AvailableDoctor> availableDoctorsForSlot(LocalDate date, Instant slotStart, Instant slotEnd,
+                                                          UUID serviceId, UUID branchId) {
+        // Lấy tất cả bác sĩ đang trực ca chứa khung giờ này
+        var schedules = scheduleRepository.findByWorkDateAndAvailableTrue(date).stream()
+                .filter(s -> {
+                    var shiftStart = date.atTime(s.getStartTime()).atZone(ZONE).toInstant();
+                    var shiftEnd = date.atTime(s.getEndTime()).atZone(ZONE).toInstant();
+                    return !slotStart.isBefore(shiftStart) && !slotEnd.isAfter(shiftEnd);
+                })
+                .toList();
+
+        if (schedules.isEmpty()) return List.of();
+
+        var staffIds = schedules.stream().map(Schedule::getStaffId).distinct().toList();
+        var staffById = staffRepository.findByIdInAndActiveTrue(staffIds).stream()
+                .filter(st -> branchId == null || branchId.equals(st.getBranchId()))
+                .collect(Collectors.toMap(Staff::getId, st -> st));
+
+        // Lọc bác sĩ có kỹ năng dịch vụ
+        if (serviceId != null) {
+            var serviceSkills = staffRepository.availableServices(staffById.keySet()).stream()
+                    .filter(skill -> skill.getServiceId().equals(serviceId))
+                    .collect(Collectors.toMap(
+                            com.petcare.platform.staff.repository.StaffRepository.StaffServiceEntry::getStaffId,
+                            com.petcare.platform.staff.repository.StaffRepository.StaffServiceEntry::getServiceId,
+                            (a, b) -> a
+                    ));
+            staffById.keySet().retainAll(serviceSkills.keySet());
+        }
+
+        // Lấy các slot đã được đặt trong khung giờ này
+        var scheduleIds = schedules.stream().map(Schedule::getId).toList();
+        var bookedSlotIds = timeSlotRepository.findBookedSlotsInRange(scheduleIds, slotStart, slotEnd);
+        var bookedStaffIds = bookedSlotIds.stream()
+                .map(slotId -> {
+                    var slot = timeSlotRepository.findById(slotId).orElse(null);
+                    return slot != null ? slot.getScheduleId() : null;
+                })
+                .filter(Objects::nonNull)
+                .map(scheduleId -> {
+                    var sched = schedules.stream().filter(s -> s.getId().equals(scheduleId)).findFirst().orElse(null);
+                    return sched != null ? sched.getStaffId() : null;
+                })
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+
+        var directory = staffRepository.directoryById(staffById.keySet()).stream()
+                .filter(StaffRepository.DirectoryEntry::getActive)
+                .collect(Collectors.toMap(StaffRepository.DirectoryEntry::getId, entry -> entry));
+
+        return schedules.stream()
+                .filter(s -> staffById.containsKey(s.getStaffId()))
+                .filter(s -> !bookedStaffIds.contains(s.getStaffId()))
+                .map(s -> {
+                    var worker = directory.get(s.getStaffId());
+                    return new AvailableDoctor(
+                            s.getStaffId(),
+                            s.getId(),
+                            worker != null ? worker.getFullName() : "Bác sĩ",
+                            staffById.get(s.getStaffId()).getBranchId(),
+                            worker != null ? worker.getBranchName() : "",
+                            s.getStartTime(),
+                            s.getEndTime()
+                    );
+                })
+                .distinct()
+                .toList();
+    }
+
+    public record AvailableDoctor(UUID staffId, UUID scheduleId, String staffName,
+                                  UUID branchId, String branchName,
+                                  LocalTime shiftStart, LocalTime shiftEnd) {}
 
     @Transactional
     public ScheduleResponse setAvailability(UUID id, boolean available) {

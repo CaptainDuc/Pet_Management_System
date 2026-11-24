@@ -63,7 +63,10 @@ class StaffAssignmentTest extends IntegrationTestBase {
         var accepted = Map.of("expectedSlotId", old, "targetSlotId", target, "customerAgreed", true);
         assertThat(send(HttpMethod.POST, prefix + "/assign", b.staffUser().token(), accepted).getStatusCode())
                 .isEqualTo(HttpStatus.FORBIDDEN);
-        var assigned = send(HttpMethod.POST, prefix + "/assign", front.token(), accepted);
+        jdbc.update("update schedules set is_available=false where staff_id=?", a.staffId());
+        assertThat(json(send(HttpMethod.GET, prefix + "/candidates", front.token(), null)).path("data").findValuesAsText("staffId"))
+                .containsExactly(b.staffId().toString());
+        var assigned = send(HttpMethod.POST, prefix + "/assign", front.token(), request);
         assertThat(assigned.getStatusCode()).as(assigned.getBody()).isEqualTo(HttpStatus.OK);
         assertThat(json(assigned).at("/data/paymentStatus").asText()).isEqualTo("PAID");
         assertThat(json(assigned).at("/data/items/0/staffName").asText()).isEqualTo(b.staffUser().fullName());

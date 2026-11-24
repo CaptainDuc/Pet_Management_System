@@ -33,4 +33,11 @@ public class Schedule extends BaseEntity {
 
     @Column(name = "is_available", nullable = false)
     private boolean available = true;
+
+    private java.time.Instant clockedInAt;
+    private java.time.Instant clockedOutAt;
+
+    public void setClockedAtEnd(java.time.Instant endTime) {
+        this.clockedOutAt = endTime;
+    }
 }
