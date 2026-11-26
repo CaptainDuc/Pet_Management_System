@@ -28,6 +28,8 @@
 .pc-button--small { min-height:40px; padding:8px 15px; font-size:13px; }
 .pc-text-button { border:0; background:none; padding:8px 0; color:#273172; font-weight:800; font-size:13px; display:inline-flex; align-items:center; gap:6px; cursor:pointer; }
 .pc-text-button:hover { color:#176b9d; }
+.pc-text-button--danger { color:#dc2626; }
+.pc-text-button--danger:hover { color:#b91c1c; }
 .pc-topbar { height:84px; padding:0 36px; background:#fff; border-bottom:1px solid #e5edf6; display:flex; align-items:center; justify-content:space-between; gap:20px; position:sticky; top:0; z-index:40; }
 .pc-topbar-right { display:flex; align-items:center; gap:24px; font-size:13px; font-weight:700; }
 .pc-home-link { color:#5a6b85; display:inline-flex; align-items:center; gap:7px; }

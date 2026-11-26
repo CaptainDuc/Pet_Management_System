@@ -120,6 +120,10 @@ export const clinicApi = {
     });
   },
 
+  markNoShow(bookingId, token) {
+    return request(`/bookings/queue/${bookingId}/no-show`, { method: 'POST', token });
+  },
+
   ownerReport(token) {
     return request('/analytics/dashboard', { token });
   },
@@ -138,6 +142,10 @@ export const clinicApi = {
 
   updatePet(id, payload, token) {
     return request(`/pets/${id}`, { method: "PUT", token, body: payload });
+  },
+
+  deletePet(id, token) {
+    return request(`/pets/${id}`, { method: "DELETE", token });
   },
 
   listServices(token) {

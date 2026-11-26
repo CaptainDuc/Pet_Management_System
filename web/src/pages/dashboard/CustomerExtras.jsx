@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Award, CheckCircle, Sparkles, Send, RefreshCw } from 'lucide-react';
+import { Award, CheckCircle, CheckCircle2, Sparkles, Send, RefreshCw } from 'lucide-react';
 import { Card, Input, Button, Badge } from '../../design-system/components';
 import AiMessageText from '../../components/AiMessageText';
 

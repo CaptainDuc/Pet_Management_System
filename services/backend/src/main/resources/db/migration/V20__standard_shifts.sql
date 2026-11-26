@@ -10,15 +10,15 @@ DECLARE
         '13:00'::time, '17:00'::time,  -- Chiều
         '17:00'::time, '21:00'::time   -- Tối
     ];
-    work_date DATE := CURRENT_DATE;
+    v_work_date DATE := CURRENT_DATE;
     i INT;
 BEGIN
     -- Lặp qua tất cả bác sĩ đang hoạt động
     FOR doctor_record IN
         SELECT s.id as staff_id
         FROM staff s
-        JOIN "user" u ON u.id = s.user_id
-        WHERE s.active = true
+        JOIN users u ON u.id = s.user_id
+        WHERE s.is_active = true
           AND u.status = 'ACTIVE'
           AND (u.role = 'VETERINARIAN' OR EXISTS (
               SELECT 1 FROM user_roles ur JOIN roles r ON r.id = ur.role_id
@@ -27,42 +27,45 @@ BEGIN
     LOOP
         -- Tạo 3 ca cho hôm nay và 7 ngày tới
         FOR i IN 0..6 LOOP
-            work_date := CURRENT_DATE + i;
+            v_work_date := CURRENT_DATE + i;
 
             -- Ca sáng
             IF NOT EXISTS (
                 SELECT 1 FROM schedules
                 WHERE staff_id = doctor_record.staff_id
-                  AND work_date = work_date
+                  AND work_date = v_work_date
                   AND start_time = '08:00'::time
                   AND end_time = '12:00'::time
             ) THEN
                 INSERT INTO schedules (staff_id, work_date, start_time, end_time, is_available, created_at, updated_at, version)
-                VALUES (doctor_record.staff_id, work_date, '08:00'::time, '12:00'::time, true, NOW(), NOW(), 0);
+                VALUES (doctor_record.staff_id, v_work_date, '08:00'::time, '12:00'::time, true, NOW(), NOW(), 0)
+                ON CONFLICT (staff_id, work_date) DO NOTHING;
             END IF;
 
             -- Ca chiều
             IF NOT EXISTS (
                 SELECT 1 FROM schedules
                 WHERE staff_id = doctor_record.staff_id
-                  AND work_date = work_date
+                  AND work_date = v_work_date
                   AND start_time = '13:00'::time
                   AND end_time = '17:00'::time
             ) THEN
                 INSERT INTO schedules (staff_id, work_date, start_time, end_time, is_available, created_at, updated_at, version)
-                VALUES (doctor_record.staff_id, work_date, '13:00'::time, '17:00'::time, true, NOW(), NOW(), 0);
+                VALUES (doctor_record.staff_id, v_work_date, '13:00'::time, '17:00'::time, true, NOW(), NOW(), 0)
+                ON CONFLICT (staff_id, work_date) DO NOTHING;
             END IF;
 
             -- Ca tối
             IF NOT EXISTS (
                 SELECT 1 FROM schedules
                 WHERE staff_id = doctor_record.staff_id
-                  AND work_date = work_date
+                  AND work_date = v_work_date
                   AND start_time = '17:00'::time
                   AND end_time = '21:00'::time
             ) THEN
                 INSERT INTO schedules (staff_id, work_date, start_time, end_time, is_available, created_at, updated_at, version)
-                VALUES (doctor_record.staff_id, work_date, '17:00'::time, '21:00'::time, true, NOW(), NOW(), 0);
+                VALUES (doctor_record.staff_id, v_work_date, '17:00'::time, '21:00'::time, true, NOW(), NOW(), 0)
+                ON CONFLICT (staff_id, work_date) DO NOTHING;
             END IF;
         END LOOP;
     END LOOP;

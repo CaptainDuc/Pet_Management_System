@@ -128,7 +128,7 @@ public class BookingController {
     }
 
     @PostMapping("/{id}/report")
-    @PreAuthorize("hasAuthority('booking:update')")
+    @PreAuthorize("hasAuthority('booking:report')")
     public ResponseEntity<ApiResponse<BookingResponse>> report(
             @AuthenticationPrincipal UserPrincipal principal, @PathVariable UUID id,
             @Valid @RequestBody ReportIssueRequest request) {

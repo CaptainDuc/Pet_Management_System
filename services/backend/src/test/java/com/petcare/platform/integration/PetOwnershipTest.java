@@ -82,6 +82,21 @@ class PetOwnershipTest extends IntegrationTestBase {
     }
 
     @Test
+    void ownerCanDeletePetAndItIsRemovedFromTheirActiveProfiles() {
+        TestUser owner = newUser("CUSTOMER");
+        UUID petId = createPet(owner.token());
+
+        ResponseEntity<String> deleted = send(HttpMethod.DELETE, "/api/v1/pets/" + petId, owner.token(), null);
+
+        assertThat(deleted.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(send(HttpMethod.GET, "/api/v1/pets/" + petId, owner.token(), null).getStatusCode())
+                .isEqualTo(HttpStatus.NOT_FOUND);
+        ResponseEntity<String> list = send(HttpMethod.GET, "/api/v1/pets", owner.token(), null);
+        assertThat(list.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(list.getBody()).doesNotContain(petId.toString());
+    }
+
+    @Test
     void clinicStaffCanReadAnyPet() {
         TestUser owner = newUser("CUSTOMER");
         TestUser staff = newUser("STAFF");

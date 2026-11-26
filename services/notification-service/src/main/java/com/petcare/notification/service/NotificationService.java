@@ -110,6 +110,15 @@ public class NotificationService {
             case "booking.completed" -> new String[]{
                     "Lịch hẹn đã hoàn thành",
                     "Cảm ơn bạn đã sử dụng dịch vụ " + services + " của PetCare."};
+            case "booking.reminder-24h" -> new String[]{
+                    "Nhắc lịch hẹn ngày mai",
+                    "Lịch hẹn " + services + " sẽ diễn ra lúc " + time + ". Hãy chuẩn bị cho bé nhé."};
+            case "booking.reminder-30m" -> new String[]{
+                    "Lịch hẹn sắp bắt đầu",
+                    "Còn khoảng 30 phút nữa đến lịch hẹn " + services + " lúc " + time + ". Hãy chuẩn bị cho bé nhé."};
+            case "booking.no-show" -> new String[]{
+                    "Lịch hẹn được ghi nhận là vắng mặt",
+                    "Phòng khám đã ghi nhận bé không đến lịch hẹn " + services + " lúc " + time + "."};
             case "booking.cancelled" -> new String[]{
                     "Lịch hẹn đã bị hủy",
                     "Lịch hẹn " + services + " lúc " + time + " đã bị hủy."

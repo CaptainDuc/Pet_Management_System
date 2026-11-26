@@ -77,6 +77,12 @@ public class VisitQueueController {
         return ApiResponse.ok(bookings.walkIn(user.getId(), customerId, body));
     }
 
+    @PostMapping("/{id}/no-show")
+    @PreAuthorize(RECEPTION)
+    public ApiResponse<BookingResponse> noShow(@AuthenticationPrincipal UserPrincipal user, @PathVariable UUID id) {
+        return ApiResponse.ok(bookings.markNoShow(user.getId(), id));
+    }
+
     @PostMapping("/{id}/{itemId}/check-in")
     @PreAuthorize(RECEPTION)
     public ApiResponse<Void> checkIn(@AuthenticationPrincipal UserPrincipal user, @PathVariable UUID id,

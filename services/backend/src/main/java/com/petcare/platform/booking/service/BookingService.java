@@ -276,6 +276,34 @@ public class BookingService {
         return transition(userId, id, BookingStatus.CANCELLED, reason);
     }
 
+    @Transactional
+    public BookingResponse markNoShow(UUID userId, UUID id) {
+        if (!SecurityUtils.hasAnyRole("STAFF", "OWNER", "ADMIN")
+                || !SecurityUtils.hasPermission("booking:update")) {
+            throw new AccessDeniedException("Access denied");
+        }
+        Booking booking = bookingRepository.findByIdForUpdate(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Booking", id));
+        List<BookingItem> items = itemRepository.findByBookingId(id);
+        if (items.stream().anyMatch(item -> item.getCheckedInAt() != null)) {
+            throw new ConflictException("BOOKING_CUSTOMER_ALREADY_CHECKED_IN");
+        }
+        List<UUID> slotIds = items.stream().map(BookingItem::getTimeSlotId).distinct().toList();
+        Instant earliest = timeSlotRepository.findAllById(slotIds).stream()
+                .map(TimeSlot::getStartTime).min(Comparator.naturalOrder()).orElse(null);
+        Instant now = Instant.now();
+        if (!BookingNoShowPolicy.canMarkNoShow(booking.getStatus(), earliest, now)) {
+            throw new ConflictException("BOOKING_NOT_ELIGIBLE_FOR_NO_SHOW");
+        }
+        booking.setStatus(BookingStatus.NO_SHOW);
+        items.forEach(item -> item.setStatus(BookingStatus.NO_SHOW));
+        historyRepository.save(new BookingStatusHistory(
+                id, BookingStatus.CONFIRMED, BookingStatus.NO_SHOW, userId, "Khách không đến"));
+        BookingResponse response = toResponses(List.of(booking)).getFirst();
+        recordEvent(response, RabbitMQQueues.BOOKING_NO_SHOW, null);
+        return response;
+    }
+
     // ─── Thanh toán & phản hồi của phòng khám ─────────────────────────────
 
     @Transactional
@@ -495,17 +523,11 @@ public class BookingService {
         }
 
         if (to == BookingStatus.CANCELLED) {
-            if (booking.getPaymentStatus() == PaymentStatus.PAID
-                    && !SecurityUtils.hasAnyRole("OWNER", "ADMIN")) {
-                throw new ConflictException("BOOKING_ALREADY_PAID");
-            }
             if (from == BookingStatus.IN_PROGRESS && !SecurityUtils.hasRole("ADMIN")) {
                 throw new AccessDeniedException("Access denied");
             }
-            if (!clinic && earliest != null
-                    && Instant.now().plus(cancelCutoffHours, ChronoUnit.HOURS).isAfter(earliest)) {
-                throw new BusinessException("Cancellation is only allowed at least "
-                        + cancelCutoffHours + " hours before the appointment");
+            if (!clinic && !BookingCancellationPolicy.canCustomerCancel(earliest, Instant.now())) {
+                throw new BusinessException("Cancellation is only allowed at least 30 minutes before the appointment");
             }
         }
 

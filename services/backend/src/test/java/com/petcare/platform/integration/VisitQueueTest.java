@@ -71,6 +71,28 @@ class VisitQueueTest extends IntegrationTestBase {
     }
 
     @Test
+    void receptionCanMarkConfirmedPastAppointmentNoShowWithoutChangingPayment() {
+        Scenario s = newScenario("VETERINARIAN");
+        TestUser front = newUser("STAFF");
+        UUID slot = s.slotIds().getFirst();
+        JsonNode created = call(HttpMethod.POST, "/api/v1/bookings", s.customer(),
+                bookingBody(s.petId(), s.serviceId(), slot), HttpStatus.CREATED);
+        String id = created.path("id").asText();
+        call(HttpMethod.POST, "/api/v1/bookings/" + id + "/confirm", s.staffUser(), null, HttpStatus.OK);
+        jdbc.update("update time_slots set start_time=now()-interval '1 minute',end_time=now()+interval '29 minutes' where id=?", slot);
+
+        call(HttpMethod.POST, QUEUE + "/" + id + "/no-show", s.customer(), null, HttpStatus.FORBIDDEN);
+        JsonNode marked = call(HttpMethod.POST, QUEUE + "/" + id + "/no-show", front, null, HttpStatus.OK);
+
+        assertThat(marked.path("status").asText()).isEqualTo("NO_SHOW");
+        assertThat(marked.path("paymentStatus").asText()).isEqualTo("UNPAID");
+        assertThat(call(HttpMethod.GET, "/api/v1/bookings/" + id, s.customer(), null, HttpStatus.OK)
+                .path("status").asText()).isEqualTo("NO_SHOW");
+        assertThat(call(HttpMethod.GET, QUEUE + "?date=" + LocalDate.now(ZONE), front, null, HttpStatus.OK))
+                .noneMatch(row -> row.path("bookingId").asText().equals(id));
+    }
+
+    @Test
     void walkInReservesARealSlotAndRollsBackIfItIsNotToday() {
         Scenario s = newScenario("VETERINARIAN");
         TestUser front = newUser("STAFF");

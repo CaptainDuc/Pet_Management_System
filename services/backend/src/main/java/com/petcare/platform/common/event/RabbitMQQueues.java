@@ -25,6 +25,9 @@ public final class RabbitMQQueues {
     public static final String BOOKING_STARTED   = "booking.started";
     public static final String BOOKING_PAID      = "booking.paid";
     public static final String BOOKING_ISSUE     = "booking.issue";
+    public static final String BOOKING_NO_SHOW   = "booking.no-show";
+    public static final String BOOKING_REMINDER_24H = "booking.reminder-24h";
+    public static final String BOOKING_REMINDER_30M = "booking.reminder-30m";
 
     // ─── Invoice ───────────────────────────────────────────────────────────────────
     public static final String INVOICE_EXCHANGE = "petcare.invoice";

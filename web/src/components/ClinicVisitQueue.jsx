@@ -80,8 +80,10 @@ export default function ClinicVisitQueue({ token, reception = false }) {
   async function act(visit, action) {
     setBusy(true); setActionError(''); setFeedback('');
     try {
-      await clinicApi.visitAction(visit, action, token);
-      setFeedback(({ 'check-in': 'Đã tiếp đón', start: 'Đã bắt đầu dịch vụ cho', complete: 'Đã hoàn tất dịch vụ cho' })[action] + ' ' + visit.petName + '.');
+      if (action === 'no-show') await clinicApi.markNoShow(visit.bookingId, token);
+      else await clinicApi.visitAction(visit, action, token);
+      setFeedback(action === 'no-show' ? `Đã ghi nhận ${visit.petName} vắng mặt.`
+        : ({ 'check-in': 'Đã tiếp đón', start: 'Đã bắt đầu dịch vụ cho', complete: 'Đã hoàn tất dịch vụ cho' })[action] + ' ' + visit.petName + '.');
     } catch (err) { setActionError(err.message); }
     finally { setBusy(false); refresh(); }
   }
@@ -122,6 +124,12 @@ export default function ClinicVisitQueue({ token, reception = false }) {
           {reception && v.staffName && !v.checkedInAt && !working && !done && date === clinicDate() && (
             <button className="pc-button pc-button--small" disabled={busy} onClick={() => act(v, 'check-in')}>
               Xác nhận khách đã đến
+            </button>
+          )}
+          {reception && v.status === 'CONFIRMED' && !v.checkedInAt && due && date === clinicDate() && (
+            <button className="pc-button pc-button--small pc-button--line" disabled={busy}
+              onClick={() => window.confirm(`Ghi nhận ${v.petName} không đến lịch hẹn? Thao tác này áp dụng cho toàn bộ lịch hẹn.`) && act(v, 'no-show')}>
+              Đánh dấu vắng mặt
             </button>
           )}
 

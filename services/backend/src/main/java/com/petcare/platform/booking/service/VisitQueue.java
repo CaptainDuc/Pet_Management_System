@@ -32,7 +32,7 @@ public class VisitQueue {
                 join services svc on svc.id = i.service_id
                 left join staff s on s.id = i.staff_id left join users clinician on clinician.id = s.user_id
                 left join staff pref on pref.id = i.preferred_staff_id left join users preferred on preferred.id = pref.user_id
-                where i.status <> 'CANCELLED' and t.start_time >= :start
+                where i.status not in ('CANCELLED','NO_SHOW') and t.start_time >= :start
                 """;
         var range = pending ? " and i.staff_id is null and i.status in ('PENDING','CONFIRMED') " : " and t.start_time < :end ";
         var query = jdbc.sql(sql + range + (assignedUser == null ? "" : " and s.user_id = :userId ")

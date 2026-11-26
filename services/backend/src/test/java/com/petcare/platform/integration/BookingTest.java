@@ -169,8 +169,10 @@ class BookingTest extends IntegrationTestBase {
                 .isEqualTo(1);
         ResponseEntity<String> cancelled = send(HttpMethod.POST, "/api/v1/bookings/" + bookingId + "/cancel",
                 s.customer().token(), Map.of("reason", "Already paid check"));
-        assertThat(cancelled.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
-        assertThat(cancelled.getBody()).contains("BOOKING_ALREADY_PAID");
+        assertThat(cancelled.getStatusCode()).as(cancelled.getBody()).isEqualTo(HttpStatus.OK);
+        assertThat(json(cancelled).path("data").path("status").asText()).isEqualTo("CANCELLED");
+        assertThat(json(cancelled).path("data").path("paymentStatus").asText()).isEqualTo("PAID");
+        assertThat(json(cancelled).path("data").path("paidAt").isNull()).isFalse();
     }
 
     @Test
