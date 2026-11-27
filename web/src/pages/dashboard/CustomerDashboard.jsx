@@ -12,7 +12,7 @@ import PhotoInput from '../../components/PhotoInput';
 import { canPayBooking, paymentStatusLabel } from './bookingPayment';
 import { canCustomerCancelAppointment, isActiveAppointment } from './appointmentLifecycle';
 
-const emptyPet = { name: '', species: 'Chó', gender: 'Đực', dateOfBirth: '', weight: '', photoUrl: '', notes: '' };
+const emptyPet = { name: '', species: '', gender: 'Đực', dateOfBirth: '', weight: '', photoUrl: '', notes: '' };
 const statuses = { PENDING: 'Chờ xác nhận', CONFIRMED: 'Đã xác nhận', IN_PROGRESS: 'Đang thực hiện', COMPLETED: 'Đã hoàn thành', CANCELLED: 'Đã hủy', NO_SHOW: 'Khách không đến' };
 
 function Status({ booking }) {
@@ -23,6 +23,8 @@ export default function CustomerDashboard({ user, token, activeTab, setActiveTab
   const [pets, setPets] = useState([]);
   const [bookings, setBookings] = useState([]);
   const [services, setServices] = useState([]);
+  const [branches, setBranches] = useState([]);
+  const [detailBooking, setDetailBooking] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -52,11 +54,11 @@ export default function CustomerDashboard({ user, token, activeTab, setActiveTab
     let alive = true;
     setLoading(true);
     setError('');
-    Promise.allSettled([clinicApi.listPets(token), clinicApi.listBookings(token), clinicApi.listServices(token)])
+    Promise.allSettled([clinicApi.listPets(token), clinicApi.listAllBookings(token), clinicApi.listServices(token), clinicApi.staffBranches(token)])
       .then(results => {
         if (!alive) return;
-        [setPets, setBookings, setServices].forEach((setter, index) => {
-          if (results[index].status === 'fulfilled') setter(results[index].value?.content || []);
+        [setPets, setBookings, setServices, setBranches].forEach((setter, index) => {
+          if (results[index].status === 'fulfilled') setter(index === 1 || index === 3 ? results[index].value : results[index].value?.content || []);
         });
         const failed = results.find(result => result.status === 'rejected');
         if (failed) setError(failed.reason.message || 'Chưa tải được dữ liệu. Bạn vui lòng thử lại.');
@@ -70,8 +72,8 @@ export default function CustomerDashboard({ user, token, activeTab, setActiveTab
     let active = true;
     async function refreshBookings() {
       try {
-        const result = await clinicApi.listBookings(token);
-        if (active) setBookings(result.content);
+        const result = await clinicApi.listAllBookings(token);
+        if (active) setBookings(result);
       } catch (err) { if (active) setError(err.message); }
     }
     const timer = setInterval(refreshBookings, 10000);
@@ -152,11 +154,11 @@ export default function CustomerDashboard({ user, token, activeTab, setActiveTab
 
   async function savePet(event) {
     event.preventDefault();
-    if (savingPet || preparingPhoto || !petDraft.name.trim()) return;
+    if (savingPet || preparingPhoto || !petDraft.name.trim() || !petDraft.species.trim()) return;
     setSavingPet(true);
     setPetError('');
     const payload = {
-      name: petDraft.name.trim(), species: petDraft.species, gender: petDraft.gender,
+      name: petDraft.name.trim(), species: petDraft.species.trim(), gender: petDraft.gender,
       dateOfBirth: petDraft.dateOfBirth || null, weight: petDraft.weight === '' ? null : Number(petDraft.weight),
       photoUrl: petDraft.photoUrl.trim() || null, notes: petDraft.notes.trim() || null,
       breedId: petEditor.breedId || null,
@@ -217,8 +219,8 @@ export default function CustomerDashboard({ user, token, activeTab, setActiveTab
     const canCancel = canCustomerCancelAppointment(booking.status, appointmentStart);
     return <article className="pc-booking" key={booking.id}>
       <div className="pc-booking-date">{start ? start.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' }) : 'Chưa có ngày'}<strong>{start ? formatTime(start) : '—'}</strong></div>
-      <div className="pc-booking-info"><h3>{pets.find(pet => pet.id === booking.petId)?.name || 'Thú cưng'} · {booking.items?.map(item => item.serviceName).join(', ')}</h3><p>Mã hẹn BK-{String(booking.id).slice(0, 8).toUpperCase()}</p>{booking.items?.length > 0 && <ul>{booking.items.map(item => <li key={item.id}>{item.serviceName} · {item.startTime ? new Date(item.startTime).toLocaleString('vi-VN', { dateStyle: 'short', timeStyle: 'short' }) : 'Chưa có giờ'}{item.staffName ? ' · Phụ trách: ' + item.staffName :
-            booking.status !== 'CANCELLED' && ' · Chờ phân công'}{item.preferredStaffName && ' · Mong muốn: ' + item.preferredStaffName}</li>)}</ul>}<Status booking={booking} />{booking.staffNote && <p className="mt-2">Phòng khám: {booking.staffNote}</p>}<button className="pc-text-button ml-3" onClick={() => { setReportBooking(booking); setReportText(''); setReportError(''); }}><MessageSquare size={14} />Trao đổi</button></div>
+      <div className="pc-booking-info"><h3>{pets.find(pet => pet.id === booking.petId)?.name || booking.petName || 'Thú cưng'} · {booking.items?.map(item => item.serviceName).join(', ')}</h3><p>Mã hẹn BK-{String(booking.id).slice(0, 8).toUpperCase()}</p>{booking.items?.length > 0 && <ul>{booking.items.map(item => <li key={item.id}>{item.serviceName} · {item.startTime ? new Date(item.startTime).toLocaleString('vi-VN', { dateStyle: 'short', timeStyle: 'short' }) : 'Chưa có giờ'}{item.staffName ? ' · Phụ trách: ' + item.staffName :
+            booking.status !== 'CANCELLED' && ' · Chờ phân công'}{item.preferredStaffName && ' · Mong muốn: ' + item.preferredStaffName}</li>)}</ul>}<Status booking={booking} />{booking.staffNote && <p className="mt-2">Phòng khám: {booking.staffNote}</p>}<button className="pc-text-button ml-3" onClick={() => setDetailBooking(booking)}>Xem chi tiết<ArrowRight size={14} /></button><button className="pc-text-button ml-3" onClick={() => { setReportBooking(booking); setReportText(''); setReportError(''); }}><MessageSquare size={14} />Trao đổi</button></div>
       <div className="pc-booking-end">{booking.status === 'COMPLETED' && <BookingReview booking={booking} token={token} />}<strong>{formatMoney(booking.totalAmount)}</strong>{Number(booking.discountAmount) > 0 && <small className="pc-muted">Đã giảm {formatMoney(booking.discountAmount)}{booking.promotionCode ? ` · ${booking.promotionCode}` : ''}</small>}<span className={`pc-status ${booking.paymentStatus === 'PAID' ? 'pc-status--ok' : ''}`}>{booking.paymentStatus === 'PAID' && <Check size={13} />}{paymentStatusLabel(booking.paymentStatus)}</span>{canPayBooking(booking.paymentStatus, booking.status) && <button className="pc-button pc-button--soft pc-button--small" onClick={() => setPaymentBooking({ ...booking, rawAmount: Number(booking.totalAmount), petName: pets.find(pet => pet.id === booking.petId)?.name, code: `BK-${String(booking.id).slice(0, 8).toUpperCase()}` })}>Thanh toán</button>}{['PENDING', 'CONFIRMED'].includes(booking.status) && booking.items?.some(i => canCustomerCancelAppointment(booking.status, i.startTime)) && <button className="pc-text-button" onClick={() => setMoveBooking(booking)}>Đổi lịch hẹn</button>}{canCancel && <button className="pc-text-button" onClick={() => { setCancelBooking(booking); setCancelReason(''); setCancelError(''); }}>Hủy lịch hẹn</button>}{['PENDING', 'CONFIRMED'].includes(booking.status) && appointmentStart && !canCancel && <small className="pc-muted">Cần hủy trong vòng 30 phút cuối? Vui lòng liên hệ lễ tân.</small>}</div>
     </article>;
   }
@@ -287,11 +289,33 @@ export default function CustomerDashboard({ user, token, activeTab, setActiveTab
   return (
     <>
       {mainContent}
+      <Modal isOpen={Boolean(detailBooking)} onClose={() => setDetailBooking(null)} title="Chi tiết lịch hẹn" size="lg" className="pc-light pc-dialog">
+        {detailBooking && <div className="pc-form">
+          <dl className="pc-summary">
+            <div><dt>Trạng thái lịch</dt><dd>{statuses[detailBooking.status] || detailBooking.status}</dd></div>
+            <div><dt>Thú cưng</dt><dd>{detailBooking.petName || pets.find(pet => pet.id === detailBooking.petId)?.name || 'Thú cưng'}</dd></div>
+            <div><dt>Phòng khám</dt><dd>{branches.find(branch => branch.id === detailBooking.branchId)?.name || 'Phòng khám PetCare'}</dd></div>
+            {(detailBooking.items || []).map(item => <React.Fragment key={item.id}>
+              <div><dt>Dịch vụ</dt><dd>{item.serviceName}</dd></div>
+              <div><dt>Thời gian</dt><dd>{item.startTime ? new Date(item.startTime).toLocaleString('vi-VN', { dateStyle: 'full', timeStyle: 'short' }) : 'Chưa xác định'}{item.endTime && ` – ${formatTime(item.endTime)}`}</dd></div>
+              <div><dt>Bác sĩ phụ trách</dt><dd>{item.staffName || 'Lễ tân đang phân công'}</dd></div>
+              {item.preferredStaffName && <div><dt>Bác sĩ mong muốn</dt><dd>{item.preferredStaffName}</dd></div>}
+              <div><dt>Giá dịch vụ</dt><dd>{formatMoney(item.unitPrice)}</dd></div>
+            </React.Fragment>)}
+            {Number(detailBooking.discountAmount) > 0 && <div><dt>Tổng ưu đãi {detailBooking.promotionCode && `· ${detailBooking.promotionCode}`}</dt><dd>−{formatMoney(detailBooking.discountAmount)}</dd></div>}
+            <div className="pc-summary-total"><dt>Tổng thanh toán</dt><dd>{formatMoney(detailBooking.totalAmount)}</dd></div>
+            <div><dt>Thanh toán</dt><dd>{paymentStatusLabel(detailBooking.paymentStatus)}{detailBooking.paymentMethod && ` · ${detailBooking.paymentMethod === 'ONLINE' ? 'Chuyển khoản' : 'Tại quầy'}`}</dd></div>
+          </dl>
+          {detailBooking.notes && <p>Ghi chú của bạn: {detailBooking.notes}</p>}
+          {detailBooking.staffNote && <p>Phòng khám: {detailBooking.staffNote}</p>}
+          <div className="pc-form-actions"><button type="button" className="pc-button pc-button--line" onClick={() => setDetailBooking(null)}>Đóng</button></div>
+        </div>}
+      </Modal>
       <Modal isOpen={Boolean(petEditor) && !confirmPetDelete} onClose={savingPet || deletingPet || preparingPhoto ? undefined : () => { setPetEditor(null); setConfirmPetDelete(false); }} title={petEditor?.id ? `Hồ sơ của ${petEditor.name}` : 'Thêm một người bạn nhỏ'} size="lg" className="pc-light pc-dialog">
       <form className="pc-form" onSubmit={savePet}>
         {petError && <div className="pc-notice" role="alert">{petError}</div>}
         <label className="pc-field">Tên của bé<input name="petName" required maxLength={100} value={petDraft.name} placeholder="Ví dụ: Bông, Milo..." onChange={event => setPetDraft({ ...petDraft, name: event.target.value })} /></label>
-        <div className="pc-form-grid"><label className="pc-field">Loài<select name="petSpecies" value={petDraft.species} onChange={event => setPetDraft({ ...petDraft, species: event.target.value })}>{[...new Set(['Chó', 'Mèo', 'Chim', 'Thỏ / Hamster', petDraft.species])].map(value => <option key={value}>{value}</option>)}</select></label><label className="pc-field">Giới tính<select name="petGender" value={petDraft.gender || ''} onChange={event => setPetDraft({ ...petDraft, gender: event.target.value })}><option value="">Chưa cập nhật</option>{[...new Set(['Đực', 'Cái', petDraft.gender].filter(Boolean))].map(value => <option key={value}>{value}</option>)}</select></label></div>
+        <div className="pc-form-grid"><label className="pc-field">Loài<input name="petSpecies" required maxLength={100} value={petDraft.species} placeholder="Ví dụ: Chó, mèo, thỏ..." onChange={event => setPetDraft({ ...petDraft, species: event.target.value })} /></label><label className="pc-field">Giới tính<select name="petGender" value={petDraft.gender || ''} onChange={event => setPetDraft({ ...petDraft, gender: event.target.value })}><option value="">Chưa cập nhật</option>{[...new Set(['Đực', 'Cái', petDraft.gender].filter(Boolean))].map(value => <option key={value}>{value}</option>)}</select></label></div>
         <div className="pc-form-grid"><label className="pc-field">Ngày sinh<input name="petBirthday" type="date" max={localDate()} value={petDraft.dateOfBirth} onChange={event => setPetDraft({ ...petDraft, dateOfBirth: event.target.value })} /></label><label className="pc-field">Cân nặng (kg)<input name="petWeight" type="number" min="0.01" step="0.01" placeholder="Ví dụ: 4.5" value={petDraft.weight} onChange={event => setPetDraft({ ...petDraft, weight: event.target.value })} /></label></div>
         <PhotoInput label="Ảnh của bé" emptyLabel="Kéo ảnh của bé vào đây" name="petPhoto" value={petDraft.photoUrl} onChange={photoUrl => setPetDraft(current => ({ ...current, photoUrl }))} disabled={savingPet} onBusyChange={setPreparingPhoto} />
         <label className="pc-field">Giống, dị ứng và điều cần lưu ý<textarea name="petNotes" maxLength={2000} value={petDraft.notes} onChange={event => setPetDraft({ ...petDraft, notes: event.target.value })} placeholder="Giống Poodle, dị ứng hải sản, thói quen chăm sóc..." /></label>
@@ -304,11 +328,11 @@ export default function CustomerDashboard({ user, token, activeTab, setActiveTab
         <div className="pc-form-actions"><button type="button" className="pc-button pc-button--line" disabled={deletingPet} onClick={() => setConfirmPetDelete(false)}>Quay lại</button><button type="button" className="pc-button" disabled={deletingPet} onClick={deletePetProfile}>{deletingPet ? 'Đang xóa...' : 'Xóa hồ sơ'}</button></div>
       </div>
     </Modal>
-    {bookingPet && <BookingWizard pets={pets} services={services} initialPetId={bookingPet} suggestion={bookingSuggestion} token={token} onClose={() => setBookingPet(null)} onBooked={() => { setBookingPet(null); setActiveTab('bookings'); setSuccess('Đã giữ giờ hẹn cho bé. Phòng khám sẽ thông báo khi có người phụ trách.'); setReload(value => value + 1); }} />}
+    {bookingPet && <BookingWizard pets={pets} services={services} initialPetId={bookingPet} suggestion={bookingSuggestion} token={token} onClose={() => setBookingPet(null)} onBooked={booking => { setBookingPet(null); setActiveTab('bookings'); setSuccess(`Đã giữ giờ hẹn. Tổng tiền được hệ thống xác nhận: ${formatMoney(booking.totalAmount)}. Phòng khám sẽ thông báo khi phân công bác sĩ.`); setReload(value => value + 1); }} />}
     {moveBooking && <RescheduleDialog booking={moveBooking} token={token} customer onClose={() => setMoveBooking(null)} onSaved={() => {
       setMoveBooking(null); setSuccess('Đã cập nhật lịch hẹn.'); setReload(n => n + 1);
     }} />}
-    <VietQrPaymentModal open={Boolean(paymentBooking)} booking={paymentBooking} onClose={() => setPaymentBooking(null)} onPaid={() => { setPaymentBooking(null); setReload(value => value + 1); }} />
+    <VietQrPaymentModal open={Boolean(paymentBooking)} booking={paymentBooking} onClose={() => setPaymentBooking(null)} onPaid={payment => { setPaymentBooking(null); setSuccess(`Đã nhận thanh toán ${formatMoney(payment.amount)}. Hóa đơn sẽ xuất hiện sau khi hoàn tất buổi khám.`); setReload(value => value + 1); }} />
     <Modal isOpen={Boolean(cancelBooking)} onClose={cancelling ? undefined : () => setCancelBooking(null)} title="Hủy lịch hẹn này?" className="pc-light pc-dialog"><form className="pc-form" onSubmit={confirmCancellation}><p className="pc-muted">Bạn có thể hủy khi còn ít nhất 30 phút trước giờ hẹn. Giờ hẹn sau khi hủy sẽ được trả lại cho phòng khám.</p>{cancelBooking?.paymentStatus === 'PAID' && <p className="pc-notice">Lịch đã thanh toán sẽ không tự động được hoàn tiền. Vui lòng liên hệ phòng khám để được hỗ trợ.</p>}{cancelError && <p className="pc-notice" role="alert">{cancelError}</p>}<label className="pc-field">Lý do hủy<textarea maxLength={1000} value={cancelReason} onChange={event => setCancelReason(event.target.value)} placeholder="Bạn có thể cho phòng khám biết lý do..." /></label><div className="pc-form-actions"><button type="button" className="pc-button pc-button--line" disabled={cancelling} onClick={() => setCancelBooking(null)}>Giữ lịch hẹn</button><button className="pc-button" disabled={cancelling}>{cancelling ? 'Đang hủy...' : 'Xác nhận hủy lịch'}</button></div></form></Modal>
     <Modal isOpen={Boolean(reportBooking)} onClose={reporting ? undefined : () => setReportBooking(null)} title="Trao đổi với phòng khám" className="pc-light pc-dialog"><form className="pc-form" onSubmit={sendReport}>{reportError && <p className="pc-notice" role="alert">{reportError}</p>}<label className="pc-field">Nội dung cần hỗ trợ<textarea required maxLength={2000} value={reportText} onChange={event => setReportText(event.target.value)} /></label><div className="pc-form-actions"><button className="pc-button" disabled={reporting}>{reporting ? 'Đang gửi...' : 'Gửi nội dung'}</button></div></form></Modal>
     </>

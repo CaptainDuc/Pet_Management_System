@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Award, CheckCircle, CheckCircle2, Sparkles, Send, RefreshCw } from 'lucide-react';
+import { Award, CheckCircle, CheckCircle2, Sparkles, Send, RefreshCw, TrendingUp, Gift } from 'lucide-react';
 import { Card, Input, Button, Badge } from '../../design-system/components';
 import AiMessageText from '../../components/AiMessageText';
 
@@ -8,13 +8,16 @@ const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1";
 export default function CustomerExtras({ user, token, activeTab, onApiLog, onBookingSuggestion }) {
   // Loyalty state
   const [loyaltyData, setLoyaltyData] = useState({
-    points: 1250,
-    tier: 'GOLD',
-    lifetimePoints: 2400,
-    nextTierPoints: 3000
+    points: 0,
+    tier: 'BRONZE',
+    lifetimePoints: 0,
+    discountPercent: 0,
+    nextTier: null,
+    nextTierPoints: 500,
+    progressPercent: 0
   });
+  const [tierBenefits, setTierBenefits] = useState([]);
   const [loyaltyLoading, setLoyaltyLoading] = useState(false);
-  const [redeemedVouchers, setRedeemedVouchers] = useState([]);
 
   // AI Chat state
   const [aiMessages, setAiMessages] = useState([
@@ -42,21 +45,68 @@ export default function CustomerExtras({ user, token, activeTab, onApiLog, onBoo
     if (!token) return;
     setLoyaltyLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/loyalty/me`, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+      const [meRes, discountRes, nextTierRes, tiersRes] = await Promise.all([
+        fetch(`${API_BASE}/loyalty/me`, {
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }
+        }),
+        fetch(`${API_BASE}/loyalty/discount`, {
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }
+        }),
+        fetch(`${API_BASE}/loyalty/next-tier`, {
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }
+        }),
+        fetch(`${API_BASE}/loyalty/tiers`, {
+          headers: { 'Content-Type': 'application/json' }
+        })
+      ]);
+
+      const [meData, discountData, nextTierData, tiersData] = await Promise.all([
+        meRes.json(), discountRes.json(), nextTierRes.json(), tiersRes.json()
+      ]);
+
+      if (onApiLog) {
+        onApiLog({ status: meRes.status, data: meData, label: 'loyalty/me' });
+        onApiLog({ status: discountRes.status, data: discountData, label: 'loyalty/discount' });
+        onApiLog({ status: nextTierRes.status, data: nextTierData, label: 'loyalty/next-tier' });
+        onApiLog({ status: tiersRes.status, data: tiersData, label: 'loyalty/tiers' });
+      }
+
+      if (meRes.ok && meData?.data) {
+        const account = meData.data;
+        setLoyaltyData(prev => ({
+          ...prev,
+          points: account.points || 0,
+          tier: account.tier || 'BRONZE',
+          lifetimePoints: account.lifetimePoints || 0
+        }));
+      }
+
+      if (discountRes.ok && discountData?.data) {
+        setLoyaltyData(prev => ({
+          ...prev,
+          discountPercent: discountData.data.discountPercent || 0
+        }));
+      }
+
+      if (nextTierRes.ok && nextTierData?.data) {
+        const next = nextTierData.data;
+        if (next.maxTierReached) {
+          setLoyaltyData(prev => ({ ...prev, nextTier: null, progressPercent: 100 }));
+        } else {
+          setLoyaltyData(prev => ({
+            ...prev,
+            nextTier: next.nextTier,
+            nextTierPoints: next.nextTierPoints,
+            progressPercent: next.progressPercent || 0
+          }));
         }
-      });
-      const data = await res.json();
-      if (onApiLog) onApiLog({ status: res.status, data });
-      if (res.ok && data?.data) {
-        setLoyaltyData({
-          points: data.data.points || 1250,
-          tier: data.data.tier || 'GOLD',
-          lifetimePoints: data.data.lifetimePoints || 2400,
-          nextTierPoints: 3000
-        });
+      }
+
+      if (tiersRes.ok && tiersData?.data) {
+        const currentTierConfig = tiersData.data.find(t => t.name === loyaltyData.tier);
+        if (currentTierConfig) {
+          setTierBenefits(currentTierConfig.benefits || []);
+        }
       }
     } catch (err) {
       console.warn('Loyalty fetch error:', err);
@@ -65,7 +115,7 @@ export default function CustomerExtras({ user, token, activeTab, onApiLog, onBoo
     }
   };
 
-  useEffect(() => { if (activeTab === "loyalty") fetchLoyalty(); }, [activeTab, token]);
+  useEffect(() => { if (activeTab === "loyalty") fetchLoyalty(); }, [activeTab, token, loyaltyData.tier]);
   // Handle AI Chat submission
   const handleSendAi = async (customPrompt) => {
     const q = customPrompt || aiInput;
@@ -129,7 +179,7 @@ export default function CustomerExtras({ user, token, activeTab, onApiLog, onBoo
                 <span>Điểm thưởng & Hạng thẻ VIP</span>
               </Card.Title>
               <Card.Description className="text-xs text-[var(--color-fg-tertiary)] mt-1">
-                Tích lũy 1 điểm cho mỗi 10.000 đ chi tiêu tại PetCare để nâng hạng thẻ và nhận voucher quà tặng
+                Tích lũy 1 điểm cho mỗi 10.000 đ chi tiêu tại PetCare để nâng hạng thẻ và nhận ưu đãi tự động
               </Card.Description>
             </div>
             <Button
@@ -176,84 +226,59 @@ export default function CustomerExtras({ user, token, activeTab, onApiLog, onBoo
             <Card variant="outlined" padding="lg" className="md:col-span-2 flex flex-col justify-between">
               <div>
                 <h4 className="text-sm font-bold text-slate-900 mb-2">Quyền lợi Hạng thẻ {loyaltyData.tier}</h4>
+                {loyaltyData.discountPercent > 0 && (
+                  <div className="mb-4 p-3 bg-[var(--color-role-customer-bg)]/50 border border-[var(--color-role-customer-border)]/50 rounded-lg flex items-center space-x-3">
+                    <Gift className="w-5 h-5 text-[var(--color-role-customer-main)]" />
+                    <div>
+                      <span className="font-semibold text-slate-900">Tự động giảm giá tại thanh toán: </span>
+                      <span className="text-lg font-bold text-[var(--color-role-customer-main)]">{loyaltyData.discountPercent}%</span>
+                      <span className="text-slate-600 ml-1">cho tất cả dịch vụ</span>
+                    </div>
+                  </div>
+                )}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                  <Card variant="outlined" padding="md" className="bg-slate-50 border-slate-100">
-                    <div className="flex items-center space-x-2.5">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-                      <span className="text-slate-700">Giảm 10% tất cả dịch vụ tắm & spa</span>
-                    </div>
-                  </Card>
-                  <Card variant="outlined" padding="md" className="bg-slate-50 border-slate-100">
-                    <div className="flex items-center space-x-2.5">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-                      <span className="text-slate-700">Miễn phí 1 lần khám tổng quát hàng quý</span>
-                    </div>
-                  </Card>
-                  <Card variant="outlined" padding="md" className="bg-slate-50 border-slate-100">
-                    <div className="flex items-center space-x-2.5">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-                      <span className="text-slate-700">Ưu tiên đặt chỗ vào các dịp Lễ, Tết</span>
-                    </div>
-                  </Card>
-                  <Card variant="outlined" padding="md" className="bg-slate-50 border-slate-100">
-                    <div className="flex items-center space-x-2.5">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-                      <span className="text-slate-700">Hỗ trợ hotline bác sĩ thú y 24/7</span>
-                    </div>
-                  </Card>
+                  {tierBenefits.map((benefit, idx) => (
+                    <Card key={idx} variant="outlined" padding="md" className="bg-slate-50 border-slate-100">
+                      <div className="flex items-center space-x-2.5">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                        <span className="text-slate-700">{benefit}</span>
+                      </div>
+                    </Card>
+                  ))}
+                  {tierBenefits.length === 0 && (
+                    <Card variant="outlined" padding="md" className="bg-slate-50 border-slate-100 col-span-2">
+                      <div className="flex items-center space-x-2.5 text-slate-500">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                        <span>Không có quyền lợi đặc biệt cho hạng này</span>
+                      </div>
+                    </Card>
+                  )}
                 </div>
               </div>
 
               <div className="mt-4 pt-4 border-t border-slate-100">
-                <div className="flex justify-between text-xs text-slate-600 mb-1.5 font-medium">
-                  <span>Tiến trình nâng hạng DIAMOND:</span>
-                  <span>{loyaltyData.points} / {loyaltyData.nextTierPoints} điểm</span>
-                </div>
-                <div className="w-full bg-[var(--color-neutral-100)] rounded-full h-2.5 overflow-hidden">
-                  <div
-                    className="bg-[var(--color-role-customer-main)] h-2.5 rounded-full transition-all duration-500"
-                    style={{ width: `${Math.min(100, (loyaltyData.points / loyaltyData.nextTierPoints) * 100)}%` }}
-                  />
-                </div>
+                {loyaltyData.nextTier ? (
+                  <>
+                    <div className="flex justify-between text-xs text-slate-600 mb-1.5 font-medium">
+                      <span>Tiến trình nâng hạng {loyaltyData.nextTier}:</span>
+                      <span>{loyaltyData.points} / {loyaltyData.nextTierPoints} điểm ({loyaltyData.progressPercent}%)</span>
+                    </div>
+                    <div className="w-full bg-[var(--color-neutral-100)] rounded-full h-2.5 overflow-hidden">
+                      <div
+                        className="bg-[var(--color-role-customer-main)] h-2.5 rounded-full transition-all duration-500"
+                        style={{ width: `${Math.min(100, loyaltyData.progressPercent)}%` }}
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <div className="flex items_center justify-center text-sm text-emerald-600 font-medium py-2">
+                    <TrendingUp className="w-4 h-4 mr-1" />
+                    Bạn đã đạt hạng cao nhất - KIM CƯƠNG!
+                  </div>
+                )}
               </div>
             </Card>
           </div>
-
-          {/* Vouchers Store */}
-          <Card variant="outlined" padding="lg" className="space-y-4">
-            <h4 className="text-sm font-bold text-slate-900">Đổi điểm lấy mã giảm giá dịch vụ</h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Card variant="outlined" padding="lg" className="flex flex-col justify-between hover:border-blue-400 transition">
-                <div>
-                  <Badge variant="info" size="xs" className="mb-2">Voucher Spa</Badge>
-                  <h5 className="font-bold text-slate-900 text-sm mt-1">Giảm 50.000 đ dịch vụ Spa</h5>
-                  <p className="text-xs text-slate-500 mt-1">Áp dụng cho dịch vụ tắm sấy và cắt tỉa lông</p>
-                </div>
-                <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
-                  <Badge variant="warning" size="xs">500 điểm</Badge>
-                  <Button size="sm" onClick={() => handleRedeemVoucher('Voucher Giảm 50k Spa', 500)}>
-                    Đổi mã
-                  </Button>
-                </div>
-              </Card>
-
-              <Card variant="outlined" padding="lg" className="flex flex-col justify-between hover:border-blue-400 transition">
-                <div>
-                  <Badge variant="primary" size="xs" className="mb-2">Voucher Khám</Badge>
-                  <h5 className="font-bold text-slate-900 text-sm mt-1">Khám tổng quát miễn phí</h5>
-                  <p className="text-xs text-slate-500 mt-1">Áp dụng cho 1 thú cưng tại bất kỳ chi nhánh nào</p>
-                </div>
-                <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
-                  <Badge variant="warning" size="xs">1.000 điểm</Badge>
-                  <Button size="sm" onClick={() => handleRedeemVoucher('Voucher Khám miễn phí', 1000)}>
-                    Đổi mã
-                  </Button>
-                </div>
-              </Card>
-
-
-            </div>
-          </Card>
         </div>
       )}
 

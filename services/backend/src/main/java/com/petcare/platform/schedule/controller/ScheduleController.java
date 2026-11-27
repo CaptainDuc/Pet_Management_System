@@ -69,6 +69,13 @@ public class ScheduleController {
         return ApiResponse.ok(scheduleService.setAvailability(id, body.available()));
     }
 
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasAuthority('schedule:write')")
+    public ApiResponse<Void> delete(@PathVariable UUID id) {
+        scheduleService.delete(id);
+        return ApiResponse.ok(null);
+    }
+
     @PostMapping
     @PreAuthorize("hasAuthority('schedule:write')")
     public ResponseEntity<ApiResponse<ScheduleResponse>> create(

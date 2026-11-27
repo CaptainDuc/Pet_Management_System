@@ -44,6 +44,22 @@ export function AuthProvider({ children }) {
     localStorage.removeItem('user');
   }, []);
 
+  useEffect(() => {
+    const syncSession = event => {
+      if (event.type === 'storage' && !['accessToken', 'refreshToken', 'user'].includes(event.key)) return;
+      setToken(localStorage.getItem('accessToken') || '');
+      setRefreshToken(localStorage.getItem('refreshToken') || '');
+      try { setUser(JSON.parse(localStorage.getItem('user') || 'null')); }
+      catch { setUser(null); }
+    };
+    window.addEventListener('storage', syncSession);
+    window.addEventListener('petcare-auth-updated', syncSession);
+    return () => {
+      window.removeEventListener('storage', syncSession);
+      window.removeEventListener('petcare-auth-updated', syncSession);
+    };
+  }, []);
+
   // Validate or fetch fresh profile on mount
   useEffect(() => {
     let isMounted = true;
@@ -57,18 +73,20 @@ export function AuthProvider({ children }) {
             localStorage.setItem('user', JSON.stringify(profile));
           }
         } catch (err) {
-          // If token expired, try refreshing
+          // An offline/backend failure must not silently sign the user out.
+          if (err.status === 401 || err.status === 403) {
           if (refreshToken) {
             try {
               const rotated = await authApi.refreshToken(refreshToken);
               if (isMounted && rotated) {
                 saveAuthSession(rotated);
               }
-            } catch {
-              if (isMounted) clearAuthSession();
+            } catch (refreshError) {
+              if (isMounted && [400, 401, 403, 422, 423].includes(refreshError.status)) clearAuthSession();
             }
           } else {
             if (isMounted) clearAuthSession();
+          }
           }
         }
       }

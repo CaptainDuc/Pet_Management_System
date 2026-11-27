@@ -121,7 +121,7 @@ public class InvoiceService {
                             .map(Promotion::getCode).orElse(null);
             items.add(InvoiceItem.builder()
                     .invoiceId(invoice.getId())
-                    .description(code == null ? "Giảm giá" : "Giảm giá (" + code + ")")
+                    .description(code == null ? "Ưu đãi thành viên" : "Tổng ưu đãi (gồm mã " + code + ")")
                     .quantity(1)
                     .unitPrice(discount.negate())
                     .subtotal(discount.negate())

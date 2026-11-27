@@ -15,6 +15,8 @@ export default function CustomerRecords({ tab, pets, token }) {
   const [selectedInvoice, setSelectedInvoice] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [retry, setRetry] = useState(0);
+  const selectedPet = pets.find(pet => pet.id === petId);
 
   useEffect(() => {
     if (!pets.length) { setPetId(''); return; }
@@ -40,7 +42,7 @@ export default function CustomerRecords({ tab, pets, token }) {
     }).catch(err => { if (active) setError(err.message || 'Không tải được dữ liệu.'); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [tab, petId, token]);
+  }, [tab, petId, token, retry]);
 
   async function showInvoice(id) {
     setError('');
@@ -56,9 +58,9 @@ export default function CustomerRecords({ tab, pets, token }) {
         {pets.map(pet => <option key={pet.id} value={pet.id}>{pet.name}</option>)}
       </select></label>}
     {loading && <p role="status">Đang tải dữ liệu…</p>}
-    {error && <p className="pc-notice" role="alert">{error}</p>}
+    {error && <div className="pc-notice" role="alert">{error}<button type="button" className="pc-text-button" onClick={() => setRetry(value => value + 1)}>Thử lại</button></div>}
     {!loading && !error && tab === 'health' && (pets.length === 0 ? <p className="pc-muted">Thêm thú cưng để xem hồ sơ sức khỏe.</p> : <>
-      <div><h2 className="pc-section-title">Bệnh án</h2>
+      <div><h2 className="pc-section-title">Bệnh án · {selectedPet?.name}</h2>
         {records.length ? <div className="space-y-3">{records.map(record => <article key={record.id} className="rounded-xl border border-slate-200 p-4">
           <strong>{date(record.visitDate)} · {record.diagnosis || 'Lần khám'}</strong>
           {record.vetName && <p>Bác sĩ {record.vetName}</p>}
@@ -66,7 +68,7 @@ export default function CustomerRecords({ tab, pets, token }) {
           {record.notes && <p>Ghi chú: {record.notes}</p>}
         </article>)}</div> : <p className="pc-muted">Bé chưa có bệnh án.</p>}
       </div>
-      <div><h2 className="pc-section-title">Tiêm phòng</h2>
+      <div><h2 className="pc-section-title">Tiêm phòng · {selectedPet?.name}</h2>
         {vaccinations.length ? <div className="space-y-3">{vaccinations.map(vaccine => <article key={vaccine.id} className="rounded-xl border border-slate-200 p-4">
           <strong>{vaccine.vaccineName}</strong><p>Đã tiêm: {date(vaccine.administeredDate)}</p>
           {vaccine.nextDueDate && <p>Nhắc tiêm tiếp: {date(vaccine.nextDueDate)}</p>}

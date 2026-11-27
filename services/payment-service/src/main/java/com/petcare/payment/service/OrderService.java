@@ -39,6 +39,7 @@ public class OrderService {
         PayableInfo payable = request.invoiceId() == null
                 ? payableClient.booking(request.bookingId()) : payableClient.invoice(request.invoiceId());
         ensureUnpaid(payable);
+        // The booking/invoice already contains the member and voucher discounts.
         BigDecimal amount = payable.amount();
         if (amount == null || amount.signum() <= 0) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "No payable balance");
@@ -54,10 +55,19 @@ public class OrderService {
         }
         if (existing.isPresent()) {
             Order order = existing.get();
-            if (order.getStatus() == OrderStatus.PAID || !sameAmount(order.getTotalAmount(), amount)) {
+            if (order.getStatus() == OrderStatus.PAID) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "Payment requires reconciliation");
             }
-            return toCreateResponse(order);
+            // If amount changed (e.g., loyalty tier upgrade), cancel old PENDING order and create new one
+            if (!sameAmount(order.getTotalAmount(), amount)) {
+                if (order.getStatus() == OrderStatus.PENDING) {
+                    orderRepository.delete(order);
+                } else {
+                    throw new ResponseStatusException(HttpStatus.CONFLICT, "Payment requires reconciliation");
+                }
+            } else {
+                return toCreateResponse(order);
+            }
         }
         String reference = payable.reference();
         String description = request.description();

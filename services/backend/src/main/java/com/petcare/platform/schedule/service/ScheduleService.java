@@ -371,6 +371,15 @@ public class ScheduleService {
         return toResponse(shift);
     }
 
+    @Transactional
+    public void delete(UUID id) {
+        Schedule shift = scheduleRepository.lockForUpdate(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Schedule", id));
+        // Delete associated time slots first
+        timeSlotRepository.deleteByScheduleId(id);
+        scheduleRepository.delete(shift);
+    }
+
     private ScheduleResponse toResponse(Schedule s) {
         return new ScheduleResponse(s.getId(), s.getStaffId(), s.getWorkDate(),
                 s.getStartTime(), s.getEndTime(), s.isAvailable(),

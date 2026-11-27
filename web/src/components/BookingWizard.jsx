@@ -25,6 +25,8 @@ export default function BookingWizard({ pets, services, initialPetId, suggestion
   const [promotion, setPromotion] = useState(null);
   const [checking, setChecking] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [member, setMember] = useState(null);
+  const [memberError, setMemberError] = useState('');
   const service = services.find(item => item.id === serviceId);
   const sameTime = (a, b) => a && b && a.startTime === b.startTime && a.branchId === b.branchId;
   const doctors = slot ? slots.filter(s => sameTime(s, slot)) : [];
@@ -32,10 +34,22 @@ export default function BookingWizard({ pets, services, initialPetId, suggestion
     .sort((a, b) => Date.parse(a.startTime) - Date.parse(b.startTime));
   const pet = pets.find(item => item.id === petId);
   const discount = promotion?.checkedCode === code.trim() && promotion.checkedServiceId === serviceId && promotion.valid ? promotion : null;
+  const afterVoucher = Number(discount ? discount.finalAmount : service?.basePrice || 0);
+  const memberReduction = Math.round(afterVoucher * Number(member?.discountPercent || 0) / 100);
+  const estimate = Math.max(0, afterVoucher - memberReduction);
+
+  useEffect(() => {
+    let alive = true;
+    clinicApi.memberDiscount(token, walkInCustomerId).then(data => { if (alive) { setMember(data); setMemberError(''); } })
+      .catch(err => { if (alive) setMemberError(err.message || 'Không tải được ưu đãi thành viên.'); });
+    return () => { alive = false; };
+  }, [token, walkInCustomerId]);
 
   // Load available time slots when date/service changes
   useEffect(() => {
     setSlot(null);
+    setSlots([]);
+    setError('');
     setPreference('');
     setAvailableDoctors([]);
     if (!serviceId || !date) return;
@@ -81,8 +95,10 @@ export default function BookingWizard({ pets, services, initialPetId, suggestion
   async function submit(event) {
     event.preventDefault();
     if (saving || checking) return;
+    if (step === 0 && (!pet || !service)) { setError('Vui lòng chọn thú cưng và dịch vụ.'); return; }
+    if (step === 1 && (!slot || loading)) { setError('Vui lòng chọn một giờ còn trống.'); return; }
     if (step < 2) { setError(''); setStep(step + 1); return; }
-    if (!pet || !service || !slot || (code.trim() && !discount)) return;
+    if (!pet || !service || !slot || !member || (code.trim() && !discount)) return;
     setSaving(true);
     setError('');
     try {
@@ -182,8 +198,10 @@ export default function BookingWizard({ pets, services, initialPetId, suggestion
           {!walkInCustomerId && <div><dt>Bác sĩ mong muốn</dt><dd>{preference ? slot?.staffName : 'Để phòng khám sắp xếp'}</dd></div>}
           <div><dt>Thời lượng</dt><dd>{service?.durationMinutes} phút</dd></div><div><dt>Giá dịch vụ</dt><dd>{formatMoney(service?.basePrice)}</dd></div>
           {discount && <div><dt>Ưu đãi</dt><dd>−{formatMoney(discount.discountAmount)}</dd></div>}
-          <div className="pc-summary-total"><dt>Tổng tạm tính</dt><dd>{formatMoney(discount ? discount.finalAmount : service?.basePrice)}</dd></div>
+          {memberReduction > 0 && <div><dt>Ưu đãi thành viên {member.tier} ({member.discountPercent}%)</dt><dd>−{formatMoney(memberReduction)}</dd></div>}
+          <div className="pc-summary-total"><dt>Tổng tạm tính</dt><dd>{member ? formatMoney(estimate) : 'Đang tải...'}</dd></div>
         </dl>
+        {memberError && <p className="pc-notice" role="alert">{memberError}<button type="button" className="pc-text-button" onClick={() => clinicApi.memberDiscount(token, walkInCustomerId).then(data => { setMember(data); setMemberError(''); }).catch(err => setMemberError(err.message))}>Thử lại</button></p>}
         <div className="pc-promo"><label className="pc-field">Mã ưu đãi (nếu có)<input name="promotionCode" placeholder="Nhập mã của bạn" value={code} onChange={event => { setCode(event.target.value); setPromotion(null); }} /></label><button type="button" className="pc-button pc-button--soft" disabled={checking || !code.trim()} onClick={applyPromotion}>{checking ? 'Đang kiểm tra...' : 'Áp dụng'}</button></div>
         {promotion?.checkedCode === code.trim() && promotion.checkedServiceId === serviceId && <p className="pc-muted" role="status">{promotion.valid ? 'Mã ưu đãi đã được áp dụng.' : promotion.message || promotion.reason || 'Mã ưu đãi không khả dụng.'}</p>}
         {code.trim() && !checking && !discount && <p className="pc-muted">Hãy áp dụng mã ưu đãi trước khi xác nhận, hoặc xóa mã để tiếp tục.</p>}
@@ -192,7 +210,7 @@ export default function BookingWizard({ pets, services, initialPetId, suggestion
       </>}
       <div className="pc-form-actions">
         <button type="button" className="pc-button pc-button--line" disabled={saving} onClick={step ? () => setStep(step - 1) : onClose}>{step ? <><ArrowLeft />Quay lại</> : 'Để sau'}</button>
-        <button className="pc-button" type="submit" disabled={saving || checking || (step === 0 && (!pet || !service)) || (step === 1 && (!slot || loading)) || (step === 2 && Boolean(code.trim() && !discount))}>{saving ? 'Đang đặt lịch...' : step === 2 ? <><Check />Xác nhận đặt lịch</> : <>Tiếp tục<ArrowRight /></>}</button>
+        <button className="pc-button" type="submit" disabled={saving || checking || (step === 0 && (!pet || !service)) || (step === 1 && (!slot || loading)) || (step === 2 && (!member || Boolean(code.trim() && !discount)))}>{saving ? 'Đang đặt lịch...' : step === 2 ? <><Check />Xác nhận đặt lịch</> : <>Tiếp tục<ArrowRight /></>}</button>
       </div>
     </form>
   </Modal>;

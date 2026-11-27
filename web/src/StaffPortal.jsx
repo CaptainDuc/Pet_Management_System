@@ -58,6 +58,7 @@ const ROLE_CONFIGS = {
       { id: 'bookings', label: 'Lịch hẹn' },
       { id: 'invoices', label: 'Hóa đơn' },
       { id: 'customers', label: 'Khách hàng' },
+      { id: 'shifts', label: 'Quản lý ca' },
       { id: 'profile', label: 'Hồ sơ Nhân viên' }
     ]
   },

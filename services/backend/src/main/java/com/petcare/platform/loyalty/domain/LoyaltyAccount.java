@@ -3,6 +3,7 @@ package com.petcare.platform.loyalty.domain;
 import com.petcare.platform.common.domain.BaseEntity;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.ColumnTransformer;
 
 import java.util.UUID;
 
@@ -34,4 +35,17 @@ public class LoyaltyAccount extends BaseEntity {
 
     @Column(name = "tier", nullable = false)
     private String tier;
+
+    @Column(name = "lifetime_points", nullable = false)
+    private Long lifetimePoints;
+
+    @Column(name = "tier_achieved_at")
+    private java.time.Instant tierAchievedAt;
+
+    @Column(name = "benefits_claimed", columnDefinition = "jsonb")
+    @ColumnTransformer(
+        read = "benefits_claimed::text",
+        write = "?::jsonb"
+    )
+    private String benefitsClaimed;
 }

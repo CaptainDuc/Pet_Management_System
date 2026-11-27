@@ -1,20 +1,11 @@
 import React, { useState, useEffect } from "react";
 import {
   Users,
-  Lock,
   Shield,
-  Server,
   RefreshCw,
-  CheckCircle2,
   AlertTriangle,
   Search,
-  Filter,
   Plus,
-  UserCheck,
-  Key,
-  ChevronRight,
-  Database,
-  Cpu,
   Activity,
 } from "lucide-react";
 import { Card, Button, Badge, Input, Select, Table } from '../../design-system/components';
@@ -49,80 +40,6 @@ export default function AdminDashboard({
   // Audit state
   const [auditLogs, setAuditLogs] = useState([]);
   const [auditLoading, setAuditLoading] = useState(false);
-
-  // System Health state
-  const systemServices = [
-    {
-      name: "Core Backend Monolith",
-      port: 8080,
-      type: "Spring Boot 3.3",
-      status: "HEALTHY",
-      memory: "~320 MB",
-    },
-    {
-      name: "Payment Microservice",
-      port: 8082,
-      type: "Spring Boot 3.3",
-      status: "HEALTHY",
-      memory: "~260 MB",
-    },
-    {
-      name: "Notification Microservice",
-      port: 8083,
-      type: "Spring Boot 3.3",
-      status: "HEALTHY",
-      memory: "~260 MB",
-    },
-    {
-      name: "AI Vision Service",
-      port: 8003,
-      type: "FastAPI / PyTorch",
-      status: "HEALTHY",
-      memory: "~115 MB",
-    },
-    {
-      name: "AI RAG Service",
-      port: 8002,
-      type: "FastAPI / Chroma",
-      status: "HEALTHY",
-      memory: "~80 MB",
-    },
-    {
-      name: "AI Agent Service",
-      port: 8001,
-      type: "FastAPI / LangChain",
-      status: "HEALTHY",
-      memory: "~65 MB",
-    },
-    {
-      name: "AI Recommendation",
-      port: 8004,
-      type: "FastAPI / Scikit",
-      status: "HEALTHY",
-      memory: "~45 MB",
-    },
-    {
-      name: "PostgreSQL Primary Cluster",
-      port: 5432,
-      type: "Postgres 16",
-      status: "HEALTHY",
-      memory: "~45 MB",
-    },
-    {
-      name: "Redis Cache & Sessions",
-      port: 6379,
-      type: "Redis 7.2",
-      status: "HEALTHY",
-      memory: "~8 MB",
-    },
-    {
-      name: "RabbitMQ Message Broker",
-      port: 5672,
-      type: "RabbitMQ 3.13",
-      status: "HEALTHY",
-      memory: "~78 MB",
-    },
-  ];
 
   const fetchUsers = async () => {
     if (!token) return;
@@ -256,7 +173,7 @@ export default function AdminDashboard({
     } else if (activeTab === "audit") {
       fetchAudit();
     }
-  }, [activeTab]);
+  }, [activeTab, token]);
 
   const filteredUsers = usersList.filter((u) => {
     const matchSearch =
@@ -273,7 +190,6 @@ export default function AdminDashboard({
 
   return (
     <div className="space-y-6">
-      {activeTab === 'system' && <p className="pc-demo-note">Thông số hạ tầng bên dưới đang là dữ liệu minh họa, chưa phản ánh trạng thái giám sát thực tế.</p>}
       {/* TAB 1: QUẢN LÝ NGƯỜI DÙNG */}
       {activeTab === "users" && (
         <div className="space-y-6">
@@ -545,56 +461,21 @@ export default function AdminDashboard({
 
       {/* TAB 4: GIÁM SÁT HỆ THỐNG */}
       {activeTab === "system" && (
-        <div className="space-y-6">
-          <Card variant="outlined" padding="md" className="flex items-center justify-between">
-            <Card.Header className="flex items-center space-x-2">
-              <span className="w-8 h-8 rounded-xl bg-[var(--color-role-admin-bg)] text-[var(--color-role-admin-text)] flex items-center justify-center font-bold">
-                <Activity size={18} />
-              </span>
-              <div>
-                <Card.Title className="text-lg font-bold text-[var(--color-fg-primary)]">
-                  Giám sát Hạ tầng Microservices & AI Cluster
-                </Card.Title>
-                <Card.Description className="text-xs text-[var(--color-fg-tertiary)] mt-1">
-                  Tình trạng vận hành 10 dịch vụ chính, mức tiêu thụ RAM tối ưu
-                  ~1.34 GB và cổng kết nối
-                </Card.Description>
-              </div>
-            </Card.Header>
-            <Badge variant="success" size="sm">
-              Tất cả 10 containers: ONLINE
-            </Badge>
-          </Card>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {systemServices.map((svc, idx) => (
-              <Card key={idx} variant="outlined" padding="md" className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 rounded-xl bg-[var(--color-neutral-100)] border border-[var(--color-bd-light)] flex items-center justify-center text-[var(--color-fg-tertiary)]">
-                    <Server className="w-5 h-5 text-[var(--color-role-admin-main)]" />
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-xs text-slate-900">
-                      {svc.name}
-                    </h4>
-                    <span className="text-[11px] text-slate-500">
-                      {svc.type} • Port :{svc.port}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="text-right">
-                  <Badge variant="success" size="xs" className="block mb-1">
-                    {svc.status}
-                  </Badge>
-                  <span className="text-[11px] text-slate-400 font-mono">
-                    RAM: {svc.memory}
-                  </span>
-                </div>
-              </Card>
-            ))}
-          </div>
-        </div>
+        <Card variant="outlined" padding="lg" className="max-w-3xl">
+          <Card.Header className="flex items-center gap-3">
+            <span className="w-10 h-10 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center">
+              <AlertTriangle size={20} />
+            </span>
+            <div>
+              <Card.Title className="text-lg font-bold text-[var(--color-fg-primary)]">Giám sát hệ thống</Card.Title>
+              <Card.Description className="mt-1 text-sm text-[var(--color-fg-tertiary)]">Chưa kết nối nguồn health-check trực tiếp.</Card.Description>
+            </div>
+          </Card.Header>
+          <p className="mt-4 text-sm leading-6 text-slate-600">
+            Màn hình này hiện chưa đọc trạng thái từ backend, payment, notification hay AI services.
+            Vì vậy hệ thống không hiển thị trạng thái ONLINE hoặc số liệu tài nguyên giả lập.
+          </p>
+        </Card>
       )}
 
       {/* TAB: QUẢN LÝ MÃ GIẢM GIÁ */}

@@ -6,6 +6,7 @@ import com.petcare.platform.booking.repository.BookingRepository;
 import com.petcare.platform.invoice.domain.Invoice;
 import com.petcare.platform.invoice.domain.InvoiceStatus;
 import com.petcare.platform.invoice.repository.InvoiceRepository;
+import com.petcare.platform.loyalty.service.LoyaltyService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
@@ -17,6 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.Locale;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -30,6 +32,7 @@ public class InternalPayableController {
 
     private final BookingRepository bookingRepository;
     private final InvoiceRepository invoiceRepository;
+    private final LoyaltyService loyaltyService;
 
     @Value("${app.internal.api-key:petcare_internal_dev_key}")
     private String internalApiKey;
@@ -44,7 +47,7 @@ public class InternalPayableController {
         rejectCancelled(booking);
         boolean paid = booking.getPaymentStatus() == PaymentStatus.PAID;
         return new PayableResponse(booking.getId(), null, bookingReference(booking.getId()),
-                booking.getTotalAmount(), booking.getPaymentStatus().name(), paid);
+                booking.getTotalAmount(), booking.getPaymentStatus().name(), paid, 0);
     }
 
     @GetMapping("/invoices/{id}/payable")
@@ -57,7 +60,27 @@ public class InternalPayableController {
         bookingRepository.findById(invoice.getBookingId()).ifPresent(this::rejectCancelled);
         boolean paid = invoice.getStatus() == InvoiceStatus.PAID;
         return new PayableResponse(invoice.getBookingId(), invoice.getId(), invoice.getInvoiceNumber(),
-                invoice.getTotalAmount(), invoice.getStatus().name(), paid);
+                invoice.getTotalAmount(), invoice.getStatus().name(), paid, 0);
+    }
+
+    @GetMapping("/loyalty/discount/{userId}")
+    public Map<String, Object> getUserDiscount(
+            @PathVariable UUID userId,
+            @RequestHeader(value = "X-Internal-Key", required = false) String key) {
+        requireKey(key);
+        var account = loyaltyService.getOrCreateAccount(userId);
+        int discount = loyaltyService.getDiscountPercent(account.getTier());
+        return Map.of("discountPercent", discount);
+    }
+
+    private int getDiscountForCustomer(UUID customerId) {
+        if (customerId == null) return 0;
+        try {
+            var account = loyaltyService.getOrCreateAccount(customerId);
+            return loyaltyService.getDiscountPercent(account.getTier());
+        } catch (Exception e) {
+            return 0;
+        }
     }
 
     private void rejectCancelled(Booking booking) {

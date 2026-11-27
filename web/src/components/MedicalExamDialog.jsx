@@ -1,7 +1,56 @@
 import React, { useEffect, useState } from 'react';
-import { Stethoscope, History, Syringe, AlertCircle, CheckCircle, Clock, ChevronDown, ChevronUp, FileText, Calendar } from 'lucide-react';
-import { Modal, Button, Badge } from '../design-system/components';
+import { Stethoscope, History, Syringe, AlertCircle, CheckCircle, Clock, ChevronDown, ChevronUp, FileText, Calendar, ClipboardList, Plus } from 'lucide-react';
+import { Modal, Button, Badge, Select, Input } from '../design-system/components';
 import { clinicApi, medicalApi } from '../api/clinic';
+
+const PRESCRIPTION_TEMPLATES = [
+  { id: 'tiem-phong-7-benh', name: 'Vắc xin 7 bệnh (Nobivac DHPPi+L)', category: 'Tiêm phòng' },
+  { id: 'tiem-phong-5-benh', name: 'Vắc xin 5 bệnh (Nobivac DHPPi)', category: 'Tiêm phòng' },
+  { id: 'tiem-phong-4-benh', name: 'Vắc xin 4 bệnh (Duramune)', category: 'Tiêm phòng' },
+  { id: 'phong-dai', name: 'Vắc xin phòng dại (Rabisin/Nobivac Rabies)', category: 'Tiêm phòng' },
+  { id: 'khang-sinh-cephalexin', name: 'Kháng sinh Cephalexin 250mg/500mg', category: 'Kháng sinh' },
+  { id: 'khang-sinh-amoxicillin', name: 'Kháng sinh Amoxicillin/Clavulanate', category: 'Kháng sinh' },
+  { id: 'khang-sinh-enrofloxacin', name: 'Kháng sinh Enrofloxacin 50mg/150mg', category: 'Kháng sinh' },
+  { id: 'khang-sinh-doxycycline', name: 'Kháng sinh Doxycycline 100mg', category: 'Kháng sinh' },
+  { id: 'giam-dau-nsaid', name: 'Giảm đau/Chống viêm NSAID (Meloxicam/Carprofen)', category: 'Giảm đau' },
+  { id: 'khang-histamin', name: 'Kháng histamin (Diphenhydramine/Cetirizine)', category: 'Dị ứng' },
+  { id: 'corticoid-dexamethasone', name: 'Corticoid Dexamethasone/Prednisolone', category: 'Corticoid' },
+  { id: 'thuoc-giun-dronecit', name: 'Thuốc giun Drontal/Milbemax (broad-spectrum)', category: 'Tẩy giun' },
+  { id: 'thuoc-giun-milbemycin', name: 'Thuốc giun Milbemycin oxime (InterCeptor)', category: 'Tẩy giun' },
+  { id: 'ngoai-tri-otamax', name: 'Ngoại trị tai Otomax/Surolan (viêm tai)', category: 'Ngoại trị' },
+  { id: 'ngoai-tri-mata', name: 'Ngoại trị mắt (Tobrex/Chloramphenicol)', category: 'Ngoại trị' },
+  { id: 'bổ-sung-vitamin', name: 'Bổ sung Vitamin B12/B-complex', category: 'Bổ sung' },
+  { id: 'rua-mat-physiol', name: 'Rửa mắt/tai Physiol/NaCl 0.9%', category: 'Vệ sinh' },
+  { id: 'thuoc-ho-chong-viem', name: 'Thuốc ho/Chống viêm đường hô hấp (Bromhexine)', category: 'Hô hấp' },
+  { id: 'probiotic', name: 'Men vi sinh/Probiotic (Enterococcus/FortiFlora)', category: 'Tiêu hóa' },
+  { id: 'giam-sot-paracetamol', name: 'Giảm sốt Paracetamol thú y (dạng tiêm/uống)', category: 'Giảm sốt' },
+];
+
+function getTemplateContent(id) {
+  const templates = {
+    'tiem-phong-7-benh': '💉 Tiêm phòng 7 bệnh (Nobivac DHPPi+L)\n- Liều: 1 ml dưới da\n- Ghi chú: Bé khỏe, không sốt, ăn ngon. Tiêm theo lịch.',
+    'tiem-phong-5-benh': '💉 Tiêm phòng 5 bệnh (Nobivac DHPPi)\n- Liều: 1 ml dưới da\n- Ghi chú: Bé khỏe, không sốt, ăn ngon. Tiêm theo lịch.',
+    'tiem-phong-4-benh': '💉 Tiêm phòng 4 bệnh (Duramune Max 5-CvK/4L)\n- Liều: 1 ml dưới da\n- Ghi chú: Bé khỏe, không sốt, ăn ngon. Tiêm theo lịch.',
+    'phong-dai': '💉 Vắc xin phòng dại (Rabisin/Nobivac Rabies)\n- Liều: 1 ml dưới da\n- Ghi chú: Bé đủ 3 tháng tuổi. Tiêm phòng dại theo quy định.',
+    'khang-sinh-cephalexin': '💊 Kháng sinh Cephalexin 250mg/500mg\n- Liều: 20-30 mg/kg/ngày chia 2 lần\n- Cách dùng: Uống sau ăn 30 phút, 5-7 ngày liên tục\n- Lưu ý: Hoàn đủ liệu trình theo chỉ định.',
+    'khang-sinh-amoxicillin': '💊 Kháng sinh Amoxicillin/Clavulanate (Clavamox)\n- Liều: 12.5-25 mg/kg/ngày chia 2 lần\n- Cách dùng: Uống sau ăn, 5-7 ngày\n- Lưu ý: Theo dõi tiêu chảy, nôn.',
+    'khang-sinh-enrofloxacin': '💊 Kháng sinh Enrofloxacin 50mg/150mg\n- Liều: 5 mg/kg/ngày 1 lần\n- Cách dùng: Uống hoặc tiêm, 5-7 ngày\n- Lưu ý: Không dùng cho chó lớn đang phát triển xương khớp.',
+    'khang-sinh-doxycycline': '💊 Kháng sinh Doxycycline 100mg\n- Liều: 5-10 mg/kg/ngày 1 lần\n- Cách dùng: Uống sau ăn, 7-14 ngày\n- Lưu ý: Uống kèm nhiều nước, tránh a xít.',
+    'giam-dau-nsaid': '💊 Giảm đau/Chống viêm NSAID (Meloxicam 1.5mg/ml)\n- Liều: 0.2 mg/kg ngày đầu, sau 0.1 mg/kg/ngày\n- Cách dùng: Tiêm hoặc uống 1 lần/ngày, 3-5 ngày\n- Lưu ý: Theo dõi tiêu hóa, thận.',
+    'khang-histamin': '💊 Kháng histamin (Diphenhydramine 2mg/kg)\n- Liều: 2-4 mg/kg/ngày chia 2-3 lần\n- Cách dùng: Uống hoặc tiêm\n- Lưu ý: Gây buồn ngủ nhẹ.',
+    'corticoid-dexamethasone': '💊 Corticoid Dexamethasone/Prednisolone\n- Liều: 0.1-0.5 mg/kg/ngày\n- Cách dùng: Giảm dần liều theo chỉ định\n- Lưu ý: Không ngắt quãng, theo dõi đường huyết.',
+    'thuoc-giun-dronecit': '💊 Thuốc tẩy giun Drontal Plus/Milbemax\n- Liều: 1 viên/10kg cân nặng\n- Cách dùng: Uống 1 lần, lặp lại sau 2 tuần\n- Lưu ý: Có thể cho kèm thức ăn.',
+    'thuoc-giun-milbemycin': '💊 Thuốc tẩy giun Milbemycin oxime (InterCeptor)\n- Liều: 0.5-1 mg/kg\n- Cách dùng: Uống 1 lần/tháng để phòng ngừa\n- Lưu ý: Phòng cả giun tim.',
+    'ngoai-tri-otamax': '👂 Ngoại trị tai Otomax/Surolan\n- Cách dùng: Nhỏ 2-4 giọt/tai x 2 lần/ngày\n- Thời gian: 7-14 ngày\n- Lưu ý: Làm sạch tai trước khi nhỏ.',
+    'ngoai-tri-mata': '👁 Ngoại trị mắt Tobrex/Chloramphenicol 0.5%\n- Cách dùng: Nhỏ 1-2 giọt/mắt x 3-4 lần/ngày\n- Thời gian: 5-7 ngày\n- Lưu ý: Rửa tay trước/sau khi nhỏ.',
+    'bo-sung-vitamin': '💊 Bổ sung Vitamin B12/B-complex\n- Liều: Theo chỉ định bác sĩ\n- Cách dùng: Tiêm bắp hoặc uống\n- Lưu ý: Hỗ trợ phục hồi, tăng ăn ngon.',
+    'rua-mat-physiol': '💧 Rửa mắt/tai Physiol/NaCl 0.9%\n- Cách dùng: Nhỏ/rửa 2-3 lần/ngày\n- Lưu ý: Dùng dung dịch mới, không tái sử dụng.',
+    'thuoc-ho-chong-viem': '💊 Thuốc ho/Chống viêm đường hô hấp (Bromhexine)\n- Liều: 0.5-1 mg/kg/ngày chia 2 lần\n- Cách dùng: Uống sau ăn, 5-7 ngày\n- Lưu ý: Uống nhiều nước ấm.',
+    'probiotic': '💊 Men vi sinh/Probiotic (FortiFlora/Enterococcus)\n- Liều: 1 gói/ngày\n- Cách dùng: Trộn vào thức ăn hoặc uống trực tiếp\n- Thời gian: 5-7 ngày hoặc kéo dài.',
+    'giam-sot-paracetamol': '💊 Giảm sốt Paracetamol thú y\n- Liều: 10-15 mg/kg/ngày chia 2-3 lần\n- Cách dùng: Tiêm hoặc uống khi sốt > 39.5°C\n- Lưu ý: KHÔNG dùng Paracetamol người cho mèo.',
+  };
+  return templates[id] || '';
+}
 
 const todayIso = () => {
   const d = new Date();
@@ -20,6 +69,7 @@ export default function MedicalExamDialog({ visit, token, onClose, onSaved }) {
   const [diagnosis, setDiagnosis] = useState('');
   const [treatment, setTreatment] = useState('');
   const [notes, setNotes] = useState('');
+  const [selectedTemplate, setSelectedTemplate] = useState('');
 
   // Vaccination sub-form
   const [includeVaccine, setIncludeVaccine] = useState(
@@ -265,8 +315,30 @@ export default function MedicalExamDialog({ visit, token, onClose, onSaved }) {
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
+            <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center justify-between">
               Phác đồ điều trị & Đơn thuốc dặn dò
+              <div className="flex items-center gap-2">
+                <Select
+                  value={selectedTemplate}
+                  onChange={e => {
+                    const id = e.target.value;
+                    setSelectedTemplate(id);
+                    if (id) {
+                      const content = getTemplateContent(id);
+                      setTreatment(prev => prev + (prev ? '\n\n' : '') + content);
+                      setSelectedTemplate(''); // reset after insert
+                    }
+                  }}
+                  options={[
+                    { value: '', label: '-- Chọn mẫu đơn thuốc --' },
+                    ...PRESCRIPTION_TEMPLATES.map(t => ({ value: t.id, label: `${t.name} (${t.category})` }))
+                  ]}
+                  placeholder="-- Chọn mẫu đơn thuốc --"
+                  disabled={busy}
+                  style={{ minWidth: '280px', fontSize: '11px' }}
+                />
+                <span className="text-[10px] text-slate-400">Chọn mẫu để chèn nhanh</span>
+              </div>
             </label>
             <textarea
               rows={3}

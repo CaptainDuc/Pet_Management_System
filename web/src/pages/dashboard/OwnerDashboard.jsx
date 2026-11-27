@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { Activity, RefreshCw } from "lucide-react";
-import { Card, Button, Badge, Table } from '../../design-system/components';
+import { Activity, RefreshCw, Plus, Pencil, Archive, Tag } from "lucide-react";
+import { Card, Button, Badge, Table, Input, Select, Modal } from '../../design-system/components';
 
 import OwnerReport from '../../components/OwnerReport';
 import DoctorRoster from '../../components/DoctorRoster';
@@ -18,29 +18,113 @@ export default function OwnerDashboard({
 }) {
   const [rosterVersion, setRosterVersion] = useState(0);
 
-  // Pricing Catalog state
+  // Service catalog state
   const [services, setServices] = useState([]);
+  const [categories, setCategories] = useState([]);
   const [servicesLoading, setServicesLoading] = useState(false);
+  const [serviceError, setServiceError] = useState('');
+  const [serviceSaving, setServiceSaving] = useState(false);
+  const [serviceMutationId, setServiceMutationId] = useState(null);
+  const [serviceModalOpen, setServiceModalOpen] = useState(false);
+  const [editingService, setEditingService] = useState(null);
+  const [serviceForm, setServiceForm] = useState({
+    name: '', categoryId: '', description: '', basePrice: '', durationMinutes: 30
+  });
+
+  const request = async (path, options = {}) => {
+    const res = await fetch(`${API_BASE}${path}`, {
+      ...options,
+      headers: {
+        ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...options.headers
+      }
+    });
+    const data = await res.json().catch(() => null);
+    if (onApiLog) onApiLog({ status: res.status, data, label: path });
+    if (!res.ok) throw new Error(data?.message || 'Không thể thực hiện thao tác. Vui lòng thử lại.');
+    return data?.data;
+  };
 
   const fetchServices = async () => {
+    if (!token) return;
     setServicesLoading(true);
+    setServiceError('');
     try {
-      const res = await fetch(`${API_BASE}/services?page=0&size=50`);
-      const data = await res.json();
-      if (res.ok && data?.data?.content) {
-        setServices(data.data.content.map((s, idx) => ({
-          id: `SRV-${String(idx + 1).padStart(2, '0')}`,
-          rawId: s.id,
-          name: s.name,
-          category: s.description || 'Dịch vụ phòng khám',
-          duration: `${s.durationMinutes} phút`,
-          price: Number(s.basePrice || 0)
-        })));
-      }
+      const [serviceData, categoryData] = await Promise.all([
+        request('/services?page=0&size=50'),
+        request('/services/categories')
+      ]);
+      setServices(serviceData?.content || []);
+      setCategories(Array.isArray(categoryData) ? categoryData : []);
     } catch (err) {
-      console.warn('Services fetch error:', err);
+      setServiceError(err.message || 'Không thể tải danh mục dịch vụ.');
     } finally {
       setServicesLoading(false);
+    }
+  };
+
+  const openServiceForm = (service = null) => {
+    setEditingService(service);
+    setServiceForm(service ? {
+      name: service.name || '',
+      categoryId: service.categoryId || '',
+      description: service.description || '',
+      basePrice: service.basePrice ?? '',
+      durationMinutes: service.durationMinutes || 30
+    } : { name: '', categoryId: '', description: '', basePrice: '', durationMinutes: 30 });
+    setServiceError('');
+    setServiceModalOpen(true);
+  };
+
+  const saveService = async (event) => {
+    event.preventDefault();
+    const basePrice = Number(serviceForm.basePrice);
+    const durationMinutes = Number(serviceForm.durationMinutes);
+    if (!serviceForm.name.trim()) return setServiceError('Vui lòng nhập tên dịch vụ.');
+    if (serviceForm.basePrice === '' || !Number.isFinite(basePrice) || basePrice < 0) return setServiceError('Giá dịch vụ không hợp lệ.');
+    if (serviceForm.durationMinutes === '' || !Number.isInteger(durationMinutes) || durationMinutes < 5) return setServiceError('Thời lượng tối thiểu là 5 phút.');
+
+    setServiceSaving(true);
+    setServiceError('');
+    try {
+      const payload = {
+        name: serviceForm.name.trim(),
+        categoryId: serviceForm.categoryId || null,
+        description: serviceForm.description.trim() || null,
+        basePrice,
+        durationMinutes
+      };
+      await request(editingService ? `/services/${editingService.id}` : '/services', {
+        method: editingService ? 'PUT' : 'POST',
+        body: JSON.stringify(payload)
+      });
+      setServiceModalOpen(false);
+      await fetchServices();
+    } catch (err) {
+      setServiceError(err.message || 'Không thể lưu dịch vụ.');
+    } finally {
+      setServiceSaving(false);
+    }
+  };
+
+  const closeServiceModal = () => {
+    if (serviceSaving) return;
+    setServiceModalOpen(false);
+    setServiceError('');
+  };
+
+  const deactivateService = async (service) => {
+    if (serviceMutationId || !window.confirm(`Ngừng cung cấp dịch vụ “${service.name}”?`)) return;
+    setServiceMutationId(service.id);
+    setServiceError('');
+    try {
+      await request(`/services/${service.id}`, { method: 'DELETE' });
+      await fetchServices();
+    } catch (err) {
+      setServiceError(err.message || 'Không thể ngừng dịch vụ.');
+    } finally {
+      setServiceMutationId(null);
     }
   };
 
@@ -79,7 +163,7 @@ export default function OwnerDashboard({
     } else if (activeTab === 'services') {
       fetchServices();
     }
-  }, [activeTab]);
+  }, [activeTab, token]);
 
   return (
     <div className="space-y-6">
@@ -94,37 +178,78 @@ export default function OwnerDashboard({
       {/* TAB 3: BẢNG GIÁ & DỊCH VỤ */}
       {activeTab === "services" && (
         <div className="space-y-6">
-          <Card variant="outlined" padding="md" className="flex items-center justify-between">
+          <Card variant="outlined" padding="md" className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <Card.Header className="flex items-center space-x-2">
-              <span className="w-8 h-8 rounded-xl bg-[var(--color-role-owner-bg)] text-[var(--color-role-owner-text)] flex items-center justify-center font-bold">
-                🏷️
+              <span className="w-8 h-8 rounded-xl bg-[var(--color-role-owner-bg)] text-[var(--color-role-owner-text)] flex items-center justify-center">
+                <Tag size={17} />
               </span>
               <div>
-                <Card.Title className="text-lg font-bold text-[var(--color-fg-primary)]">
-                  Bảng giá Niêm yết Dịch vụ
-                </Card.Title>
+                <Card.Title className="text-lg font-bold text-[var(--color-fg-primary)]">Dịch vụ & bảng giá</Card.Title>
                 <Card.Description className="text-xs text-[var(--color-fg-tertiary)] mt-1">
-                  Quản lý biểu phí dịch vụ khám chữa, tiêm phòng và spa làm đẹp
-                  toàn hệ thống
+                  Cập nhật dịch vụ, giá niêm yết và thời lượng áp dụng khi khách đặt lịch.
                 </Card.Description>
               </div>
             </Card.Header>
+            <div className="flex gap-2">
+              <Button variant="ghost" size="sm" onClick={fetchServices} disabled={servicesLoading}
+                leftIcon={<RefreshCw className={`w-3.5 h-3.5 ${servicesLoading ? 'animate-spin' : ''}`} />}>
+                Tải lại
+              </Button>
+              <Button variant="primary" size="sm" onClick={() => openServiceForm()}
+                leftIcon={<Plus className="w-3.5 h-3.5" />}>Thêm dịch vụ</Button>
+            </div>
           </Card>
+
+          {serviceError && !serviceModalOpen && (
+            <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">{serviceError}</p>
+          )}
 
           <Table
             columns={[
-              { key: 'id', header: 'Mã DV', width: '100px' },
-              { key: 'name', header: 'Tên dịch vụ' },
-              { key: 'category', header: 'Phân loại', width: '150px', render: (val) => <Badge variant="ghost" size="xs">{val}</Badge> },
-              { key: 'duration', header: 'Thời lượng ước tính', width: '150px' },
-              { key: 'price', header: 'Đơn giá niêm yết', width: '150px', align: 'right', render: (val) => <span className="font-bold text-blue-600">{val.toLocaleString()} đ</span> },
+              { key: 'name', header: 'Tên dịch vụ', render: (_, row) => <div><span className="font-semibold">{row.name}</span>{row.description && <p className="mt-1 text-xs text-slate-500">{row.description}</p>}</div> },
+              { key: 'categoryId', header: 'Danh mục', width: '170px', render: (id) => categories.find(category => category.id === id)?.name || 'Chưa phân loại' },
+              { key: 'durationMinutes', header: 'Thời lượng', width: '130px', render: (minutes) => `${minutes} phút` },
+              { key: 'basePrice', header: 'Đơn giá', width: '160px', render: (value) => <span className="font-bold tabular-nums">{Number(value || 0).toLocaleString('vi-VN')} đ</span> },
+              { key: 'actions', header: 'Thao tác', width: '150px', render: (_, row) => (
+                <div className="flex items-center gap-2">
+                  <Button variant="ghost" size="xs" aria-label={`Sửa ${row.name}`} onClick={() => openServiceForm(row)} leftIcon={<Pencil size={13} />}>Sửa</Button>
+                  <Button variant="ghost" size="xs" aria-label={`Ngừng ${row.name}`} onClick={() => deactivateService(row)} disabled={serviceMutationId !== null} leftIcon={<Archive size={13} />}>{serviceMutationId === row.id ? 'Đang xử lý' : 'Ngừng'}</Button>
+                </div>
+              )},
             ]}
             data={services}
             keyField="id"
             striped
             hoverable
+            emptyMessage={servicesLoading ? 'Đang tải dịch vụ…' : 'Chưa có dịch vụ đang hoạt động.'}
             className="table-wrapper"
           />
+
+          <Modal
+            open={serviceModalOpen}
+            onClose={closeServiceModal}
+            title={editingService ? 'Cập nhật dịch vụ' : 'Thêm dịch vụ'}
+            description="Giá và thời lượng này sẽ được dùng trong quy trình đặt lịch."
+            size="md"
+            variant="form"
+            loading={serviceSaving}
+          >
+            <form onSubmit={saveService} className="space-y-4">
+              {serviceError && <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">{serviceError}</p>}
+              <Input label="Tên dịch vụ" value={serviceForm.name} onChange={e => setServiceForm({ ...serviceForm, name: e.target.value })} required maxLength={255} fullWidth />
+              <Select label="Danh mục" value={serviceForm.categoryId} onChange={value => setServiceForm({ ...serviceForm, categoryId: value })}
+                options={[{ value: '', label: 'Chưa phân loại' }, ...categories.map(category => ({ value: category.id, label: category.name }))]} fullWidth />
+              <Input label="Mô tả" value={serviceForm.description} onChange={e => setServiceForm({ ...serviceForm, description: e.target.value })} fullWidth />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Input label="Giá (VNĐ)" type="number" min="0" step="1000" value={serviceForm.basePrice} onChange={e => setServiceForm({ ...serviceForm, basePrice: e.target.value })} required fullWidth />
+                <Input label="Thời lượng (phút)" type="number" min="5" step="5" value={serviceForm.durationMinutes} onChange={e => setServiceForm({ ...serviceForm, durationMinutes: e.target.value })} required fullWidth />
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <Button type="button" variant="ghost" onClick={closeServiceModal} disabled={serviceSaving}>Hủy</Button>
+                <Button type="submit" variant="primary" disabled={serviceSaving}>{editingService ? 'Lưu thay đổi' : 'Tạo dịch vụ'}</Button>
+              </div>
+            </form>
+          </Modal>
         </div>
       )}
 

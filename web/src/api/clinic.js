@@ -1,4 +1,5 @@
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1";
+import { refreshAccessToken } from './session';
 
 async function request(endpoint, { method = "GET", token, body } = {}) {
   const headers = {};
@@ -16,12 +17,21 @@ async function request(endpoint, { method = "GET", token, body } = {}) {
       headers,
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
-  } catch {
-    const error = new Error(
+    if (response.status === 401 && token) {
+      const freshToken = await refreshAccessToken();
+      response = await fetch(`${API_BASE}${endpoint}`, {
+        method,
+        headers: { ...headers, Authorization: `Bearer ${freshToken}` },
+        body: body !== undefined ? JSON.stringify(body) : undefined,
+      });
+    }
+  } catch (error) {
+    if (!(error instanceof TypeError)) throw error;
+    const networkError = new Error(
       "Không thể kết nối đến máy chủ backend (http://localhost:8000)."
     );
-    error.status = 0;
-    throw error;
+    networkError.status = 0;
+    throw networkError;
   }
 
   let payload = null;
@@ -165,6 +175,14 @@ export const clinicApi = {
     });
   },
 
+  listAllBookings(token) {
+    return listAll('/bookings', token);
+  },
+
+  memberDiscount(token, customerId) {
+    return request(customerId ? `/loyalty/customer/${customerId}/discount` : '/loyalty/discount', { token });
+  },
+
   createBooking(payload, token) {
     return request("/bookings", { method: "POST", token, body: payload });
   },
@@ -191,8 +209,8 @@ export const clinicApi = {
     return request('/schedules/staff', { token });
   },
 
-  shifts(date, token) {
-    return request(`/schedules${query({ dateFrom: date, dateTo: date })}`, { token });
+  shifts(dateFrom, dateTo, token) {
+    return request(`/schedules${query({ dateFrom, dateTo })}`, { token });
   },
 
   createShift(body, token) {
@@ -205,6 +223,10 @@ export const clinicApi = {
 
   shiftBookings(id, token) {
     return request(`/bookings/by-shift/${id}`, { token });
+  },
+
+  deleteShift(id, token) {
+    return request(`/schedules/${id}`, { method: 'DELETE', token });
   },
 
   validatePromotion(code, bookingTotal, token) {

@@ -9,6 +9,11 @@ public record PayableResponse(
         String reference,
         BigDecimal amount,
         String paymentStatus,
-        boolean alreadyPaid
+        boolean alreadyPaid,
+        int discountPercent
 ) {
+    // Backward compatibility constructor
+    public PayableResponse(UUID bookingId, UUID invoiceId, String reference, BigDecimal amount, String paymentStatus, boolean alreadyPaid) {
+        this(bookingId, invoiceId, reference, amount, paymentStatus, alreadyPaid, 0);
+    }
 }

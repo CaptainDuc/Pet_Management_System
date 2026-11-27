@@ -36,7 +36,7 @@ export default function VietQrPaymentModal({ open, invoice, booking, onClose, on
 
     paymentApi
       .createPayment({
-        amount: Number(isBooking ? booking?.amount : invoice?.total || 0),
+        amount: Number(isBooking ? booking?.totalAmount : invoice?.totalAmount || invoice?.total || 0),
         bookingId: isBooking ? booking?.id : undefined,
         invoiceId: isBooking ? undefined : invoice?.id,
         invoiceCode: reference,

@@ -1,5 +1,6 @@
 const PAYMENT_BASE =
   import.meta.env.VITE_PAYMENT_URL || "http://localhost:8000/api/v1";
+import { refreshAccessToken } from './session';
 
 async function request(endpoint, { method = "GET", body } = {}) {
   const token = localStorage.getItem("accessToken");
@@ -15,12 +16,21 @@ async function request(endpoint, { method = "GET", body } = {}) {
       headers,
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
-  } catch {
-    const error = new Error(
+    if (response.status === 401 && token) {
+      const freshToken = await refreshAccessToken();
+      response = await fetch(`${PAYMENT_BASE}${endpoint}`, {
+        method,
+        headers: { ...headers, Authorization: `Bearer ${freshToken}` },
+        body: body !== undefined ? JSON.stringify(body) : undefined,
+      });
+    }
+  } catch (error) {
+    if (!(error instanceof TypeError)) throw error;
+    const networkError = new Error(
       "Không thể kết nối đến payment-service (http://localhost:8000)."
     );
-    error.status = 0;
-    throw error;
+    networkError.status = 0;
+    throw networkError;
   }
 
   let payload = null;

@@ -59,4 +59,8 @@ public interface TimeSlotRepository extends JpaRepository<TimeSlot, UUID> {
     List<UUID> findBookedSlotsInRange(@Param("scheduleIds") Collection<UUID> scheduleIds,
                                        @Param("start") java.time.Instant start,
                                        @Param("end") java.time.Instant end);
+
+    @Modifying
+    @Query("delete from TimeSlot t where t.scheduleId = :scheduleId")
+    void deleteByScheduleId(@Param("scheduleId") UUID scheduleId);
 }

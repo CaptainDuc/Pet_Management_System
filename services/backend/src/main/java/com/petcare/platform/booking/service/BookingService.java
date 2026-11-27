@@ -38,6 +38,7 @@ import com.petcare.platform.servicecatalog.domain.CareService;
 import com.petcare.platform.servicecatalog.repository.CareServiceRepository;
 import com.petcare.platform.staff.domain.Staff;
 import com.petcare.platform.staff.repository.StaffRepository;
+import com.petcare.platform.loyalty.service.LoyaltyService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -49,6 +50,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import com.petcare.platform.schedule.service.ScheduleService;
 import com.petcare.platform.schedule.dto.AvailableSlotsResponse;
 import com.petcare.platform.schedule.dto.AvailableSlotsResponse.StaffSlots;
@@ -92,6 +94,7 @@ public class BookingService {
     private final OutboxService outboxService;
     private final PromotionService promotionService;
     private final PromotionRepository promotionRepository;
+    private final LoyaltyService loyaltyService;
 
     private record PlannedItem(CareService service, UUID slotId, List<UUID> reservedSlots, UUID staffId, UUID preference, String notes) {}
 
@@ -194,6 +197,19 @@ public class BookingService {
             booking.setPromotionId(applied.promotionId());
             booking.setDiscountAmount(applied.discountAmount());
             booking.setTotalAmount(applied.finalAmount());
+            booking = bookingRepository.save(booking);
+        }
+
+        // Snapshot the member benefit when the appointment is created. Every later
+        // payment method and the invoice now use the same authoritative amount.
+        int memberPercent = loyaltyService.getDiscountPercent(
+                loyaltyService.getOrCreateAccount(customerId).getTier());
+        if (memberPercent > 0) {
+            BigDecimal memberDiscount = booking.getTotalAmount()
+                    .multiply(BigDecimal.valueOf(memberPercent))
+                    .divide(BigDecimal.valueOf(100), 0, RoundingMode.HALF_UP);
+            booking.setDiscountAmount(booking.getDiscountAmount().add(memberDiscount));
+            booking.setTotalAmount(booking.getTotalAmount().subtract(memberDiscount));
             booking = bookingRepository.save(booking);
         }
 
@@ -344,9 +360,11 @@ public class BookingService {
             log.warn("payment.completed for cancelled booking {}", id);
             return false;
         }
+        // Allow discounted payments (loyalty tier discount). The payment service already validates
+        // the order amount against the discounted payable amount.
         if (amount != null && booking.getTotalAmount() != null
-                && amount.compareTo(booking.getTotalAmount()) < 0) {
-            log.warn("payment.completed amount {} is lower than booking {} total {}",
+                && amount.compareTo(booking.getTotalAmount()) > 0) {
+            log.warn("payment.completed amount {} exceeds booking {} total {}",
                     amount, id, booking.getTotalAmount());
             return false;
         }
@@ -400,6 +418,16 @@ public class BookingService {
         });
         bookingRepository.save(booking);
         promotionService.consume(booking.getId());
+
+        // Earn loyalty points: 1 point per 10,000 VND spent (on actual paid amount after discount)
+        if (booking.getCustomerId() != null && booking.getTotalAmount() != null) {
+            try {
+                loyaltyService.addPointsFromSpending(booking.getCustomerId(), booking.getTotalAmount().longValue());
+            } catch (Exception e) {
+                log.warn("Failed to add loyalty points for booking {}: {}", booking.getId(), e.getMessage());
+            }
+        }
+
         return autoConfirm;
     }
 
