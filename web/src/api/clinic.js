@@ -250,6 +250,10 @@ export const invoiceApi = {
   getByBooking(bookingId, token) {
     return request(`/invoices/by-booking/${bookingId}`, { token });
   },
+
+  getInvoice(id, token) {
+    return request(`/invoices/${id}`, { token });
+  },
 };
 
 export const promotionApi = {

@@ -145,6 +145,12 @@
 .pc-slot-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:9px; }
 .pc-slot-grid .pc-choice { text-align:center; padding:11px 5px; }
 .pc-slot-grid .pc-choice[aria-pressed=true] { padding:10px 4px; }
+@media print {
+  body * { visibility:hidden !important; }
+  .pc-invoice-print, .pc-invoice-print * { visibility:visible !important; }
+  .pc-invoice-print { position:absolute; inset:0 auto auto 0; width:100%; padding:24px; color:#111; background:#fff; }
+  .pc-invoice-print-action { display:none !important; }
+}
 .pc-summary { margin:0; display:grid; gap:14px; }
 .pc-summary > div { display:flex; justify-content:space-between; gap:20px; font-size:14px; }
 .pc-summary dt { color:#62718b; }
@@ -218,7 +224,7 @@
   .pc-pet-actions .pc-text-button { justify-content:center; }
   .pc-overview-aside { grid-template-columns:1fr; }
   .pc-panel { padding:22px; }
-  .pc-mobile-nav { display:flex; justify-content:space-around; position:fixed; z-index:40; bottom:0; inset-inline:0; background:#fff; border-top:1px solid #dce5f0; padding:8px 4px calc(8px + env(safe-area-inset-bottom)); }
+  .pc-mobile-nav { display:flex; justify-content:flex-start; overflow-x:auto; position:fixed; z-index:40; bottom:0; inset-inline:0; background:#fff; border-top:1px solid #dce5f0; padding:8px 4px calc(8px + env(safe-area-inset-bottom)); }
   .pc-mobile-nav button { min-width:60px; min-height:48px; display:flex; flex-direction:column; align-items:center; gap:5px; background:transparent; border:0; color:#62718b; font-size:10px; font-weight:800; }
   .pc-mobile-nav button[aria-current=page] { color:#273172; }
   .pc-booking { flex-wrap:wrap; padding:18px; gap:14px; }

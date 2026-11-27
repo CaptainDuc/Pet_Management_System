@@ -79,11 +79,25 @@ public class NotificationService {
         Object bookingId = data.get("bookingId");
         if (bookingId != null) {
             n.setAppointmentId(UUID.fromString(bookingId.toString()));
+            if ("booking.rescheduled".equals(eventType) || "booking.cancelled".equals(eventType)) {
+                jdbcTemplate.update("""
+                        update notification_deliveries set status='DEAD_LETTERED',updated_at=now(),
+                        last_error='Appointment changed' where channel='EMAIL' and status in ('PENDING','FAILED')
+                        and notification_id in (select id from notifications where appointment_id=?)
+                        """, n.getAppointmentId());
+            }
         }
         n.setType(eventType);
         n.setTitle(text[0]);
         n.setBody(text[1]);
-        repository.save(n);
+        repository.saveAndFlush(n);
+        if ("booking.reminder-24h".equals(eventType) && data.get("customerEmail") instanceof String email
+                && !email.isBlank()) {
+            jdbcTemplate.update("""
+                    insert into notification_deliveries(notification_id,channel,recipient,provider,status,next_attempt_at)
+                    values (?,'EMAIL',?,'SMTP','PENDING',now())
+                    """, n.getId(), email);
+        }
     }
 
     private String[] compose(String eventType, Map<String, Object> data) {
@@ -111,7 +125,7 @@ public class NotificationService {
                     "Lịch hẹn đã hoàn thành",
                     "Cảm ơn bạn đã sử dụng dịch vụ " + services + " của PetCare."};
             case "booking.reminder-24h" -> new String[]{
-                    "Nhắc lịch hẹn ngày mai",
+                    "Nhắc lịch hẹn sắp tới",
                     "Lịch hẹn " + services + " sẽ diễn ra lúc " + time + ". Hãy chuẩn bị cho bé nhé."};
             case "booking.reminder-30m" -> new String[]{
                     "Lịch hẹn sắp bắt đầu",

@@ -1,12 +1,12 @@
 import React from 'react';
-import { PawPrint, LayoutDashboard, CalendarDays, Gift, MessageCircle, UserRound, Home, LogOut, ArrowUpRight } from 'lucide-react';
+import { PawPrint, LayoutDashboard, CalendarDays, Gift, MessageCircle, UserRound, Home, LogOut, ArrowUpRight, HeartPulse, Receipt } from 'lucide-react';
 import NotificationBell from './NotificationBell';
 import { Avatar } from '../design-system/components';
 import '../customer.css';
 
 const tabs = [
   ['overview', 'Tổng quan', LayoutDashboard], ['pets', 'Thú cưng của tôi', PawPrint],
-  ['bookings', 'Lịch hẹn', CalendarDays], ['loyalty', 'Điểm thưởng', Gift],
+  ['bookings', 'Lịch hẹn', CalendarDays], ['health', 'Sức khỏe', HeartPulse], ['invoices', 'Hóa đơn', Receipt], ['loyalty', 'Điểm thưởng', Gift],
   ['ai-chat', 'Trợ lý AI', MessageCircle], ['profile', 'Hồ sơ cá nhân', UserRound],
 ];
 
@@ -25,6 +25,6 @@ export default function CustomerPortal({ user, token, activeTab, setActiveTab, o
       </aside>
       <main className="pc-main"><div className="pc-content">{children}</div></main>
     </div>
-    <nav className="pc-mobile-nav" aria-label="Điều hướng trên điện thoại">{tabs.filter(([id]) => ['overview', 'pets', 'bookings', 'ai-chat', 'profile'].includes(id)).map(([id, label, Icon]) => <button key={id} aria-current={activeTab === id ? 'page' : undefined} onClick={() => setActiveTab(id)}><Icon size={21} />{id === 'pets' ? 'Thú cưng' : id === 'profile' ? 'Tài khoản' : label}</button>)}</nav>
+    <nav className="pc-mobile-nav" aria-label="Điều hướng trên điện thoại">{tabs.filter(([id]) => ['overview', 'pets', 'bookings', 'health', 'invoices', 'ai-chat', 'profile'].includes(id)).map(([id, label, Icon]) => <button key={id} aria-current={activeTab === id ? 'page' : undefined} onClick={() => setActiveTab(id)}><Icon size={21} />{id === 'pets' ? 'Thú cưng' : id === 'profile' ? 'Tài khoản' : label}</button>)}</nav>
   </div>;
 }

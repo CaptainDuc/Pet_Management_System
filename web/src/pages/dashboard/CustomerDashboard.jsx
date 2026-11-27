@@ -7,6 +7,7 @@ import BookingWizard, { formatMoney, formatTime, localDate } from '../../compone
 import VietQrPaymentModal from '../../components/VietQrPaymentModal';
 import RescheduleDialog from '../../components/RescheduleDialog';
 import CustomerExtras from './CustomerExtras';
+import CustomerRecords from '../../components/CustomerRecords';
 import PhotoInput from '../../components/PhotoInput';
 import { canPayBooking, paymentStatusLabel } from './bookingPayment';
 import { canCustomerCancelAppointment, isActiveAppointment } from './appointmentLifecycle';
@@ -222,7 +223,9 @@ export default function CustomerDashboard({ user, token, activeTab, setActiveTab
     </article>;
   }
 
-  const mainContent = ['loyalty', 'ai-chat'].includes(activeTab) ? (
+  const mainContent = ['health', 'invoices'].includes(activeTab) ? (
+    <CustomerRecords tab={activeTab} pets={pets} token={token} />
+  ) : ['loyalty', 'ai-chat'].includes(activeTab) ? (
     <CustomerExtras user={user} token={token} activeTab={activeTab} onBookingSuggestion={suggestion => book(suggestion.petId, suggestion)} />
   ) : (
     <>
