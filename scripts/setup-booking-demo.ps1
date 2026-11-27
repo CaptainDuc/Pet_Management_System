@@ -99,7 +99,7 @@ if (-not ($existingSkills.skills | Where-Object { $_.serviceId -eq $service.id }
 }
 if ($schedules.Count -eq 0) {
     $null = Invoke-PetCare 'POST' '/schedules' @{
-        staffId = $selected.id; workDate = $day; startTime = '08:00:00'; endTime = '10:00:00'
+        staffId = $selected.id; workDate = $day; startTime = '08:00:00'; endTime = '16:30:00'
         isAvailable = $true; slotDurationMinutes = 30
     }
 }

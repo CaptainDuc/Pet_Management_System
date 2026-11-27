@@ -2,22 +2,32 @@ import React, { useEffect, useState } from 'react';
 import { clinicApi } from '../api/clinic';
 import { Modal } from '../design-system/components';
 import { localDate } from './BookingWizard';
+import { canCustomerCancelAppointment } from '../pages/dashboard/appointmentLifecycle';
 
 const time = stamp => new Date(stamp).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Ho_Chi_Minh' });
 const when = stamp => new Date(stamp).toLocaleString('vi-VN', { dateStyle: 'short', timeStyle: 'short', timeZone: 'Asia/Ho_Chi_Minh' });
+const timeKey = slot => `${Date.parse(slot.startTime)}/${Date.parse(slot.endTime)}`;
 
-export default function RescheduleDialog({ booking, token, onClose, onSaved }) {
-  const items = booking.items.filter(item => item.timeSlotId && item.startTime);
+export default function RescheduleDialog({ booking, token, onClose, onSaved, customer = false }) {
+  const items = booking.items.filter(item => item.timeSlotId && item.startTime
+    && (!customer || canCustomerCancelAppointment(booking.status, item.startTime)));
   const [itemId, setItemId] = useState(items[0]?.id);
   const item = items.find(i => i.id === itemId);
   const [date, setDate] = useState(item?.startTime.slice(0, 10) || localDate());
   const [groups, setGroups] = useState([]);
+  const [selectedTime, setSelectedTime] = useState(item ? timeKey(item) : '');
   const [slotId, setSlotId] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [submitError, setSubmitError] = useState('');
   const [reload, setReload] = useState(0);
+  const options = groups.flatMap(group => group.slots.map(slot => ({ ...slot, staffId: group.staffId, staffName: group.staffName })));
+  const currentTime = item && item.startTime.slice(0, 10) === date ? timeKey(item) : '';
+  const times = [...new Map(options.map(slot => [timeKey(slot), slot])).values()];
+  if (currentTime && !times.some(slot => timeKey(slot) === currentTime)) times.push(item);
+  times.sort((a, b) => Date.parse(a.startTime) - Date.parse(b.startTime));
+  const availableDoctors = options.filter(slot => timeKey(slot) === selectedTime);
 
   useEffect(() => {
     let active = true;
@@ -51,25 +61,42 @@ export default function RescheduleDialog({ booking, token, onClose, onSaved }) {
       {items.length > 1 && <label className="pc-field">Dịch vụ cần đổi
         <select value={itemId} disabled={saving} onChange={e => {
           setItemId(e.target.value); setSlotId(''); setSubmitError('');
-          setDate(items.find(i => i.id === e.target.value).startTime.slice(0, 10));
+          const next = items.find(i => i.id === e.target.value);
+          setDate(next.startTime.slice(0, 10)); setSelectedTime(timeKey(next));
         }}>{items.map(i => <option key={i.id} value={i.id}>{i.serviceName} · {when(i.startTime)}</option>)}</select>
       </label>}
       {item && <p className="pc-muted">{item.serviceName} · Giờ hẹn hiện tại {when(item.startTime)}</p>}
       <label className="pc-field">Ngày hẹn mới
         <input type="date" required min={localDate()} value={date} disabled={saving}
-          onChange={e => { setDate(e.target.value); setSlotId(''); setSubmitError(''); }} />
+          onChange={e => { setDate(e.target.value); setSelectedTime(e.target.value === item.startTime.slice(0, 10) ? timeKey(item) : ''); setSlotId(''); setSubmitError(''); }} />
       </label>
       {loading && <p role="status">Đang tìm giờ trống…</p>}
       {error && <p role="alert" className="pc-notice">{error}</p>}
-      {!loading && !error && date && (groups.length ? <label className="pc-field">Nhân viên và giờ hẹn
-        <select required value={slotId} disabled={saving} onChange={e => { setSlotId(e.target.value); setSubmitError(''); }}>
-          <option value="">Chọn khung giờ</option>
-          {groups.map(group => <optgroup key={group.scheduleId} label={group.staffName}>
-            {group.slots.map(slot => <option key={slot.slotId} value={slot.slotId}>
-              {time(slot.startTime)} – {time(slot.endTime)} · {group.staffName}
-            </option>)}
-          </optgroup>)}
-        </select></label> : <p className="pc-muted">Ngày này chưa có giờ phù hợp. Bạn có thể chọn ngày khác.</p>)}
+      {!loading && !error && date && (times.length ? <>
+        <div><p className="pc-field mb-3">Chọn giờ phù hợp</p>
+          <div className="pc-slot-grid">{times.map(slot => <button key={timeKey(slot)} type="button"
+            className="pc-choice" disabled={saving} aria-pressed={selectedTime === timeKey(slot)}
+            onClick={() => { setSelectedTime(timeKey(slot)); setSlotId(''); setSubmitError(''); }}>
+            {time(slot.startTime)} – {time(slot.endTime)}
+            {timeKey(slot) === currentTime && <small>Giờ hẹn hiện tại</small>}
+          </button>)}</div>
+        </div>
+        {selectedTime && <div><p className="pc-field mb-3">Chọn bác sĩ khả dụng</p>
+          <div className="pc-choice-grid">
+            {selectedTime === currentTime && <button type="button" className="pc-choice" disabled={saving}
+              aria-pressed={!slotId} onClick={() => { setSlotId(''); setSubmitError(''); }}>
+              <strong>{item.staffName || item.preferredStaffName || 'Bác sĩ hiện tại'}</strong>
+              <small>Đang giữ lịch</small>
+            </button>}
+            {availableDoctors.map(slot => <button key={slot.slotId} type="button" className="pc-choice"
+              disabled={saving} aria-pressed={slotId === slot.slotId}
+              onClick={() => { setSlotId(slot.slotId); setSubmitError(''); }}>
+              <strong>{slot.staffName}</strong>
+              <small>{time(slot.startTime)} – {time(slot.endTime)}</small>
+            </button>)}
+          </div>
+        </div>}
+      </> : <p className="pc-muted">Ngày này chưa có giờ phù hợp. Bạn có thể chọn ngày khác.</p>)}
       {submitError && <p role="alert" className="pc-notice">{submitError}</p>}
       <div className="pc-form-actions">
         <button type="button" className="pc-button pc-button--line" onClick={onClose} disabled={saving}>Giữ lịch hiện tại</button>

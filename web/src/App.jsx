@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { clinicApi } from './api/clinic';
 import AdminConsole from './AdminConsole';
 import StaffPortal from './StaffPortal';
 import PublicAiChat from './components/PublicAiChat';
@@ -8,7 +9,7 @@ import {
   ArrowRight,
   Award,
   BadgeCheck,
-  BedDouble,
+  Stethoscope,
   CalendarCheck,
   Check,
   ChevronRight,
@@ -21,10 +22,8 @@ import {
   Menu,
   PawPrint,
   Phone,
-  Quote,
   Scissors,
   ShieldCheck,
-  ShoppingBag,
   Sparkles,
   Star,
   Users,
@@ -54,20 +53,10 @@ const services = [
     bg: 'bg-sky-50',
   },
   {
-    icon: ShoppingBag,
-    title: 'Pet Shop',
-    subtitle: 'Thức ăn & phụ kiện chính hãng',
-    description:
-      'Hơn 3.000 khách hàng tin tưởng lựa chọn. Pet Service cung cấp thức ăn, đồ chơi và phụ kiện đa dạng, nguồn gốc rõ ràng.',
-    color: 'from-brand-peach to-orange-400',
-    bg: 'bg-orange-50',
-  },
-  {
-    icon: BedDouble,
-    title: 'Pet Hotel',
-    subtitle: 'Khách sạn thú cưng chuẩn 5 sao',
-    description:
-      'Không gian lưu trú sạch sẽ, được chăm sóc và vui chơi mỗi ngày. Bạn yên tâm đi xa, bé yêu luôn được quan tâm tận tình.',
+    icon: Stethoscope,
+    title: 'Khám sức khỏe',
+    subtitle: 'Khám tổng quát cho chó và mèo',
+    description: 'Đặt lịch với bác sĩ thú y để kiểm tra sức khỏe và theo dõi tình trạng của bé.',
     color: 'from-brand-green to-emerald-400',
     bg: 'bg-emerald-50',
   },
@@ -76,8 +65,6 @@ const services = [
 const prices = [
   { name: 'Tắm vệ sinh', price: 'từ 200.000đ', note: 'Tắm, sấy, vệ sinh tai và cắt móng' },
   { name: 'Cắt tỉa lông', price: 'từ 250.000đ', note: 'Tạo kiểu theo yêu cầu, phù hợp từng giống' },
-  { name: 'Pet Hotel', price: 'từ 150.000đ/ngày', note: 'Phòng sạch, ăn uống và vui chơi đầy đủ' },
-  { name: 'Pet Shop', price: 'Giá cạnh tranh', note: 'Thức ăn, phụ kiện, đồ chơi cho thú cưng' },
 ];
 
 const combos = [
@@ -98,32 +85,20 @@ const combos = [
     name: 'Combo #3',
     price: '450.000',
     tag: 'Cao cấp',
-    features: ['Tắm sấy', 'Vệ sinh', 'Cắt tỉa tạo kiểu', 'Phụ kiện & nước hoa'],
+    features: ['Tắm sấy', 'Vệ sinh', 'Cắt tỉa tạo kiểu'],
   },
 ];
 
-const testimonials = [
-  {
-    name: 'Dino Vũ',
-    role: 'Khách hàng thân thiết',
-    quote:
-      'Bé nhà mình rất nhát nhưng các bạn chăm rất nhẹ nhàng. Lông được tỉa đẹp, thơm và đúng yêu cầu. Sẽ quay lại thường xuyên.',
-  },
-  {
-    name: 'Huy Trần',
-    role: 'Khách hàng Pet Hotel',
-    quote:
-      'Gửi bé ở Pet Service mấy ngày mà yên tâm hẳn. Ngày nào cũng có hình ảnh cập nhật, bé về vui vẻ và sạch sẽ.',
-  },
-  {
-    name: 'Minh Anh',
-    role: 'Khách hàng dịch vụ tại nhà',
-    quote:
-      'Đặt lịch rất nhanh, nhân viên tới đúng giờ. Dụng cụ sạch sẽ, làm việc chuyên nghiệp. Rất đáng để trải nghiệm.',
-  },
-];
 
 export function LandingPage() {
+  const [feed, setFeed] = useState();
+  useEffect(() => {
+    let active = true;
+    clinicApi.publicReviews().then(data => { if (active) setFeed(data); })
+      .catch(() => { if (active) setFeed(null); });
+    return () => { active = false; };
+  }, []);
+  const score = feed?.summary.count ? feed.summary.average + '/5' : '—';
   const [menuOpen, setMenuOpen] = useState(false);
   const { user, isAuthenticated } = useAuth();
 
@@ -282,7 +257,7 @@ export function LandingPage() {
               </p>
 
               <p className="mt-5 max-w-xl text-base leading-7 text-slate-500 sm:text-lg">
-                Spa, khách sạn và dịch vụ chăm sóc thú cưng tận nhà. Pet Service mang đến trải nghiệm chuẩn 5 sao,
+                Cắt tỉa lông, tắm vệ sinh và khám sức khỏe cho thú cưng. Pet Service mang đến trải nghiệm chuẩn 5 sao,
                 an toàn và tận tâm cho mọi bé yêu.
               </p>
 
@@ -306,7 +281,7 @@ export function LandingPage() {
               <div className="mt-10 grid max-w-xl grid-cols-3 gap-4 border-t border-slate-200/70 pt-6">
                 {[
                   { value: '3.000+', label: 'Khách hàng tin tưởng' },
-                  { value: '4.9/5', label: 'Đánh giá dịch vụ' },
+                  { value: score, label: 'Đánh giá dịch vụ' },
                   { value: '30 phút', label: 'Có mặt tận nơi' },
                 ].map((item) => (
                   <div key={item.label}>
@@ -330,8 +305,8 @@ export function LandingPage() {
                   <Star className="h-5 w-5 fill-amber-400" />
                 </span>
                 <div>
-                  <p className="font-display text-sm font-extrabold text-brand-navy">4.9/5 sao</p>
-                  <p className="text-[11px] text-slate-500">1.200+ đánh giá thực tế</p>
+                  <p className="font-display text-sm font-extrabold text-brand-navy">{score}</p>
+                  <p className="text-[11px] text-slate-500">{feed ? feed.summary.count + ' đánh giá công khai' : 'Đánh giá buổi hẹn'}</p>
                 </div>
               </div>
 
@@ -381,7 +356,7 @@ export function LandingPage() {
               </p>
             </div>
 
-            <div className="mt-12 grid gap-6 md:grid-cols-3">
+            <div className="mt-12 grid gap-6 md:grid-cols-2">
               {services.map((service) => (
                 <article
                   key={service.title}
@@ -440,7 +415,7 @@ export function LandingPage() {
                 Spa Thú Cưng <span className="text-brand-blue">Pet Service</span>
               </h2>
               <p className="mt-4 text-base leading-7 text-slate-500">
-                Tắm vệ sinh, cắt tỉa lông, khách sạn và phụ kiện. Giá tham khảo, có thể thay đổi theo giống và cân nặng
+                Tắm vệ sinh và cắt tỉa lông. Giá tham khảo, có thể thay đổi theo giống và cân nặng
                 của bé.
               </p>
 
@@ -534,7 +509,7 @@ export function LandingPage() {
                 </div>
                 <div className="rounded-3xl border border-white/10 bg-gradient-to-br from-brand-blue to-cyan-400 p-6 text-white shadow-2xl">
                   <Star className="h-8 w-8 fill-brand-peach text-brand-peach" />
-                  <p className="mt-6 font-display text-4xl font-extrabold">4.9/5</p>
+                  <p className="mt-6 font-display text-4xl font-extrabold">{score}</p>
                   <p className="mt-1 text-sm font-semibold text-white/80">Đánh giá trung bình</p>
                 </div>
                 <div className="rounded-3xl border border-white/10 bg-gradient-to-br from-brand-peach to-orange-400 p-6 text-brand-navy shadow-2xl">
@@ -705,14 +680,6 @@ export function LandingPage() {
                   className="h-[420px] w-full object-cover sm:h-[520px]"
                 />
               </div>
-              <div className="absolute -bottom-5 right-4 rounded-2xl bg-white px-5 py-4 shadow-xl shadow-brand-navy/10">
-                <div className="flex items-center gap-1 text-amber-400">
-                  {[1, 2, 3, 4, 5].map((star) => (
-                    <Star key={star} className="h-4 w-4 fill-current" />
-                  ))}
-                </div>
-                <p className="mt-1 text-xs font-semibold text-slate-500">1.200+ đánh giá thực tế</p>
-              </div>
             </div>
 
             <div className="lg:col-span-3">
@@ -721,32 +688,14 @@ export function LandingPage() {
                 Niềm tin từ <span className="text-brand-blue">những người bạn bốn chân</span>
               </h2>
               <p className="mt-4 text-base leading-7 text-slate-500">
-                Hàng nghìn khách hàng đã chọn Pet Service để chăm sóc bé yêu. Đây là chia sẻ của họ.
+                {feed === null ? 'Chưa tải được đánh giá.' : !feed ? 'Đang tải đánh giá…' : feed.recent.length ? 'Nhận xét từ những khách hàng đã hoàn tất buổi hẹn.' : 'Chưa có đánh giá được chia sẻ công khai.'}
               </p>
 
               <div className="mt-8 space-y-4">
-                {testimonials.map((item) => (
-                  <figure key={item.name} className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
-                    <div className="flex items-start gap-4">
-                      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-brand-soft font-display text-sm font-extrabold text-brand-navy">
-                        {item.name.charAt(0)}
-                      </span>
-                      <div className="flex-1">
-                        <div className="flex items-center justify-between gap-3">
-                          <div>
-                            <p className="text-sm font-extrabold text-brand-navy">{item.name}</p>
-                            <p className="text-xs text-slate-400">{item.role}</p>
-                          </div>
-                          <Quote className="h-6 w-6 text-brand-blue/30" />
-                        </div>
-                        <div className="mt-2 flex items-center gap-1 text-amber-400">
-                          {[1, 2, 3, 4, 5].map((star) => (
-                            <Star key={star} className="h-3.5 w-3.5 fill-current" />
-                          ))}
-                        </div>
-                        <blockquote className="mt-2 text-sm leading-6 text-slate-500">{item.quote}</blockquote>
-                      </div>
-                    </div>
+                {feed?.recent.map((item, index) => (
+                  <figure key={index} className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+                    <figcaption className="font-semibold text-brand-navy">Khách hàng PetCare · {item.rating}/5 sao</figcaption>
+                    {item.comment && <blockquote className="mt-2 break-words text-sm text-slate-600">{item.comment}</blockquote>}
                   </figure>
                 ))}
               </div>
@@ -860,7 +809,7 @@ export function LandingPage() {
             <div>
               <h3 className="font-display text-sm font-bold uppercase tracking-wider text-white">Dịch vụ</h3>
               <ul className="mt-4 space-y-2.5 text-sm">
-                {['Spa thú cưng chuẩn 5 sao', 'Tắm thú cưng tại nhà', 'Cắt tỉa lông tạo kiểu', 'Khách sạn thú cưng', 'Sản phẩm & phụ kiện'].map(
+                {['Spa thú cưng chuẩn 5 sao', 'Tắm thú cưng tại nhà', 'Cắt tỉa lông tạo kiểu', 'Khám sức khỏe thú cưng'].map(
                   (item) => (
                     <li key={item}>
                       <a href="#dich-vu" className="transition hover:text-brand-peach">

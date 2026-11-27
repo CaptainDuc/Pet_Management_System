@@ -13,7 +13,7 @@ CROSS JOIN services s;
 DELETE FROM time_slots;
 DELETE FROM schedules;
 
--- 4. Generate full continuous schedules and 30-min time slots from 08:00 to 17:00 for the next 60 days
+-- 4. Generate full continuous schedules and 30-min time slots from 08:00 to 16:30 for the next 60 days
 DO $$
 DECLARE
     st RECORD;
@@ -29,12 +29,13 @@ BEGIN
             sched_id := gen_random_uuid();
 
             INSERT INTO schedules (id, staff_id, work_date, start_time, end_time, is_available)
-            VALUES (sched_id, st.id, curr_date, '08:00:00', '17:00:00', true);
+            VALUES (sched_id, st.id, curr_date, '08:00:00', '16:30:00', true);
 
-            -- Continuous 30-min slots from 08:00 to 17:00 (18 slots per day)
-            -- 08:00, 08:30, 09:00, 09:30, 10:00, 10:30, 11:00, 11:30, 12:00, 12:30, 13:00, 13:30, 14:00, 14:30, 15:00, 15:30, 16:00, 16:30
+            -- Continuous 30-min slots from 08:00 to 16:30 (17 slots per day)
+            -- 08:00, 08:30, 09:00, 09:30, 10:00, 10:30, 11:00, 11:30, 12:00, 12:30, 13:00, 13:30, 14:00, 14:30, 15:00, 15:30, 16:00
             FOR slot_h IN 8..16 LOOP
                 FOR slot_m IN 0..1 LOOP
+                    EXIT WHEN slot_h = 16 AND slot_m = 1;
                     slot_time := make_time(slot_h, slot_m * 30, 0);
                     slot_start := (curr_date + slot_time) AT TIME ZONE 'Asia/Ho_Chi_Minh';
                     slot_end := slot_start + INTERVAL '30 minutes';

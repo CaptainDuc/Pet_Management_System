@@ -87,11 +87,12 @@ BEGIN
         IF NOT EXISTS (SELECT 1 FROM schedules WHERE staff_id = vet_staff_id AND work_date = curr_date) THEN
             sched_id := gen_random_uuid();
             INSERT INTO schedules (id, staff_id, work_date, start_time, end_time, is_available)
-            VALUES (sched_id, vet_staff_id, curr_date, '08:00:00', '18:00:00', true);
+            VALUES (sched_id, vet_staff_id, curr_date, '08:00:00', '16:30:00', true);
 
-            -- Morning slots: 08:00 to 11:30 (every 30 mins)
-            FOR slot_h IN 8..11 LOOP
+            -- Slot starts: 08:00 to 16:00 (every 30 mins)
+            FOR slot_h IN 8..16 LOOP
                 FOR slot_m IN 0..1 LOOP
+                    EXIT WHEN slot_h = 16 AND slot_m = 1;
                     slot_time := make_time(slot_h, slot_m * 30, 0);
                     slot_start := (curr_date + slot_time) AT TIME ZONE 'Asia/Ho_Chi_Minh';
                     slot_end := slot_start + INTERVAL '30 minutes';
@@ -100,18 +101,6 @@ BEGIN
                 END LOOP;
             END LOOP;
 
-            -- Afternoon slots: 13:30 to 17:30 (every 30 mins)
-            FOR slot_h IN 13..17 LOOP
-                FOR slot_m IN 0..1 LOOP
-                    IF NOT (slot_h = 13 AND slot_m = 0) THEN
-                        slot_time := make_time(slot_h, slot_m * 30, 0);
-                        slot_start := (curr_date + slot_time) AT TIME ZONE 'Asia/Ho_Chi_Minh';
-                        slot_end := slot_start + INTERVAL '30 minutes';
-                        INSERT INTO time_slots (id, schedule_id, start_time, end_time, is_booked)
-                        VALUES (gen_random_uuid(), sched_id, slot_start, slot_end, false);
-                    END IF;
-                END LOOP;
-            END LOOP;
         END IF;
 
         -- Schedule for Staff

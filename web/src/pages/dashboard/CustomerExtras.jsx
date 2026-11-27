@@ -20,7 +20,7 @@ export default function CustomerExtras({ user, token, activeTab, onApiLog, onBoo
   const [aiMessages, setAiMessages] = useState([
     {
       sender: 'ai',
-      text: 'Xin chào bạn! Tôi là Trợ lý AI Bác sĩ Thú y PetCare. Bạn đang quan sát thấy thú cưng có triệu chứng gì bất thường, hoặc cần tư vấn dinh dưỡng và chăm sóc không?'
+      text: 'Xin chào bạn! Tôi là Trợ lý AI Bác sĩ Thú y PetCare. Bạn đang quan sát thấy thú cưng có triệu chứng gì bất thường, hoặc cần tư vấn chăm sóc không?'
     }
   ]);
   const [aiInput, setAiInput] = useState('');
@@ -222,7 +222,7 @@ export default function CustomerExtras({ user, token, activeTab, onApiLog, onBoo
           {/* Vouchers Store */}
           <Card variant="outlined" padding="lg" className="space-y-4">
             <h4 className="text-sm font-bold text-slate-900">Đổi điểm lấy mã giảm giá dịch vụ</h4>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Card variant="outlined" padding="lg" className="flex flex-col justify-between hover:border-blue-400 transition">
                 <div>
                   <Badge variant="info" size="xs" className="mb-2">Voucher Spa</Badge>
@@ -251,19 +251,7 @@ export default function CustomerExtras({ user, token, activeTab, onApiLog, onBoo
                 </div>
               </Card>
 
-              <Card variant="outlined" padding="lg" className="flex flex-col justify-between hover:border-blue-400 transition">
-                <div>
-                  <Badge variant="success" size="xs" className="mb-2">Quà Tặng</Badge>
-                  <h5 className="font-bold text-slate-900 text-sm mt-1">Gói Vitamin & Gel Dinh Dưỡng</h5>
-                  <p className="text-xs text-slate-500 mt-1">Tăng sức đề kháng và mượt lông cho chó/mèo</p>
-                </div>
-                <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
-                  <Badge variant="warning" size="xs">800 điểm</Badge>
-                  <Button size="sm" onClick={() => handleRedeemVoucher('Gói Vitamin Dinh Dưỡng', 800)}>
-                    Đổi quà
-                  </Button>
-                </div>
-              </Card>
+
             </div>
           </Card>
         </div>
@@ -280,7 +268,7 @@ export default function CustomerExtras({ user, token, activeTab, onApiLog, onBoo
               <div>
                 <Card.Title className="text-base font-bold text-slate-900">Trợ lý AI Thú Y PetCare 24/7</Card.Title>
                 <Card.Description className="text-xs text-slate-500">
-                  Hỏi đáp triệu chứng, sơ cứu ban đầu, dinh dưỡng & lịch tiêm phòng chuẩn thú y
+                  Hỏi đáp triệu chứng, sơ cứu ban đầu & lịch tiêm phòng chuẩn thú y
                 </Card.Description>
               </div>
             </div>
@@ -309,10 +297,10 @@ export default function CustomerExtras({ user, token, activeTab, onApiLog, onBoo
               <Button
                 variant="ghost"
                 size="xs"
-                onClick={() => handleSendAi('Chế độ dinh dưỡng cho mèo Anh lông ngắn để mượt lông?')}
+                onClick={() => handleSendAi('Khi đưa mèo đi khám tổng quát, mình cần chuẩn bị gì?')}
                 className="whitespace-nowrap"
               >
-                ✨ Dinh dưỡng mượt lông mèo?
+                ✨ Chuẩn bị cho buổi khám?
               </Button>
             </div>
 
@@ -360,7 +348,7 @@ export default function CustomerExtras({ user, token, activeTab, onApiLog, onBoo
                 className="flex items-center space-x-2"
               >
                 <Input
-                  placeholder="Hỏi AI về sức khỏe, thức ăn, triệu chứng của thú cưng..."
+                  placeholder="Hỏi AI về sức khỏe, triệu chứng của thú cưng..."
                   value={aiInput}
                   onChange={e => setAiInput(e.target.value)}
                   className="flex-1"

@@ -42,11 +42,8 @@ public class ScheduleService {
     private static final int MAX_SLOTS_PER_SCHEDULE = 200;
 
     // Ca làm việc chuẩn hóa cho tất cả bác sĩ
-    private static final List<LocalTime[]> STANDARD_SHIFTS = List.of(
-            new LocalTime[]{LocalTime.of(8, 0), LocalTime.of(12, 0)},   // Sáng
-            new LocalTime[]{LocalTime.of(13, 0), LocalTime.of(17, 0)},  // Chiều
-            new LocalTime[]{LocalTime.of(17, 0), LocalTime.of(21, 0)}   // Tối
-    );
+    private static final LocalTime SHIFT_START = LocalTime.of(8, 0);
+    private static final LocalTime SHIFT_END = LocalTime.of(16, 30);
 
     private final ScheduleRepository scheduleRepository;
     private final TimeSlotRepository timeSlotRepository;
@@ -90,39 +87,24 @@ public class ScheduleService {
     }
 
     /**
-     * Lấy các ca làm việc chuẩn hóa cho một ngày
-     */
-    public List<LocalTime[]> getStandardShifts() {
-        return STANDARD_SHIFTS;
-    }
-
-    /**
      * Tự động tạo lịch làm việc chuẩn cho tất cả bác sĩ hoạt động trong ngày
      */
     @Transactional
     public void ensureStandardShiftsForDate(LocalDate date) {
         var doctors = staffRepository.doctors().stream()
-                .filter(d -> d.getStaffActive() && "ACTIVE".equals(d.getAccountStatus()))
+                .filter(d -> Boolean.TRUE.equals(d.getStaffActive()) && "ACTIVE".equals(d.getAccountStatus()))
                 .toList();
 
         for (var doctor : doctors) {
-            for (var shiftTimes : STANDARD_SHIFTS) {
-                var startTime = shiftTimes[0];
-                var endTime = shiftTimes[1];
-
-                if (!scheduleRepository.existsByStaffIdAndWorkDateAndStartTimeAndEndTime(doctor.getStaffId(), date, startTime, endTime)) {
-                    var schedule = new Schedule();
-                    schedule.setStaffId(doctor.getStaffId());
-                    schedule.setWorkDate(date);
-                    schedule.setStartTime(startTime);
-                    schedule.setEndTime(endTime);
-                    schedule.setAvailable(true);
-                    scheduleRepository.save(schedule);
-
-                    // Tạo time slots cho ca này (mặc định 30 phút/slot)
-                    createTimeSlotsForSchedule(schedule, 30);
-                }
-            }
+            if (scheduleRepository.existsByStaffIdAndWorkDate(doctor.getStaffId(), date)) continue;
+            var schedule = new Schedule();
+            schedule.setStaffId(doctor.getStaffId());
+            schedule.setWorkDate(date);
+            schedule.setStartTime(SHIFT_START);
+            schedule.setEndTime(SHIFT_END);
+            schedule.setAvailable(true);
+            scheduleRepository.save(schedule);
+            createTimeSlotsForSchedule(schedule, 30);
         }
     }
 

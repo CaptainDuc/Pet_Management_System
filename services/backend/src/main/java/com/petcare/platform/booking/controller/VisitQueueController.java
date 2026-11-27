@@ -70,6 +70,12 @@ public class VisitQueueController {
         return ApiResponse.ok(queue.findClientPets(body.contact()));
     }
 
+    @GetMapping("/clients")
+    @PreAuthorize(RECEPTION)
+    public ApiResponse<List<VisitQueue.Client>> clients(@RequestParam(defaultValue = "") String search) {
+        return ApiResponse.ok(queue.clients(search));
+    }
+
     @PostMapping("/walk-in/{customerId}")
     @PreAuthorize(RECEPTION)
     public ApiResponse<BookingResponse> walkIn(@AuthenticationPrincipal UserPrincipal user,

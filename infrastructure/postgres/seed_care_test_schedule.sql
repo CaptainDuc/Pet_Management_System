@@ -29,8 +29,8 @@ BEGIN
         END IF;
         new_schedule := gen_random_uuid();
         INSERT INTO schedules (id, staff_id, work_date, start_time, end_time, is_available)
-        VALUES (new_schedule, test_staff, work_day, '08:00:00', '17:00:00', true);
-        FOR slot_index IN 0..17 LOOP
+        VALUES (new_schedule, test_staff, work_day, '08:00:00', '16:30:00', true);
+        FOR slot_index IN 0..16 LOOP
             slot_start := ((work_day + TIME '08:00:00') AT TIME ZONE 'Asia/Ho_Chi_Minh')
                           + make_interval(mins => slot_index * 30);
             INSERT INTO time_slots (id, schedule_id, start_time, end_time, is_booked)

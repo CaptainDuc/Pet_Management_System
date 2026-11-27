@@ -35,7 +35,14 @@ public interface TimeSlotRepository extends JpaRepository<TimeSlot, UUID> {
     @Query(value = "select id from time_slots where id in (:ids) and not is_booked order by id for update", nativeQuery = true)
     List<UUID> lockFreeSlots(@Param("ids") Collection<UUID> ids);
 
-    List<TimeSlot> findByScheduleIdInOrderByStartTimeAsc(Collection<UUID> scheduleIds);
+    @Query(value = """
+            select t.* from time_slots t join schedules s on s.id = t.schedule_id
+            where s.id in (:scheduleIds)
+              and t.start_time >= (s.work_date + s.start_time) at time zone 'Asia/Ho_Chi_Minh'
+              and t.end_time <= (s.work_date + s.end_time) at time zone 'Asia/Ho_Chi_Minh'
+            order by t.start_time
+            """, nativeQuery = true)
+    List<TimeSlot> findByScheduleIdInOrderByStartTimeAsc(@Param("scheduleIds") Collection<UUID> scheduleIds);
 
     // Giữ chỗ nguyên tử: trả 0 nghĩa là khung giờ đã có người giữ
     @Modifying

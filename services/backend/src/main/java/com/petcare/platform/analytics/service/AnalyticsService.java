@@ -23,9 +23,10 @@ public class AnalyticsService {
     public record BranchRevenue(UUID branchId, String name, BigDecimal revenue, long paidBookings) {}
     public record ServiceCount(UUID serviceId, String name, long quantity) {}
     public record Ratings(long count, BigDecimal average) {}
+    public record Feedback(UUID bookingId, int rating, String comment, boolean published) {}
     public record Dashboard(String month, BigDecimal totalRevenue, long paidBookings, long totalBookings,
                             long completedBookings, long activePets, Ratings ratings,
-                            List<BranchRevenue> branches, List<ServiceCount> services) {}
+                            List<BranchRevenue> branches, List<ServiceCount> services, List<Feedback> recentFeedback) {}
 
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public Dashboard getDashboardStats() {
@@ -62,6 +63,10 @@ public class AnalyticsService {
                 where b.created_at >= :start and b.created_at < :end
                 group by s.id, s.name order by quantity desc, s.name, s.id
                 """).params(period).query(ServiceCount.class).list();
-        return new Dashboard(month.toString(), revenue, paid, bookings, completed, activePets, ratings, branches, services);
+        var feedback = jdbc.sql("""
+                select booking_id, rating, comment, is_published as published from reviews
+                where created_at >= :start and created_at < :end order by created_at desc, id limit 5
+                """).params(period).query(Feedback.class).list();
+        return new Dashboard(month.toString(), revenue, paid, bookings, completed, activePets, ratings, branches, services, feedback);
     }
 }

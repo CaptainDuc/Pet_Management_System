@@ -24,6 +24,7 @@ import com.petcare.platform.common.exception.ResourceNotFoundException;
 import com.petcare.platform.common.security.SecurityUtils;
 import com.petcare.platform.pet.domain.Pet;
 import com.petcare.platform.pet.repository.PetRepository;
+import com.petcare.platform.user.repository.UserRepository;
 import com.petcare.platform.promotion.domain.Promotion;
 import com.petcare.platform.promotion.dto.AppliedPromotion;
 import com.petcare.platform.promotion.repository.PromotionRepository;
@@ -39,7 +40,6 @@ import com.petcare.platform.staff.domain.Staff;
 import com.petcare.platform.staff.repository.StaffRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -56,7 +56,6 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.time.Instant;
 import java.time.ZoneId;
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -84,6 +83,7 @@ public class BookingService {
     private final BookingItemRepository itemRepository;
     private final BookingStatusHistoryRepository historyRepository;
     private final PetRepository petRepository;
+    private final UserRepository userRepository;
     private final CareServiceRepository careServiceRepository;
     private final StaffRepository staffRepository;
     private final ScheduleService scheduleService;
@@ -92,9 +92,6 @@ public class BookingService {
     private final OutboxService outboxService;
     private final PromotionService promotionService;
     private final PromotionRepository promotionRepository;
-
-    @Value("${app.booking.cancel-cutoff-hours:2}")
-    private int cancelCutoffHours;
 
     private record PlannedItem(CareService service, UUID slotId, List<UUID> reservedSlots, UUID staffId, UUID preference, String notes) {}
 
@@ -577,9 +574,8 @@ public class BookingService {
                 .orElseThrow(() -> new BusinessException("Lịch hẹn thiếu khung giờ gốc."));
         Instant now = Instant.now();
         if (!start.isAfter(now)) throw new BusinessException("Dịch vụ này đã đến giờ hẹn.");
-        if (!operator && start.isBefore(now.plus(cancelCutoffHours, ChronoUnit.HOURS))) {
-            throw new BusinessException("Vui lòng liên hệ lễ tân để đổi lịch trong vòng "
-                    + cancelCutoffHours + " giờ trước buổi hẹn.");
+        if (!operator && !BookingCancellationPolicy.canCustomerCancel(start, now)) {
+            throw new BusinessException("Vui lòng liên hệ lễ tân để đổi lịch trong vòng 30 phút trước buổi hẹn.");
         }
         int minutes = Math.toIntExact(original.stream()
                 .mapToLong(s -> Duration.between(s.getStartTime(), s.getEndTime()).toMinutes()).sum());
@@ -641,7 +637,12 @@ public class BookingService {
                     && !item.getPreferredStaffId().equals(shift.getStaffId());
             item.setStaffId(needsConsent ? null : shift.getStaffId());
         }
-        historyRepository.save(new BookingStatusHistory(id, booking.getStatus(), booking.getStatus(), userId,
+        BookingStatus previousStatus = booking.getStatus();
+        if (!isClinicSide() && previousStatus == BookingStatus.CONFIRMED) {
+            booking.setStatus(BookingStatus.PENDING);
+            itemRepository.findByBookingId(id).forEach(bookingItem -> bookingItem.setStatus(BookingStatus.PENDING));
+        }
+        historyRepository.save(new BookingStatusHistory(id, previousStatus, booking.getStatus(), userId,
                 "Reschedule " + itemId + ": " + expectedSlotId + " -> " + targetId));
         BookingResponse response = toResponses(List.of(booking)).getFirst();
         itemEvent(booking, response, itemId, "booking.rescheduled", null);
@@ -795,6 +796,11 @@ public class BookingService {
                 .findAllById(bookings.stream().map(Booking::getPromotionId)
                         .filter(Objects::nonNull).distinct().toList())
                 .stream().collect(Collectors.toMap(Promotion::getId, p -> p));
+        var customers = userRepository.findAllById(bookings.stream().map(Booking::getCustomerId).distinct().toList())
+                .stream().collect(Collectors.toMap(com.petcare.platform.user.domain.User::getId,
+                        com.petcare.platform.user.domain.User::getFullName));
+        var pets = petRepository.findAllById(bookings.stream().map(Booking::getPetId).distinct().toList())
+                .stream().collect(Collectors.toMap(Pet::getId, Pet::getName));
 
         var personIds = all.stream().flatMap(i -> java.util.stream.Stream.of(i.getStaffId(), i.getPreferredStaffId()))
                 .filter(Objects::nonNull).distinct().toList();
@@ -816,10 +822,11 @@ public class BookingService {
                                 slot == null ? null : slot.getScheduleId(), i.getTimeSlotId(),
                                 slot == null ? null : slot.getStartTime().atZone(ZONE).toOffsetDateTime(),
                                 endTime == null ? null : endTime.atZone(ZONE).toOffsetDateTime(),
-                                i.getStatus().name(), i.getUnitPrice(), i.getNotes());
+                                i.getStatus().name(), i.getCheckedInAt(), i.getUnitPrice(), i.getNotes());
                     }).toList();
             Promotion promotion = b.getPromotionId() == null ? null : promotions.get(b.getPromotionId());
-            return new BookingResponse(b.getId(), b.getCustomerId(), b.getPetId(), b.getBranchId(),
+            return new BookingResponse(b.getId(), b.getCustomerId(), customers.get(b.getCustomerId()),
+                    b.getPetId(), pets.get(b.getPetId()), b.getBranchId(),
                     b.getPromotionId(), promotion == null ? null : promotion.getCode(),
                     b.getStatus().name(), b.getTotalAmount(), b.getDiscountAmount(),
                     b.getPaymentStatus().name(), b.getPaymentMethod(), b.getPaidAt(),

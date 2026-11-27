@@ -72,6 +72,13 @@ export default function OwnerReport({ token }) {
           <div><dt className="font-semibold">Lợi nhuận gộp</dt>
             <dd className="pc-muted mt-1">Chưa có dữ liệu chi phí để tính lợi nhuận.</dd></div>
         </dl>
+        {report.recentFeedback?.length > 0 && <div className="mt-4">
+          <h3 className="font-semibold">Phản hồi gần đây trong tháng</h3>
+          <ul className="divide-y">{report.recentFeedback.map(r => <li key={r.bookingId} className="py-2">
+            <strong>{r.rating}/5 sao</strong> · BK-{r.bookingId.slice(0, 8).toUpperCase()} · {r.published ? 'Công khai' : 'Riêng tư'}
+            {r.comment && <p className="break-words">{r.comment}</p>}
+          </li>)}</ul>
+        </div>}
       </Card>
     </>}
   </section>;

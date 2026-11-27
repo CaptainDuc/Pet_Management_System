@@ -24,7 +24,8 @@ class OwnerReportTest extends IntegrationTestBase {
 
     @Test
     void monthlyReportUsesDistinctEventDatesAndThePaidBookingTotal() {
-        Scenario s = newScenario("STAFF");
+        Scenario s = newScenario("VETERINARIAN");
+        TestUser receptionist = newUser("STAFF");
         TestUser owner = newUser("OWNER");
         assertThat(send(HttpMethod.GET, PATH, s.customer().token(), null).getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
         assertThat(send(HttpMethod.GET, PATH, s.staffUser().token(), null).getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
@@ -40,13 +41,16 @@ class OwnerReportTest extends IntegrationTestBase {
         assertThat(unpaid.path("totalBookings").asLong()).isEqualTo(before.path("totalBookings").asLong() + 1);
         assertThat(unpaid.path("totalRevenue")).isEqualTo(before.path("totalRevenue"));
 
-        assertThat(send(HttpMethod.POST, "/api/v1/bookings/" + id + "/mark-paid", s.staffUser().token(), null)
+        assertThat(send(HttpMethod.POST, "/api/v1/bookings/" + id + "/mark-paid", receptionist.token(), null)
                 .getStatusCode()).isEqualTo(HttpStatus.OK);
         jdbc.update("update bookings set created_at=?, paid_at=? where id=?", new Timestamp(start.getTime() - 1), start, id);
         jdbc.update("insert into booking_status_history(booking_id,from_status,to_status,changed_by,changed_at) "
                 + "values (?,'IN_PROGRESS','COMPLETED',?,?)", id, s.staffUser().id(), start);
+        var privateBooking = java.util.UUID.randomUUID();
+        jdbc.update("insert into bookings(id,customer_id,pet_id,status,created_at) values (?,?,?,'COMPLETED',?)",
+                privateBooking, s.customer().id(), s.petId(), new Timestamp(start.getTime() - 1));
         jdbc.update("insert into reviews(booking_id,customer_id,rating,is_published,created_at) "
-                + "values (?,?,5,true,?),(?,?,1,false,?)", id, s.customer().id(), start, id, s.customer().id(), start);
+                + "values (?,?,5,true,?),(?,?,1,false,?)", id, s.customer().id(), start, privateBooking, s.customer().id(), start);
         JsonNode paid = report(owner);
         assertThat(paid.path("month").asText()).isEqualTo(month.toString());
         assertThat(paid.path("totalRevenue").decimalValue()).isEqualByComparingTo(

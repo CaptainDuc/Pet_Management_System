@@ -48,7 +48,9 @@ public abstract class IntegrationTestBase {
         POSTGRES = new PostgreSQLContainer<>(
                 DockerImageName.parse("pgvector/pgvector:pg16").asCompatibleSubstituteFor("postgres"))
                 .withInitScript("init-test.sql");
-        RABBIT = new RabbitMQContainer("rabbitmq:3.13-alpine");
+        RABBIT = new RabbitMQContainer("rabbitmq:3.13-alpine")
+                .withEnv("RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS", "+S 2:2")
+                .withStartupTimeout(java.time.Duration.ofMinutes(3));
         POSTGRES.start();
         RABBIT.start();
     }

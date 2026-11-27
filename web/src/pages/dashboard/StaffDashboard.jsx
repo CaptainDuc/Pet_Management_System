@@ -32,6 +32,7 @@ const BOOKING_PAYMENT = {
   PAID: { label: 'Đã thanh toán', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
   REFUNDED: { label: 'Đã hoàn tiền', cls: 'bg-slate-100 text-slate-600 border-slate-200' },
 };
+const clinicDay = value => new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date(value));
 
 export default function StaffDashboard({ user, token, activeTab, setActiveTab }) {
   // Billing / Invoices state
@@ -50,10 +51,11 @@ export default function StaffDashboard({ user, token, activeTab, setActiveTab })
   const [bookings, setBookings] = useState([]);
   const [bookingsLoading, setBookingsLoading] = useState(false);
   const [bookingsError, setBookingsError] = useState('');
-  const [bookingStatusFilter, setBookingStatusFilter] = useState('ALL');
+  const [bookingSearch, setBookingSearch] = useState('');
   const [bookingActionId, setBookingActionId] = useState(null);
-  const [reportingBooking, setReportingBooking] = useState(null);
-  const [reportMessage, setReportMessage] = useState('');
+  const [clients, setClients] = useState([]);
+  const [clientsLoading, setClientsLoading] = useState(false);
+  const [clientsError, setClientsError] = useState('');
 
   const formatDateTime = (value) => {
     if (!value) return '—';
@@ -64,7 +66,7 @@ export default function StaffDashboard({ user, token, activeTab, setActiveTab })
     id: inv.id,
     number: inv.invoiceNumber,
     bookingId: inv.bookingId,
-    items: (inv.items || []).map(i => i.description).join(' + ') || 'Dịch vụ khám & Thuốc',
+    items: (inv.items || []).map(i => i.description).join(' + ') || 'Dịch vụ',
     total: Number(inv.totalAmount || 0),
     currency: inv.currency || 'VND',
     status: inv.status,
@@ -95,7 +97,8 @@ export default function StaffDashboard({ user, token, activeTab, setActiveTab })
       items,
       customerId: booking.customerId,
       petId: booking.petId,
-      petName: booking.petId ? `Bé #${String(booking.petId).slice(0, 8)}` : 'Thú cưng',
+      petName: booking.petName || 'Thú cưng',
+      customerName: booking.customerName || 'Khách hàng',
       service: items.map(i => i.serviceName).filter(Boolean).join(', ') || 'Dịch vụ khám',
       dateTime: startTime
         ? startTime.toLocaleString('vi-VN', { dateStyle: 'short', timeStyle: 'short' })
@@ -113,10 +116,10 @@ export default function StaffDashboard({ user, token, activeTab, setActiveTab })
     setBookingsLoading(true);
     setBookingsError('');
     try {
-      const params = { page: 0, size: 100 };
-      if (bookingStatusFilter !== 'ALL') params.status = bookingStatusFilter;
-      const page = await clinicApi.listBookings(token, params);
-      setBookings((page?.content || []).map(mapStaffBooking));
+      const first = await clinicApi.listBookings(token, { page: 0, size: 50 });
+      const remaining = await Promise.all(Array.from({ length: Math.max(0, first.totalPages - 1) }, (_, page) =>
+        clinicApi.listBookings(token, { page: page + 1, size: 50 })));
+      setBookings([first, ...remaining].flatMap(page => page.content || []).map(mapStaffBooking));
     } catch (err) {
       setBookingsError(err.message || 'Không tải được danh sách lịch hẹn.');
     } finally {
@@ -138,21 +141,16 @@ export default function StaffDashboard({ user, token, activeTab, setActiveTab })
     }
   };
 
-  const handleReportIssue = async (e) => {
-    e.preventDefault();
-    if (!token || !reportingBooking) return;
-    if (!reportMessage.trim()) return;
-    setBookingActionId(reportingBooking.id);
+  const handleCheckIn = async (booking) => {
+    const item = booking.items.find(i => i.timeSlotId && i.startTime && i.staffId && !i.checkedInAt
+      && ['PENDING', 'CONFIRMED'].includes(i.status) && clinicDay(i.startTime) === clinicDay(Date.now()));
+    if (!item) return;
+    setBookingActionId(booking.id);
     try {
-      await clinicApi.reportBookingIssue(reportingBooking.id, reportMessage.trim(), token);
-      setReportingBooking(null);
-      setReportMessage('');
+      await clinicApi.visitAction({ bookingId: booking.id, itemId: item.id, slotId: item.timeSlotId }, 'check-in', token);
       await fetchBookings();
-    } catch (err) {
-      alert(err.message || 'Không thể gửi báo cáo sự cố.');
-    } finally {
-      setBookingActionId(null);
-    }
+    } catch (err) { alert(err.message || 'Không thể xác nhận khách đã đến.'); }
+    finally { setBookingActionId(null); }
   };
 
   const fetchCompletedBookings = async () => {
@@ -174,39 +172,20 @@ export default function StaffDashboard({ user, token, activeTab, setActiveTab })
       fetchBookings();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, token, bookingStatusFilter]);
+  }, [activeTab, token]);
 
   // Client Directory search state
   const [clientSearch, setClientSearch] = useState('');
-  const [clients] = useState([
-    {
-      id: 'CLI-01',
-      fullName: 'Nguyễn Minh Anh',
-      phone: '0901234567',
-      email: 'minhanh.nguyen@gmail.com',
-      tier: 'GOLD',
-      totalSpent: '4.850.000 đ',
-      pets: ['Lu Lu (Chó Husky - 2 tuổi)']
-    },
-    {
-      id: 'CLI-02',
-      fullName: 'Trần Thu Hà',
-      phone: '0988765432',
-      email: 'thuha.tran@gmail.com',
-      tier: 'SILVER',
-      totalSpent: '1.920.000 đ',
-      pets: ['Miu Miu (Mèo Anh lông ngắn - 1.5 tuổi)']
-    },
-    {
-      id: 'CLI-03',
-      fullName: 'Hoàng Quốc Việt',
-      phone: '0912334455',
-      email: 'quocviet.hoang@gmail.com',
-      tier: 'PLATINUM',
-      totalSpent: '9.200.000 đ',
-      pets: ['Bơ (Golden Retriever - 3 tuổi)', 'Ken (Chó Corgi - 1 tuổi)']
-    }
-  ]);
+  useEffect(() => {
+    if (activeTab !== 'customers' || !token) return;
+    let active = true;
+    setClientsLoading(true); setClientsError('');
+    const timer = setTimeout(() => clinicApi.clients(clientSearch, token)
+      .then(rows => { if (active) setClients(rows); })
+      .catch(err => { if (active) setClientsError(err.message); })
+      .finally(() => { if (active) setClientsLoading(false); }), 250);
+    return () => { active = false; clearTimeout(timer); };
+  }, [activeTab, clientSearch, token]);
 
   const handleCreateInvoice = async (e) => {
     e.preventDefault();
@@ -225,14 +204,11 @@ export default function StaffDashboard({ user, token, activeTab, setActiveTab })
     }
   };
 
-  const filteredClients = clients.filter(c =>
-    c.fullName.toLowerCase().includes(clientSearch.toLowerCase()) ||
-    c.phone.includes(clientSearch)
-  );
+  const filteredBookings = bookings.filter(b =>
+    `${b.customerName} ${b.petName}`.toLocaleLowerCase('vi').includes(bookingSearch.trim().toLocaleLowerCase('vi')));
 
   return (
     <div className="space-y-6">
-      {activeTab === 'customers' && <p className="pc-demo-note">Danh bạ trên màn hình này dùng dữ liệu minh họa.</p>}
       {activeTab === 'reception' && <ClinicVisitQueue token={token} reception />}
 
       {/* TAB: LỊCH HẸN */}
@@ -247,23 +223,12 @@ export default function StaffDashboard({ user, token, activeTab, setActiveTab })
                 <Card.Title className="text-lg font-bold text-[var(--color-fg-primary)]">Quản lý lịch hẹn</Card.Title>
               </div>
               <Card.Description className="text-xs text-slate-500 mt-1">
-                Theo dõi lịch hẹn, thu tiền mặt tại quầy và báo trùng lịch / sự cố cho khách hàng
+                Theo dõi lịch hẹn, tiếp đón khách và thu tiền tại quầy
               </Card.Description>
             </div>
             <div className="flex items-center space-x-2">
-              <Select
-                value={bookingStatusFilter}
-                onChange={e => setBookingStatusFilter(e.target.value)}
-                options={[
-                  { value: 'ALL', label: 'Tất cả trạng thái' },
-                  { value: 'PENDING', label: 'Chờ xác nhận' },
-                  { value: 'CONFIRMED', label: 'Đã xác nhận' },
-                  { value: 'IN_PROGRESS', label: 'Đang thực hiện' },
-                  { value: 'COMPLETED', label: 'Đã hoàn tất' },
-                  { value: 'CANCELLED', label: 'Đã hủy' },
-                ]}
-                className="w-48"
-              />
+              <Input value={bookingSearch} onChange={e => setBookingSearch(e.target.value)}
+                placeholder="Tìm chủ nuôi hoặc thú cưng" aria-label="Tìm chủ nuôi hoặc thú cưng" />
               <Button
                 variant="ghost"
                 size="sm"
@@ -277,7 +242,7 @@ export default function StaffDashboard({ user, token, activeTab, setActiveTab })
 
           <Table
             columns={[
-              { key: 'code', header: 'Mã' },
+              { key: 'customerName', header: 'Chủ nuôi' },
               { key: 'petName', header: 'Thú cưng' },
               { key: 'service', header: 'Dịch vụ', render: (value, b) => <div>{value}
                 {b.promotionCode && <small className="block">Mã ưu đãi: {b.promotionCode}</small>}
@@ -294,55 +259,20 @@ export default function StaffDashboard({ user, token, activeTab, setActiveTab })
                   <Button size="xs" variant="success" disabled={bookingActionId === b.id} onClick={() => handleCounterPay(b)}>
                     Thu tiền tại quầy
                   </Button>}
-                {b.status !== 'CANCELLED' && <Button size="xs" variant="warning"
-                  onClick={() => { setReportingBooking(b); setReportMessage(''); }}>Báo trùng / sự cố</Button>}
+                {['PENDING', 'CONFIRMED'].includes(b.status) && b.items.some(i => i.timeSlotId && i.startTime && i.staffId && !i.checkedInAt
+                  && ['PENDING', 'CONFIRMED'].includes(i.status) && clinicDay(i.startTime) === clinicDay(Date.now())) &&
+                  <Button size="xs" disabled={bookingActionId === b.id} onClick={() => handleCheckIn(b)}>
+                    Xác nhận đã đến
+                  </Button>}
               </div> },
             ]}
-            data={bookings}
+            data={filteredBookings}
             loading={bookingsLoading}
             emptyMessage="Không có lịch hẹn nào."
           />
 
           {moveBooking && <RescheduleDialog booking={moveBooking} token={token} onClose={() => setMoveBooking(null)}
             onSaved={() => { setMoveBooking(null); fetchBookings(); }} />}
-          <Modal
-            className="pc-light pc-work pc-work-dialog"
-            open={Boolean(reportingBooking)}
-            onClose={() => setReportingBooking(null)}
-            title="Báo trùng lịch / sự cố"
-            size="md"
-          >
-            <p className="text-xs text-slate-500 mb-4">
-              Lịch hẹn <span className="font-semibold text-slate-800">{reportingBooking?.code}</span> — khách hàng sẽ nhận được thông báo kèm nội dung bên dưới.
-            </p>
-            <form onSubmit={handleReportIssue} className="space-y-3.5 text-xs">
-              <Input
-                label="Nội dung thông báo *"
-                as="textarea"
-                rows={3}
-                required
-                value={reportMessage}
-                onChange={e => setReportMessage(e.target.value)}
-                placeholder="VD: Khung giờ này đã có bác sĩ bận, vui lòng chọn giờ khác..."
-              />
-              <div className="pt-2 flex justify-end space-x-2">
-                <Button
-                  variant="outline"
-                  type="button"
-                  onClick={() => setReportingBooking(null)}
-                >
-                  Hủy
-                </Button>
-                <Button
-                  type="submit"
-                  disabled={bookingActionId === reportingBooking?.id || !reportMessage.trim()}
-                  loading={bookingActionId === reportingBooking?.id}
-                >
-                  Gửi báo cáo
-                </Button>
-              </div>
-            </form>
-          </Modal>
         </div>
       )}
 
@@ -358,7 +288,7 @@ export default function StaffDashboard({ user, token, activeTab, setActiveTab })
                 <Card.Title className="text-lg font-bold text-[var(--color-fg-primary)]">Quầy Thu ngân & Hóa đơn viện phí</Card.Title>
               </div>
               <Card.Description className="text-xs text-slate-500 mt-1">
-                Tạo hóa đơn dịch vụ, thanh toán VNPay QR, Tiền mặt, Thẻ và áp dụng giảm giá điểm thưởng
+                Phát hành hóa đơn sau khi hoàn tất dịch vụ. Lịch đã thanh toán sẽ có hóa đơn đã thanh toán.
               </Card.Description>
             </div>
             <Button
@@ -427,14 +357,6 @@ export default function StaffDashboard({ user, token, activeTab, setActiveTab })
                           VietQR
                         </Button>
                       )}
-                      <Button
-                        variant="ghost"
-                        size="xs"
-                        leftIcon={<Printer className="w-3.5 h-3.5" />}
-                        onClick={() => alert(`Đang in hóa đơn điện tử ${inv.number}...`)}
-                      >
-                        In phiếu
-                      </Button>
                     </div>
                   </td>
                 </tr>
@@ -462,7 +384,7 @@ export default function StaffDashboard({ user, token, activeTab, setActiveTab })
                 required
                 value={newInvoice.bookingId}
                 onChange={e => setNewInvoice({ bookingId: e.target.value })}
-                options={completedBookings.map(b => ({
+                options={completedBookings.filter(b => !invoices.some(inv => inv.bookingId === b.id)).map(b => ({
                   value: b.id,
                   label: `#${b.id.slice(0, 8)} • ${(b.items || []).map(i => i.serviceName).join(', ') || 'Dịch vụ'} • ${(Number(b.totalAmount) || 0).toLocaleString('vi-VN')} đ`
                 }))}
@@ -507,13 +429,13 @@ export default function StaffDashboard({ user, token, activeTab, setActiveTab })
                 <Card.Title className="text-lg font-bold text-[var(--color-fg-primary)]">Danh bạ Khách hàng & Hồ sơ chủ nuôi</Card.Title>
               </div>
               <Card.Description className="text-xs text-slate-500 mt-1">
-                Tra cứu nhanh thông tin liên lạc, hạng thẻ tích điểm và các thú cưng đang sở hữu
+                Tra cứu thông tin liên lạc, hạng thành viên và thú cưng đã đăng ký
               </Card.Description>
             </div>
             <div className="relative w-full sm:w-64">
               <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <Input
-                placeholder="Tìm theo tên hoặc SĐT..."
+                placeholder="Tìm tên, SĐT hoặc thú cưng..."
                 value={clientSearch}
                 onChange={e => setClientSearch(e.target.value)}
                 size="sm"
@@ -522,31 +444,31 @@ export default function StaffDashboard({ user, token, activeTab, setActiveTab })
             </div>
           </Card>
 
+          {clientsError && <p role="alert" className="pc-notice">{clientsError}</p>}
+          {clientsLoading && <p role="status">Đang tải khách hàng…</p>}
+          {!clientsLoading && !clientsError && !clients.length && <p className="pc-muted">Không tìm thấy khách hàng.</p>}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-            {filteredClients.map(c => (
+            {clients.map(c => (
               <Card key={c.id} variant="outlined" padding="lg" className="space-y-3">
                 <div className="flex justify-between items-start border-b border-slate-100 pb-3">
                   <div>
                     <h4 className="font-bold text-sm text-slate-900">{c.fullName}</h4>
-                    <p className="text-xs text-slate-500">{c.phone}</p>
+                    <p className="text-xs text-slate-500">{c.phone || 'Chưa có SĐT'}</p>
+                    <p className="text-xs text-slate-500">{c.email}</p>
                   </div>
-                  <Badge variant="warning" size="xs">
-                    {c.tier}
-                  </Badge>
+                  {c.tier && <Badge variant="warning" size="xs">{c.tier}</Badge>}
                 </div>
 
                 <div className="space-y-1.5 text-xs">
                   <div className="text-slate-500">Thú cưng đã đăng ký:</div>
-                  {c.pets.map((p, idx) => (
-                    <Badge key={idx} variant="ghost" size="xs" className="w-full justify-start">
-                      <PawPrint size={13} /> {p}
-                    </Badge>
-                  ))}
+                  {c.pets ? <Badge variant="ghost" size="xs" className="w-full justify-start">
+                    <PawPrint size={13} /> {c.pets}
+                  </Badge> : <span>Chưa có thú cưng</span>}
                 </div>
 
                 <div className="pt-2 border-t border-slate-100 flex justify-between items-center text-xs">
                   <span className="text-slate-400">Tổng chi tiêu:</span>
-                  <span className="font-bold text-slate-900">{c.totalSpent}</span>
+                  <span className="font-bold text-slate-900">{Number(c.totalSpent || 0).toLocaleString('vi-VN')} đ</span>
                 </div>
               </Card>
             ))}

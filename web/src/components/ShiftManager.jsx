@@ -84,7 +84,7 @@ export default function ShiftManager({ token, rosterVersion }) {
       </select></label>
       <div className="flex flex-wrap gap-3">
         <label className="pc-field">Bắt đầu<input type="time" name="start" required defaultValue="08:00" /></label>
-        <label className="pc-field">Kết thúc<input type="time" name="end" required defaultValue="17:00" /></label>
+        <label className="pc-field">Kết thúc<input type="time" name="end" required defaultValue="16:30" /></label>
         <label className="pc-field">Mỗi khung giờ (phút)<input type="number" name="duration" min="5" max="480" required defaultValue="30" /></label>
       </div>
       <button disabled={busy} className="pc-button">Lưu ca làm</button>

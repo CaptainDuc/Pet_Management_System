@@ -9,7 +9,9 @@ import java.util.UUID;
 public record BookingResponse(
         UUID id,
         UUID customerId,
+        String customerName,
         UUID petId,
+        String petName,
         UUID branchId,
         UUID promotionId,
         String promotionCode,
@@ -38,6 +40,7 @@ public record BookingResponse(
             OffsetDateTime startTime,
             OffsetDateTime endTime,
             String status,
+            Instant checkedInAt,
             BigDecimal unitPrice,
             String notes
     ) {}

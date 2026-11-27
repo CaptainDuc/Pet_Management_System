@@ -64,7 +64,7 @@ export default function BookingWizard({ pets, services, initialPetId, suggestion
     }).catch(err => { if (alive) setError(err.message); })
       .finally(() => { if (alive) setDoctorsLoading(false); });
     return () => { alive = false; };
-  }, [slot, serviceId, date, token]);
+  }, [slot?.startTime, slot?.endTime, slot?.branchId, serviceId, date, token]);
 
   async function applyPromotion() {
     if (!code.trim() || checking) return;
@@ -146,13 +146,16 @@ export default function BookingWizard({ pets, services, initialPetId, suggestion
                     </div>
                   </div>
                 </button>
-                {availableDoctors.map(doc => (
+                {availableDoctors.filter(doc => doctors.some(item => item.staffId === doc.staffId && item.endTime === slot.endTime)).map(doc => (
                   <button
                     key={doc.staffId}
                     type="button"
                     className={`pc-choice ${preference === doc.staffId ? 'ring-2 ring-sky-500' : ''}`}
                     aria-pressed={preference === doc.staffId}
-                    onClick={() => setPreference(doc.staffId)}
+                    onClick={() => {
+                      const doctorSlot = doctors.find(item => item.staffId === doc.staffId && item.endTime === slot.endTime);
+                      if (doctorSlot) { setSlot(doctorSlot); setPreference(doc.staffId); }
+                    }}
                   >
                     <div className="flex items-center gap-2">
                       <span className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-sm font-bold">

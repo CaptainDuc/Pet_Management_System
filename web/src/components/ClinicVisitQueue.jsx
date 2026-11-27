@@ -42,9 +42,8 @@ function WalkIn({ token, onClose, onSaved }) {
 
 export default function ClinicVisitQueue({ token, reception = false }) {
   const [date, setDate] = useState(clinicDate);
-  const [view, setView] = useState(reception ? 'all' : 'mine');
   const mine = !reception;
-  const pendingAssignments = reception && view === 'pending';
+  const pendingAssignments = reception;
   const [assignment, setAssignment] = useState(null);
   const [examVisit, setExamVisit] = useState(null);
   const [visits, setVisits] = useState([]);
@@ -96,10 +95,6 @@ export default function ClinicVisitQueue({ token, reception = false }) {
     <div className="flex flex-wrap items-end gap-3">
       {!pendingAssignments && <label className="pc-field">Ngày hẹn<input type="date" required value={date} disabled={busy}
         onChange={e => { if (e.target.value) { setDate(e.target.value); setFeedback(''); setActionError(''); } }} /></label>}
-      {reception && <label className="pc-field">Danh sách<select value={view} disabled={busy}
-        onChange={e => { setView(e.target.value); setFeedback(''); setActionError(''); }}>
-        <option value="all">Tất cả lượt tiếp đón</option><option value="pending">Chờ phân công · Từ hôm nay</option>
-      </select></label>}
       <button className="pc-text-button" disabled={busy || loading} onClick={refresh}>Làm mới</button>
     </div>
     {feedback && <p role="status">{feedback}</p>}
@@ -119,17 +114,6 @@ export default function ClinicVisitQueue({ token, reception = false }) {
           {reception && !v.staffName && !working && !done && (
             <button className="pc-button pc-button--small" disabled={busy} onClick={() => setAssignment(v)}>
               Phân công
-            </button>
-          )}
-          {reception && v.staffName && !v.checkedInAt && !working && !done && date === clinicDate() && (
-            <button className="pc-button pc-button--small" disabled={busy} onClick={() => act(v, 'check-in')}>
-              Xác nhận khách đã đến
-            </button>
-          )}
-          {reception && v.status === 'CONFIRMED' && !v.checkedInAt && due && date === clinicDate() && (
-            <button className="pc-button pc-button--small pc-button--line" disabled={busy}
-              onClick={() => window.confirm(`Ghi nhận ${v.petName} không đến lịch hẹn? Thao tác này áp dụng cho toàn bộ lịch hẹn.`) && act(v, 'no-show')}>
-              Đánh dấu vắng mặt
             </button>
           )}
 
@@ -174,7 +158,7 @@ export default function ClinicVisitQueue({ token, reception = false }) {
     {assignment && <AssignVisitDialog visit={assignment} token={token} onClose={() => setAssignment(null)}
       onSaved={message => { setAssignment(null); setActionError(''); setFeedback(message); refresh(); }} />}
     {walkIn && <WalkIn token={token} onClose={() => setWalkIn(false)} onSaved={() => {
-      setWalkIn(false); setDate(clinicDate()); setView('all'); setFeedback('Đã tiếp đón khách tại quầy.'); setActionError(''); refresh();
+      setWalkIn(false); setDate(clinicDate()); setFeedback('Đã tiếp đón khách tại quầy.'); setActionError(''); refresh();
     }} />}
     {!reception && examVisit && <MedicalExamDialog visit={examVisit} token={token} onClose={() => setExamVisit(null)}
       onSaved={message => { setExamVisit(null); setActionError(''); setFeedback(message); refresh(); }} />}

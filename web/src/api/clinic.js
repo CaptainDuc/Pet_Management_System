@@ -66,6 +66,9 @@ async function listAll(endpoint, token) {
 }
 
 export const clinicApi = {
+  publicReviews: () => request('/reviews/public'),
+  myReview: (id, token) => request('/reviews/' + id, { token }),
+  submitReview: (id, token, body) => request('/reviews/' + id, { token, method: 'POST', body }),
   myAttendance(token) {
     return request('/schedules/attendance/me', { token });
   },
@@ -108,6 +111,10 @@ export const clinicApi = {
 
   findClientPets(contact, token) {
     return request('/bookings/queue/client-pets', { method: 'POST', body: { contact }, token });
+  },
+
+  clients(search, token) {
+    return request(`/bookings/queue/clients${query({ search })}`, { token });
   },
 
   walkIn(customerId, body, token) {

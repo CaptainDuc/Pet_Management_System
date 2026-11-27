@@ -20,6 +20,26 @@ public class VisitQueue {
                         UUID petId, String petName, String serviceName, String staffName, UUID preferredStaffId, String preferredStaffName,
                         String status, Instant checkedInAt) {}
     public record ClientPet(UUID customerId, String customerName, UUID id, String name, String species) {}
+    public record Client(UUID id, String fullName, String phone, String email, String tier,
+                         java.math.BigDecimal totalSpent, String pets) {}
+
+    public List<Client> clients(String search) {
+        return jdbc.sql("""
+                select u.id, u.full_name, u.phone, u.email, l.tier,
+                       coalesce((select sum(b.total_amount) from bookings b where b.customer_id=u.id
+                           and b.payment_status='PAID' and b.status<>'CANCELLED'),0) as total_spent,
+                       coalesce((select string_agg(p.name, ', ' order by p.name) from pets p
+                           where p.owner_id=u.id and p.is_active),'') as pets
+                from users u left join loyalty_accounts l on l.user_id=u.id
+                where (u.role='CUSTOMER' or exists (select 1 from user_roles ur join roles r on r.id=ur.role_id
+                           where ur.user_id=u.id and r.name='CUSTOMER'))
+                  and (lower(u.full_name) like :search or coalesce(u.phone,'') like :search
+                       or exists (select 1 from pets p where p.owner_id=u.id and p.is_active
+                                  and lower(p.name) like :search))
+                order by u.full_name, u.id limit 100
+                """).param("search", "%" + search.trim().toLowerCase(java.util.Locale.ROOT) + "%")
+                .query(Client.class).list();
+    }
 
     public List<Visit> list(LocalDate date, UUID assignedUser, boolean pending) {
         String sql = """
