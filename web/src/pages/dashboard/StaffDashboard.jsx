@@ -1,19 +1,15 @@
 import React, { useEffect, useState } from 'react';
-import {
-  Bell, CreditCard, Users, Plus, Search, CheckCircle2,
-  Clock, DollarSign, Printer, ArrowRight, X, Phone,
-  FileText, Check, AlertCircle, Sparkles, QrCode, CalendarDays, PawPrint,
-  Calendar, UserPlus, Trash2, Edit3, ToggleLeft, ToggleRight, ChevronLeft, ChevronRight,
-  Clock3, Building2
-} from 'lucide-react';
+import { Users, Plus, Search, FileText, QrCode, CalendarDays, PawPrint } from 'lucide-react';
 import { clinicApi, invoiceApi } from '../../api/clinic';
 import ClinicVisitQueue from '../../components/ClinicVisitQueue';
 import RescheduleDialog from '../../components/RescheduleDialog';
 import VietQrPaymentModal from '../../components/VietQrPaymentModal';
-import { Card, Button, Badge, Table, Input, Select, Modal, Avatar } from '../../design-system/components';
+import StaffAppointmentDetail from '../../components/StaffAppointmentDetail';
+import MyShifts from '../../components/MyShifts';
+import { Card, Button, Badge, Table, Input, Select, Modal } from '../../design-system/components';
 
 const INVOICE_STATUS = {
-  ISSUED: { label: 'Đã phát hành', cls: 'bg-sky-50 text-sky-700 border-sky-200' },
+  ISSUED: { label: 'Chờ thanh toán', cls: 'bg-sky-50 text-sky-700 border-sky-200' },
   PENDING_PAYMENT: { label: 'Chờ thanh toán', cls: 'bg-amber-50 text-amber-700 border-amber-200' },
   PAID: { label: 'Đã thanh toán', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
   PARTIALLY_PAID: { label: 'Thanh toán một phần', cls: 'bg-amber-50 text-amber-700 border-amber-200' },
@@ -42,11 +38,14 @@ export default function StaffDashboard({ user, token, activeTab, setActiveTab })
   const [invoicesLoading, setInvoicesLoading] = useState(false);
   const [invoicesError, setInvoicesError] = useState('');
   const [completedBookings, setCompletedBookings] = useState([]);
+  const [completedError, setCompletedError] = useState('');
 
   const [showAddInvoiceModal, setShowAddInvoiceModal] = useState(false);
   const [newInvoice, setNewInvoice] = useState({ bookingId: '' });
   const [invoiceSubmitting, setInvoiceSubmitting] = useState(false);
   const [payingInvoice, setPayingInvoice] = useState(null);
+  const [cashierBookingId, setCashierBookingId] = useState('');
+  const [detailBookingId, setDetailBookingId] = useState(null);
 
   const [moveBooking, setMoveBooking] = useState(null);
   // Bookings state
@@ -58,33 +57,6 @@ export default function StaffDashboard({ user, token, activeTab, setActiveTab })
   const [clients, setClients] = useState([]);
   const [clientsLoading, setClientsLoading] = useState(false);
   const [clientsError, setClientsError] = useState('');
-
-  // ===== SHIFT MANAGEMENT STATE =====
-  const [shiftWeekStart, setShiftWeekStart] = useState(() => {
-    const d = new Date();
-    d.setDate(d.getDate() - d.getDay() + 1); // Monday
-    return d;
-  });
-  const [shifts, setShifts] = useState([]);
-  const [shiftsLoading, setShiftsLoading] = useState(false);
-  const [shiftsError, setShiftsError] = useState('');
-  const [staffList, setStaffList] = useState([]);
-  const [staffLoading, setStaffLoading] = useState(false);
-  const [showShiftModal, setShowShiftModal] = useState(false);
-  const [editingShift, setEditingShift] = useState(null);
-  const [shiftForm, setShiftForm] = useState({
-    staffId: '',
-    workDate: '',
-    startTime: '08:00',
-    endTime: '16:30',
-    slotDurationMinutes: 30,
-    isAvailable: true
-  });
-  const [shiftSubmitting, setShiftSubmitting] = useState(false);
-  const [shiftFormError, setShiftFormError] = useState('');
-  const [selectedShiftBookings, setSelectedShiftBookings] = useState([]);
-  const [showShiftBookingsModal, setShowShiftBookingsModal] = useState(false);
-  const [shiftBookingsLoading, setShiftBookingsLoading] = useState(false);
 
   const formatDateTime = (value) => {
     if (!value) return '—';
@@ -107,8 +79,10 @@ export default function StaffDashboard({ user, token, activeTab, setActiveTab })
     setInvoicesLoading(true);
     setInvoicesError('');
     try {
-      const page = await invoiceApi.listInvoices(token);
-      setInvoices((page?.content || []).map(mapInvoice));
+      const first = await invoiceApi.listInvoices(token);
+      const rest = await Promise.all(Array.from({ length: Math.max(0, first.totalPages - 1) }, (_, page) =>
+        invoiceApi.listInvoices(token, { page: page + 1, size: 50 })));
+      setInvoices([first, ...rest].flatMap(page => page.content || []).map(mapInvoice));
     } catch (err) {
       setInvoicesError(err.message || 'Không tải được danh sách hóa đơn.');
     } finally {
@@ -158,11 +132,12 @@ export default function StaffDashboard({ user, token, activeTab, setActiveTab })
 
   const handleCounterPay = async (booking) => {
     if (!token) return;
-    if (!window.confirm(`Xác nhận đã thu tiền mặt cho lịch hẹn ${booking.code}?\nSố tiền: ${booking.amount.toLocaleString('vi-VN')} đ`)) return;
+    if (!window.confirm(`Xác nhận đã thu tiền mặt cho lịch hẹn ${booking.code}?\nSố tiền: ${booking.amount.toLocaleString('vi-VN')} đ\nPhương thức: Tiền mặt\n\nHãy kiểm tra khách chưa chuyển khoản cho lịch này trước khi xác nhận.`)) return;
     setBookingActionId(booking.id);
     try {
       await clinicApi.markBookingPaid(booking.id, token);
       await fetchBookings();
+      if (activeTab === 'invoices') await fetchInvoices();
     } catch (err) {
       alert(err.message || 'Không thể ghi nhận thanh toán.');
     } finally {
@@ -184,143 +159,15 @@ export default function StaffDashboard({ user, token, activeTab, setActiveTab })
 
   const fetchCompletedBookings = async () => {
     if (!token) return;
+    setCompletedError('');
     try {
-      const page = await clinicApi.listBookings(token, { status: 'COMPLETED' });
-      setCompletedBookings(page?.content || []);
-    } catch {
+      const first = await clinicApi.listBookings(token, { status: 'COMPLETED' });
+      const rest = await Promise.all(Array.from({ length: Math.max(0, first.totalPages - 1) }, (_, page) =>
+        clinicApi.listBookings(token, { status: 'COMPLETED', page: page + 1, size: 50 })));
+      setCompletedBookings([first, ...rest].flatMap(page => page.content || []));
+    } catch (err) {
       setCompletedBookings([]);
-    }
-  };
-
-  // ===== SHIFT MANAGEMENT FUNCTIONS =====
-  const isoDate = (d) => d.toISOString().slice(0, 10);
-
-  const fetchStaffList = async () => {
-    if (!token) return;
-    setStaffLoading(true);
-    try {
-      const data = await clinicApi.shiftStaff(token);
-      setStaffList(data || []);
-    } catch (err) {
-      console.warn('Failed to load staff list:', err);
-      setStaffList([]);
-    } finally {
-      setStaffLoading(false);
-    }
-  };
-
-  const fetchShifts = async () => {
-    if (!token) return;
-    setShiftsLoading(true);
-    setShiftsError('');
-    const monday = new Date(shiftWeekStart);
-    const sunday = new Date(monday);
-    sunday.setDate(monday.getDate() + 6);
-    try {
-      const data = await clinicApi.shifts(isoDate(monday), isoDate(sunday), token);
-      setShifts(data || []);
-    } catch (err) {
-      setShiftsError(err.message || 'Không tải được lịch ca làm việc.');
-      setShifts([]);
-    } finally {
-      setShiftsLoading(false);
-    }
-  };
-
-  const handleShiftWeekChange = (delta) => {
-    const newStart = new Date(shiftWeekStart);
-    newStart.setDate(newStart.getDate() + delta * 7);
-    setShiftWeekStart(newStart);
-  };
-
-  const openShiftModal = (shift = null) => {
-    if (shift) {
-      setEditingShift(shift);
-      setShiftForm({
-        staffId: shift.staffId,
-        workDate: shift.workDate,
-        startTime: shift.startTime?.slice(0, 5) || '08:00',
-        endTime: shift.endTime?.slice(0, 5) || '16:30',
-        slotDurationMinutes: 30,
-        isAvailable: shift.isAvailable !== false
-      });
-    } else {
-      setEditingShift(null);
-      const monday = new Date(shiftWeekStart);
-      setShiftForm({
-        staffId: '',
-        workDate: isoDate(monday),
-        startTime: '08:00',
-        endTime: '16:30',
-        slotDurationMinutes: 30,
-        isAvailable: true
-      });
-    }
-    setShiftFormError('');
-    setShowShiftModal(true);
-  };
-
-  const handleShiftSubmit = async (e) => {
-    e.preventDefault();
-    if (!shiftForm.staffId || !shiftForm.workDate) {
-      setShiftFormError('Vui lòng chọn nhân viên và ngày làm việc.');
-      return;
-    }
-    if (shiftForm.startTime >= shiftForm.endTime) {
-      setShiftFormError('Giờ bắt đầu phải trước giờ kết thúc.');
-      return;
-    }
-    setShiftSubmitting(true);
-    setShiftFormError('');
-    try {
-      if (editingShift) {
-        // For editing, we only toggle availability via PATCH
-        if (editingShift.isAvailable !== shiftForm.isAvailable) {
-          await clinicApi.setShiftAvailability(editingShift.id, shiftForm.isAvailable, token);
-        }
-        // Note: Full edit (changing time/staff) would require delete + recreate
-        // For simplicity, we only support availability toggle on edit
-      } else {
-        await clinicApi.createShift({
-          staffId: shiftForm.staffId,
-          workDate: shiftForm.workDate,
-          startTime: shiftForm.startTime,
-          endTime: shiftForm.endTime,
-          slotDurationMinutes: shiftForm.slotDurationMinutes,
-          isAvailable: shiftForm.isAvailable
-        }, token);
-      }
-      setShowShiftModal(false);
-      fetchShifts();
-    } catch (err) {
-      setShiftFormError(err.message || 'Không thể lưu ca làm việc.');
-    } finally {
-      setShiftSubmitting(false);
-    }
-  };
-
-  const handleToggleAvailability = async (shift) => {
-    if (!token) return;
-    try {
-      await clinicApi.setShiftAvailability(shift.id, !shift.isAvailable, token);
-      fetchShifts();
-    } catch (err) {
-      alert(err.message || 'Không thể thay đổi trạng thái ca.');
-    }
-  };
-
-  const handleViewShiftBookings = async (shift) => {
-    if (!token) return;
-    setShiftBookingsLoading(true);
-    try {
-      const data = await clinicApi.shiftBookings(shift.id, token);
-      setSelectedShiftBookings(data || []);
-      setShowShiftBookingsModal(true);
-    } catch (err) {
-      alert(err.message || 'Không tải được danh sách lịch hẹn của ca này.');
-      setSelectedShiftBookings([]);
-    } finally {
-      setShiftBookingsLoading(false);
+      setCompletedError(err.message || 'Không tải được lịch hoàn tất.');
     }
   };
 
@@ -328,16 +175,13 @@ export default function StaffDashboard({ user, token, activeTab, setActiveTab })
     if (activeTab === 'invoices') {
       fetchInvoices();
       fetchCompletedBookings();
+      fetchBookings();
     }
     if (activeTab === 'bookings') {
       fetchBookings();
     }
-    if (activeTab === 'shifts') {
-      fetchStaffList();
-      fetchShifts();
-    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, token, shiftWeekStart]);
+  }, [activeTab, token]);
 
   // Client Directory search state
   const [clientSearch, setClientSearch] = useState('');
@@ -371,10 +215,16 @@ export default function StaffDashboard({ user, token, activeTab, setActiveTab })
 
   const filteredBookings = bookings.filter(b =>
     `${b.customerName} ${b.petName}`.toLocaleLowerCase('vi').includes(bookingSearch.trim().toLocaleLowerCase('vi')));
+  const focusedBooking = bookings.find(booking => booking.id === cashierBookingId);
+  const focusedInvoice = invoices.find(invoice => invoice.bookingId === cashierBookingId);
+  const missingInvoices = invoicesError || invoicesLoading || completedError ? [] : completedBookings.filter(booking => !invoices.some(invoice => invoice.bookingId === booking.id));
+  const cashierInvoices = cashierBookingId ? invoices.filter(invoice => invoice.bookingId === cashierBookingId) : invoices;
+  const goCashier = bookingId => { setCashierBookingId(bookingId); setActiveTab('invoices'); };
 
   return (
     <div className="space-y-6">
-      {activeTab === 'reception' && <ClinicVisitQueue token={token} reception />}
+      {activeTab === 'reception' && <ClinicVisitQueue token={token} reception onCashier={goCashier} />}
+      {activeTab === 'my-shifts' && <MyShifts user={user} token={token} />}
 
       {/* TAB: LỊCH HẸN */}
       {activeTab === 'bookings' && (
@@ -418,6 +268,7 @@ export default function StaffDashboard({ user, token, activeTab, setActiveTab })
               { key: 'paymentStatus', header: 'Thanh toán', render: value => BOOKING_PAYMENT[value]?.label || value },
               { key: 'status', header: 'Trạng thái', render: value => BOOKING_STATUS[value]?.label || value },
               { key: 'actions', header: 'Thao tác', sortable: false, render: (_, b) => <div className="flex flex-col gap-1.5">
+                <Button size="xs" variant="outline" onClick={() => setDetailBookingId(b.id)}>Chi tiết</Button>
                 {['PENDING', 'CONFIRMED'].includes(b.status) && b.items.some(i => new Date(i.startTime) > new Date()) &&
                   <Button size="xs" onClick={() => setMoveBooking(b)}>Đổi lịch hẹn</Button>}
                 {b.paymentStatus !== 'PAID' && b.status !== 'CANCELLED' &&
@@ -465,6 +316,23 @@ export default function StaffDashboard({ user, token, activeTab, setActiveTab })
               Tạo hóa đơn mới
             </Button>
           </Card>
+          {invoicesError && <p className="pc-notice" role="alert">{invoicesError}<button className="pc-text-button" onClick={fetchInvoices}>Thử lại</button></p>}
+          {completedError && <p className="pc-notice" role="alert">{completedError}<button className="pc-text-button" onClick={fetchCompletedBookings}>Thử lại</button></p>}
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3" aria-label="Tình trạng thu ngân">
+            <div className="pc-light pc-panel"><strong>{missingInvoices.length}</strong><p>Đã khám · Chưa có hóa đơn</p></div>
+            <div className="pc-light pc-panel"><strong>{invoices.filter(invoice => !['PAID', 'CANCELLED', 'REFUNDED'].includes(invoice.status)).length}</strong><p>Hóa đơn chờ thanh toán</p></div>
+            <div className="pc-light pc-panel"><strong>{invoices.filter(invoice => invoice.status === 'PAID').length}</strong><p>Hóa đơn đã thanh toán</p></div>
+          </div>
+          {cashierBookingId && <div className="pc-light pc-panel space-y-2">
+            <div className="flex flex-wrap justify-between gap-2"><strong>Đang xử lý: {focusedBooking ? `${focusedBooking.customerName} · ${focusedBooking.petName}` : `Lịch ${cashierBookingId.slice(0, 8)}`}</strong><button className="pc-text-button" onClick={() => setCashierBookingId('')}>Xem tất cả</button></div>
+            {focusedBooking && <p>Giá lịch: {focusedBooking.amount.toLocaleString('vi-VN')} đ · {focusedBooking.paymentStatus === 'PAID' ? 'Đã thanh toán' : 'Chưa thanh toán'} · {BOOKING_STATUS[focusedBooking.status]?.label || focusedBooking.status}</p>}
+            {focusedInvoice ? <p>Hóa đơn {focusedInvoice.number}: {INVOICE_STATUS[focusedInvoice.status]?.label || focusedInvoice.status}.</p>
+              : focusedBooking?.status === 'COMPLETED' ? <button className="pc-button pc-button--small" onClick={() => { setNewInvoice({ bookingId: cashierBookingId }); setShowAddInvoiceModal(true); }}>Phát hành hóa đơn</button>
+                : <p className="pc-muted">Hóa đơn được phát hành sau khi bác sĩ hoàn tất dịch vụ.</p>}
+            {focusedBooking && focusedBooking.paymentStatus !== 'PAID' && focusedBooking.status !== 'CANCELLED' && <button className="pc-button pc-button--soft pc-button--small" disabled={bookingActionId === focusedBooking.id} onClick={() => handleCounterPay(focusedBooking)}>Xác nhận thu tiền mặt · {focusedBooking.amount.toLocaleString('vi-VN')} đ</button>}
+          </div>}
+          {!cashierBookingId && missingInvoices.length > 0 && <section className="pc-light pc-panel space-y-3"><h3 className="pc-section-title">Cần phát hành hóa đơn</h3>{missingInvoices.map(booking => <div key={booking.id} className="flex flex-wrap justify-between items-center gap-2 border-t border-slate-200 pt-2"><span>{booking.customerName} · {booking.petName} · {Number(booking.totalAmount).toLocaleString('vi-VN')} đ</span><button className="pc-button pc-button--small" onClick={() => { setNewInvoice({ bookingId: booking.id }); setShowAddInvoiceModal(true); }}>Tạo hóa đơn</button></div>)}</section>}
 
           <Table
             columns={[
@@ -475,7 +343,7 @@ export default function StaffDashboard({ user, token, activeTab, setActiveTab })
               { key: 'issuedAt', header: 'Ngày phát hành', width: '160px' },
               { key: 'status', header: 'Trạng thái', width: '140px' },
             ]}
-            data={invoices.map(inv => ({
+            data={cashierInvoices.map(inv => ({
               ...inv,
               bookingId: `#${String(inv.bookingId).slice(0, 8)}`,
               total: `${inv.total.toLocaleString('vi-VN')} ${inv.currency}`,
@@ -489,7 +357,7 @@ export default function StaffDashboard({ user, token, activeTab, setActiveTab })
             className="table-wrapper"
             renderRow={(inv) => {
               const statusConfig = {
-                ISSUED: { label: 'Đã phát hành', variant: 'info' },
+                ISSUED: { label: 'Chờ thanh toán', variant: 'info' },
                 PENDING_PAYMENT: { label: 'Chờ thanh toán', variant: 'warning' },
                 PAID: { label: 'Đã thanh toán', variant: 'success' },
                 PARTIALLY_PAID: { label: 'Thanh toán một phần', variant: 'warning' },
@@ -533,7 +401,7 @@ export default function StaffDashboard({ user, token, activeTab, setActiveTab })
             open={Boolean(payingInvoice)}
             invoice={payingInvoice}
             onClose={() => setPayingInvoice(null)}
-            onPaid={() => fetchInvoices()}
+            onPaid={() => { fetchInvoices(); fetchBookings(); setTimeout(fetchInvoices, 2500); }}
           />
 
           <Modal
@@ -641,265 +509,7 @@ export default function StaffDashboard({ user, token, activeTab, setActiveTab })
         </div>
       )}
 
-      {/* TAB 4: QUẢN LÝ CA LÀM VIỆC */}
-      {activeTab === 'shifts' && (
-        <div className="space-y-6">
-          <Card variant="outlined" padding="lg" className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <div className="flex items-center space-x-2">
-                <span className="w-8 h-8 rounded-xl bg-[var(--color-role-staff-bg)] text-[var(--color-role-staff-text)] flex items-center justify-center font-bold">
-                  <Building2 size={18} />
-                </span>
-                <Card.Title className="text-lg font-bold text-[var(--color-fg-primary)]">Quản lý ca làm việc</Card.Title>
-              </div>
-              <Card.Description className="text-xs text-slate-500 mt-1">
-                Xem, tạo và quản lý lịch trực nhân viên theo tuần
-              </Card.Description>
-            </div>
-            <div className="flex items-center space-x-2">
-              <Button variant="ghost" size="sm" leftIcon={<ChevronLeft className="w-4 h-4" />} onClick={() => handleShiftWeekChange(-1)}>Tuần trước</Button>
-              <span className="text-sm font-medium text-slate-700 whitespace-nowrap">
-                Tuần {isoDate(shiftWeekStart)} - {isoDate(new Date(shiftWeekStart.getTime() + 6*86400000))}
-              </span>
-              <Button variant="ghost" size="sm" rightIcon={<ChevronRight className="w-4 h-4" />} onClick={() => handleShiftWeekChange(1)}>Tuần sau</Button>
-              <Button variant="primary" size="sm" leftIcon={<Plus className="w-4 h-4" />} onClick={() => openShiftModal()}>
-                Thêm ca
-              </Button>
-            </div>
-          </Card>
-
-          {shiftsError && <p role="alert" className="pc-notice">{shiftsError}</p>}
-          {shiftsLoading && <p role="status">Đang tải lịch ca làm việc…</p>}
-
-          {!shiftsLoading && (
-            <div className="overflow-x-auto rounded-xl border border-slate-200">
-              <table className="w-full text-sm" role="grid">
-                <thead className="bg-slate-50">
-                  <tr>
-                    <th className="p-3 text-left font-semibold text-slate-600 sticky left-0 bg-slate-50 z-10 w-40">Nhân viên</th>
-                    {Array.from({ length: 7 }).map((_, i) => {
-                      const d = new Date(shiftWeekStart);
-                      d.setDate(d.getDate() + i);
-                      return (
-                        <th key={i} className="p-3 text-center font-semibold text-slate-600 min-w-[120px]">
-                          <div className="font-medium">{d.toLocaleDateString('vi-VN', { weekday: 'short' })}</div>
-                          <div className="text-xs text-slate-400">{d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })}</div>
-                        </th>
-                      );
-                    })}
-                  </tr>
-                </thead>
-                <tbody>
-                  {staffList.length > 0 ? staffList.map(staff => (
-                    <tr key={staff.id} className="border-t border-slate-100 hover:bg-slate-50/50">
-                      <td className="p-3 font-medium text-slate-900 sticky left-0 bg-white z-10 w-40">
-                        <div className="flex items-center gap-2">
-                          <div className="w-7 h-7 rounded-full bg-[var(--color-role-staff-bg)] text-[var(--color-role-staff-text)] flex items-center justify-center text-xs font-bold">
-                            {staff.fullName?.split(' ').pop()?.[0] || '?'}
-                          </div>
-                          <span>{staff.fullName}</span>
-                        </div>
-                      </td>
-                      {Array.from({ length: 7 }).map((_, i) => {
-                        const d = new Date(shiftWeekStart);
-                        d.setDate(d.getDate() + i);
-                        const dateStr = isoDate(d);
-                        const dayShifts = shifts.filter(s => s.staffId === staff.id && s.workDate === dateStr);
-                        return (
-                          <td key={i} className="p-2 align-top min-w-[120px]">
-                            {dayShifts.length === 0 ? (
-                              <div className="text-xs text-slate-300 h-16 flex items-center justify-center border-2 border-dashed border-slate-100 rounded-lg">
-                                —
-                              </div>
-                            ) : (
-                              <div className="space-y-1.5">
-                                {dayShifts.map(shift => (
-                                  <div
-                                    key={shift.id}
-                                    className={`px-2 py-1.5 rounded-lg text-xs border transition-all ${
-                                      shift.isAvailable
-                                        ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
-                                        : 'bg-slate-100 border-slate-200 text-slate-600 line-through'
-                                    }`}
-                                  >
-                                    <div className="font-medium flex items-center justify-between">
-                                      <span>{shift.startTime?.slice(0,5)} - {shift.endTime?.slice(0,5)}</span>
-                                      <span className={`text-[10px] px-1.5 py-0.5 rounded ${shift.isAvailable ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
-                                        {shift.isAvailable ? 'Có sẵn' : 'Bận'}
-                                      </span>
-                                    </div>
-                                    <div className="flex items-center justify-between mt-1">
-                                      <Button
-                                        variant="ghost"
-                                        size="xs"
-                                        onClick={() => handleToggleAvailability(shift)}
-                                        title={shift.isAvailable ? 'Đánh dấu bận' : 'Đánh dấu có sẵn'}
-                                      >
-                                        {shift.isAvailable ? <ToggleLeft className="w-3.5 h-3.5" /> : <ToggleRight className="w-3.5 h-3.5" />}
-                                      </Button>
-                                      <Button
-                                        variant="ghost"
-                                        size="xs"
-                                        onClick={() => handleViewShiftBookings(shift)}
-                                        disabled={shiftBookingsLoading}
-                                        title="Xem lịch hẹn trong ca"
-                                      >
-                                        <Calendar className="w-3.5 h-3.5" />
-                                      </Button>
-                                      {!shift.isAvailable && (
-                                        <Button
-                                          variant="ghost"
-                                          size="xs"
-                                          onClick={async () => {
-                                            if (confirm('Xóa ca làm việc này?')) {
-                                              try {
-                                                await clinicApi.deleteShift(shift.id, token);
-                                                fetchShifts();
-                                              } catch (err) {
-                                                alert(err.message || 'Không thể xóa ca làm việc.');
-                                              }
-                                            }
-                                          }}
-                                          title="Xóa ca"
-                                        >
-                                          <Trash2 className="w-3.5 h-3.5 text-rose-500" />
-                                        </Button>
-                                      )}
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  )) : (
-                    <tr>
-                      <td colSpan={8} className="p-8 text-center text-slate-500">Chưa có nhân viên nào.</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {/* Shift Modal */}
-          <Modal
-            className="pc-light pc-work pc-work-dialog"
-            open={showShiftModal}
-            onClose={() => setShowShiftModal(false)}
-            title={editingShift ? 'Chỉnh sửa ca làm việc' : 'Tạo ca làm việc mới'}
-            size="md"
-          >
-            <form onSubmit={handleShiftSubmit} className="space-y-3.5 text-xs">
-              {shiftFormError && <p role="alert" className="text-rose-600">{shiftFormError}</p>}
-              <Select
-                label="Nhân viên *"
-                required
-                value={shiftForm.staffId}
-                onChange={e => setShiftForm({ ...shiftForm, staffId: e.target.value })}
-                options={staffList.map(s => ({ value: s.id, label: s.fullName }))}
-                placeholder="-- Chọn nhân viên --"
-              />
-              <div className="grid grid-cols-2 gap-3">
-                <Input
-                  label="Ngày làm việc *"
-                  type="date"
-                  required
-                  value={shiftForm.workDate}
-                  onChange={e => setShiftForm({ ...shiftForm, workDate: e.target.value })}
-                />
-                <Select
-                  label="Thời lượng khung giờ (phút)"
-                  value={shiftForm.slotDurationMinutes}
-                  onChange={e => setShiftForm({ ...shiftForm, slotDurationMinutes: Number(e.target.value) })}
-                  options={[
-                    { value: 15, label: '15 phút' },
-                    { value: 20, label: '20 phút' },
-                    { value: 30, label: '30 phút' },
-                    { value: 45, label: '45 phút' },
-                    { value: 60, label: '60 phút' },
-                  ]}
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <Input
-                  label="Giờ bắt đầu *"
-                  type="time"
-                  required
-                  value={shiftForm.startTime}
-                  onChange={e => setShiftForm({ ...shiftForm, startTime: e.target.value })}
-                />
-                <Input
-                  label="Giờ kết thúc *"
-                  type="time"
-                  required
-                  value={shiftForm.endTime}
-                  onChange={e => setShiftForm({ ...shiftForm, endTime: e.target.value })}
-                />
-              </div>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={shiftForm.isAvailable}
-                  onChange={e => setShiftForm({ ...shiftForm, isAvailable: e.target.checked })}
-                  className="w-4 h-4 rounded border-slate-300 text-[var(--color-role-staff-text)] focus:ring-[var(--color-role-staff-text)]"
-                />
-                <span>Ca có sẵn để đặt lịch (mặc định bật)</span>
-              </label>
-              {editingShift && (
-                <p className="text-[11px] text-slate-500">
-                  Lưu ý: Chỉ có thể bật/tắt trạng thái "Có sẵn" khi chỉnh sửa. Để đổi giờ/ngày/nhân viên, hãy xóa ca cũ và tạo mới.
-                </p>
-              )}
-              <div className="pt-2 flex justify-end space-x-2">
-                <Button variant="outline" type="button" onClick={() => setShowShiftModal(false)}>Hủy</Button>
-                <Button type="submit" disabled={shiftSubmitting} loading={shiftSubmitting}>
-                  {editingShift ? 'Cập nhật' : 'Tạo ca'}
-                </Button>
-              </div>
-            </form>
-          </Modal>
-
-          {/* Shift Bookings Modal */}
-          <Modal
-            className="pc-light pc-work pc-work-dialog"
-            open={showShiftBookingsModal}
-            onClose={() => setShowShiftBookingsModal(false)}
-            title="Lịch hẹn trong ca"
-            size="lg"
-          >
-            {shiftBookingsLoading ? (
-              <p role="status" className="text-center py-8">Đang tải lịch hẹn…</p>
-            ) : selectedShiftBookings.length === 0 ? (
-              <p className="text-center py-8 text-slate-500">Ca này chưa có lịch hẹn nào.</p>
-            ) : (
-              <div className="max-h-96 overflow-y-auto">
-                <Table
-                  columns={[
-                    { key: 'code', header: 'Mã lịch', width: '120px' },
-                    { key: 'customerName', header: 'Chủ nuôi' },
-                    { key: 'petName', header: 'Thú cưng' },
-                    { key: 'service', header: 'Dịch vụ', minWidth: '200px' },
-                    { key: 'dateTime', header: 'Thời gian', width: '160px' },
-                    { key: 'status', header: 'Trạng thái', width: '140px' },
-                  ]}
-                  data={selectedShiftBookings.map(b => ({
-                    ...b,
-                    code: `BK-${String(b.id).slice(0, 8).toUpperCase()}`,
-                    status: b.status,
-                  }))}
-                  keyField="id"
-                  striped
-                  hoverable
-                  className="table-wrapper"
-                />
-              </div>
-            )}
-          </Modal>
-        </div>
-      )}
+      {detailBookingId && <StaffAppointmentDetail bookingId={detailBookingId} token={token} onClose={() => setDetailBookingId(null)} onCashier={id => { setDetailBookingId(null); goCashier(id); }} />}
     </div>
   );
 }

@@ -1,10 +1,11 @@
 package com.petcare.platform.loyalty.service;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.petcare.platform.common.exception.BusinessException;
 import com.petcare.platform.common.exception.ResourceNotFoundException;
 import com.petcare.platform.loyalty.domain.LoyaltyAccount;
 import com.petcare.platform.loyalty.repository.LoyaltyAccountRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,7 +20,7 @@ import java.util.stream.Collectors;
 public class LoyaltyService {
 
     private final LoyaltyAccountRepository loyaltyAccountRepository;
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final JdbcClient jdbc;
 
     // Tier configuration: points threshold (1 point = 10,000 VND lifetime spending)
 // New account: no tier -> Đồng (500k VND = 50 pts) -> Bạc (1M VND = 100 pts)
@@ -42,16 +43,17 @@ public class LoyaltyService {
      * {@code LoyaltyController#getCustomerAccount}, which restricts this to the
      * account owner or an ADMIN.
      */
-    @Transactional(readOnly = true)
+    @Transactional
     public LoyaltyAccount getAccountByUser(UUID userId) {
-        return loyaltyAccountRepository.findByUserId(userId)
+        loyaltyAccountRepository.findByUserId(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Loyalty account for user", userId));
+        return getOrCreateAccount(userId);
     }
 
     /** Lazily provisions an account so a new customer has a balance to read. */
     @Transactional
     public LoyaltyAccount getOrCreateAccount(UUID userId) {
-        return loyaltyAccountRepository.findByUserId(userId)
+        LoyaltyAccount account = loyaltyAccountRepository.findByUserId(userId)
                 .orElseGet(() -> loyaltyAccountRepository.save(LoyaltyAccount.builder()
                         .userId(userId)
                         .points(0L)
@@ -60,69 +62,35 @@ public class LoyaltyService {
                         .tierAchievedAt(Instant.now())
                         .benefitsClaimed("[]")
                         .build()));
+        long earned = jdbc.sql("""
+                select coalesce(sum(floor(total_amount / 10000)), 0)::bigint
+                from bookings where customer_id = :userId and status = 'COMPLETED' and payment_status = 'PAID'
+                """).param("userId", userId).query(Long.class).single();
+        TierConfig tier = TIER_CONFIG.get(0);
+        for (TierConfig candidate : TIER_CONFIG) {
+            if (earned >= candidate.minPoints()) tier = candidate;
+        }
+        if (!earnedEquals(account, earned, tier.name())) {
+            if (!tier.name().equals(account.getTier())) {
+                account.setTierAchievedAt(Instant.now());
+                account.setBenefitsClaimed("[]");
+            }
+            account.setPoints(earned);
+            account.setLifetimePoints(earned);
+            account.setTier(tier.name());
+            return loyaltyAccountRepository.save(account);
+        }
+        return account;
     }
 
-    @Transactional
+    private boolean earnedEquals(LoyaltyAccount account, long earned, String tier) {
+        return account.getPoints() != null && account.getPoints() == earned
+                && account.getLifetimePoints() != null && account.getLifetimePoints() == earned
+                && tier.equals(account.getTier());
+    }
+
     public LoyaltyAccount adjustPoints(UUID userId, long pointsDelta, String reason) {
-        LoyaltyAccount account = loyaltyAccountRepository.findByUserId(userId)
-                .orElseGet(() -> LoyaltyAccount.builder()
-                        .userId(userId)
-                        .points(0L)
-                        .lifetimePoints(0L)
-                        .tier("CHƯA CÓ HẠNG")
-                        .tierAchievedAt(Instant.now())
-                        .benefitsClaimed("[]")
-                        .build());
-        long newPoints = account.getPoints() + pointsDelta;
-        if (newPoints < 0) {
-            throw new IllegalArgumentException("Points cannot go below zero");
-        }
-        account.setPoints(newPoints);
-        account.setLifetimePoints(account.getLifetimePoints() + Math.max(0, pointsDelta));
-        checkAndUpgradeTier(account);
-        return loyaltyAccountRepository.save(account);
-    }
-
-    /** Add points from spending (1 point per 10,000 VND) */
-    @Transactional
-    public LoyaltyAccount addPointsFromSpending(UUID userId, long amountVnd) {
-        long pointsEarned = amountVnd / 10000;
-        if (pointsEarned <= 0) return getOrCreateAccount(userId);
-        return adjustPoints(userId, pointsEarned, "Spending: " + amountVnd + " VND");
-    }
-
-    private void checkAndUpgradeTier(LoyaltyAccount account) {
-        // Find the highest tier the user qualifies for based on current points
-        TierConfig qualifiedTier = TIER_CONFIG.stream()
-                .filter(t -> account.getPoints() >= t.minPoints())
-                .max(java.util.Comparator.comparingLong(TierConfig::minPoints))
-                .orElse(TIER_CONFIG.get(0));
-
-        if (!qualifiedTier.name().equals(account.getTier())) {
-            account.setTier(qualifiedTier.name());
-            account.setTierAchievedAt(Instant.now());
-            // Auto-claim benefits for new tier
-            claimTierBenefits(account, qualifiedTier);
-        }
-    }
-
-    private void claimTierBenefits(LoyaltyAccount account, TierConfig config) {
-        try {
-            @SuppressWarnings("unchecked")
-            List<Map<String, Object>> claimed = objectMapper.readValue(
-                    account.getBenefitsClaimed() == null || account.getBenefitsClaimed().isBlank() ? "[]" : account.getBenefitsClaimed(),
-                    List.class
-            );
-            claimed = new java.util.ArrayList<>(claimed);
-            claimed.add(Map.of(
-                    "tier", config.name(),
-                    "claimedAt", Instant.now().toString(),
-                    "benefits", config.benefits()
-            ));
-            account.setBenefitsClaimed(objectMapper.writeValueAsString(claimed));
-        } catch (Exception e) {
-            // Ignore serialization errors
-        }
+        throw new BusinessException("Điểm thành viên được tính tự động từ lịch đã hoàn tất và thanh toán.");
     }
 
     public TierConfig getTierConfig(String tierName) {

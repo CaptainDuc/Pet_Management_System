@@ -209,6 +209,10 @@ export const clinicApi = {
     return request('/schedules/staff', { token });
   },
 
+  staffProfiles(token) {
+    return listAll('/staff', token);
+  },
+
   shifts(dateFrom, dateTo, token) {
     return request(`/schedules${query({ dateFrom, dateTo })}`, { token });
   },

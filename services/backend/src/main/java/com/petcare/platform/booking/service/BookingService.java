@@ -418,15 +418,7 @@ public class BookingService {
         });
         bookingRepository.save(booking);
         promotionService.consume(booking.getId());
-
-        // Earn loyalty points: 1 point per 10,000 VND spent (on actual paid amount after discount)
-        if (booking.getCustomerId() != null && booking.getTotalAmount() != null) {
-            try {
-                loyaltyService.addPointsFromSpending(booking.getCustomerId(), booking.getTotalAmount().longValue());
-            } catch (Exception e) {
-                log.warn("Failed to add loyalty points for booking {}: {}", booking.getId(), e.getMessage());
-            }
-        }
+        syncCompletedBookingLoyalty(booking);
 
         return autoConfirm;
     }
@@ -501,6 +493,7 @@ public class BookingService {
         if (from == next || (complete && items.stream().anyMatch(i -> i.getStatus() != BookingStatus.COMPLETED))) return;
         booking.setStatus(next);
         historyRepository.save(new BookingStatusHistory(id, from, next, userId, null));
+        if (complete) syncCompletedBookingLoyalty(booking);
         recordEvent(toResponses(List.of(booking)).getFirst(), routingKeyFor(next), null);
     }
 
@@ -558,6 +551,7 @@ public class BookingService {
 
         booking.setStatus(to);
         items.forEach(i -> i.setStatus(to));
+        if (to == BookingStatus.COMPLETED || from == BookingStatus.COMPLETED) syncCompletedBookingLoyalty(booking);
         historyRepository.save(new BookingStatusHistory(
                 id, from, to, userId, to == BookingStatus.CANCELLED ? reason : null));
 
@@ -570,6 +564,13 @@ public class BookingService {
         BookingResponse response = toResponses(List.of(booking)).get(0);
         recordEvent(response, routingKeyFor(to), reason);
         return response;
+    }
+
+    private void syncCompletedBookingLoyalty(Booking booking) {
+        if (booking.getStatus() == BookingStatus.COMPLETED && booking.getPaymentStatus() == PaymentStatus.PAID) {
+            bookingRepository.flush();
+            loyaltyService.getOrCreateAccount(booking.getCustomerId());
+        }
     }
     
 

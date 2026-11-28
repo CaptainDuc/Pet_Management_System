@@ -217,7 +217,7 @@ export default function CustomerExtras({ user, token, activeTab, onApiLog, onBoo
                   </div>
                   <div className="text-right">
                     <span className="text-[10px] opacity-75 block">Tích lũy trọn đời</span>
-                    <span className="font-semibold">{loyaltyData.lifetimePoints.toLocaleString()} đ</span>
+                    <span className="font-semibold">{loyaltyData.lifetimePoints.toLocaleString()} điểm</span>
                   </div>
                 </div>
               </Card>
@@ -230,7 +230,7 @@ export default function CustomerExtras({ user, token, activeTab, onApiLog, onBoo
                   <div className="mb-4 p-3 bg-[var(--color-role-customer-bg)]/50 border border-[var(--color-role-customer-border)]/50 rounded-lg flex items-center space-x-3">
                     <Gift className="w-5 h-5 text-[var(--color-role-customer-main)]" />
                     <div>
-                      <span className="font-semibold text-slate-900">Tự động giảm giá tại thanh toán: </span>
+                      <span className="font-semibold text-slate-900">Giảm giá khi đặt lịch: </span>
                       <span className="text-lg font-bold text-[var(--color-role-customer-main)]">{loyaltyData.discountPercent}%</span>
                       <span className="text-slate-600 ml-1">cho tất cả dịch vụ</span>
                     </div>
