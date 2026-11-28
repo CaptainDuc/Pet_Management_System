@@ -108,7 +108,7 @@ Core backend owns invoices. Payment stores `invoice_id`, `owner_id`, and `appoin
 | Message Broker | RabbitMQ | 3.13 |
 | API Docs | SpringDoc OpenAPI | 2.x |
 | Security | Spring Security 6 + JWT | HS256, Stateless |
-| AI Microservices | Python 3.11 + FastAPI | 4 service stub: agent, RAG, vision, recommendation |
+| AI Microservices | Python 3.11 + FastAPI | RAG có mã xử lý và cần cấu hình khóa/dữ liệu; agent, vision, recommendation hiện là stub |
 | Web Frontend | React 18 + Vite 5 + TailwindCSS 3 | Port 80 |
 | Mobile | React Native 0.74 + Expo SDK 51 | Expo Router |
 | Observability | Prometheus + Grafana | 9090 / 3001 |

@@ -38,7 +38,7 @@ if %errorlevel% equ 0 (
     echo  - Backend Core API:   http://localhost:8080/api/v1
     echo  - API Gateway:        http://localhost:8000/api/v1/services
     echo  - Swagger UI docs:    http://localhost:8080/swagger-ui.html
-    echo  - RabbitMQ UI:        http://localhost:15672 (petcare / petcare123)
+    echo  - RabbitMQ UI:        http://localhost:15672 (dang nhap theo .env)
     echo ========================================================
     echo.
     echo Bam phim bat ky de thoat cua so nay (cac dich vu van chay ngam)...

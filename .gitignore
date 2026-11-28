@@ -35,7 +35,7 @@ Thumbs.db
 *.log
 logs/
 
-.github
+/.github/*.bak
 
 web/dist/
 .agents
@@ -46,3 +46,4 @@ web/dist/
 # Local test login credentials
 /TAI_KHOAN_KIEM_THU*.local.txt
 /.local-backups/
+/ai/rag/pgvector_ingest_report.json

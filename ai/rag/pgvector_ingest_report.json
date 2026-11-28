@@ -1,9 +1,0 @@
-{
-  "table": "pet_chunks",
-  "provider": "openrouter",
-  "model": "nvidia/nemotron-3.5-embed-1b:free",
-  "dim": 2048,
-  "chunks_written": 796,
-  "chunks_total": 3296,
-  "created_at": "2026-11-16T14:13:14"
-}

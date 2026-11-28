@@ -1,12 +1,8 @@
 # Thử đặt lịch bằng dữ liệu DEMO
 
-Máy hiện tại đã có tám dịch vụ chăm sóc đã duyệt và lịch trống cho nhân viên
-kiểm thử trong 14 ngày tới. Bạn có thể đặt lịch từ ngày mai mà không cần chạy
-`-Bootstrap` thêm. Xem [danh mục và hướng dẫn chăm sóc](care-services.md).
-Phần bên dưới dành cho bước khởi tạo DEMO ban đầu.
-
-Web cần có dịch vụ, nhân viên phụ trách và giờ làm việc trước khi nhận đặt lịch.
-Máy hiện tại chưa có dữ liệu này; không cần thao tác từng API trong Swagger.
+Web cần có dịch vụ, bác sĩ và giờ làm việc trước khi nhận đặt lịch. Trên một
+database mới, dùng script DEMO bên dưới để tạo dữ liệu thử; trên database đã
+có lịch trống thì không cần chạy lại. Xem [danh mục và hướng dẫn chăm sóc](care-services.md).
 
 ## Lần đầu trên máy local
 

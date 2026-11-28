@@ -40,7 +40,7 @@ if ($LASTEXITCODE -eq 0) {
     Write-Host " - Backend Core API:  http://localhost:8080/api/v1" -ForegroundColor White
     Write-Host " - API Gateway:       http://localhost:8000/api/v1/services" -ForegroundColor White
     Write-Host " - Swagger UI docs:   http://localhost:8080/swagger-ui.html" -ForegroundColor White
-    Write-Host " - RabbitMQ UI:       http://localhost:15672 (petcare / petcare123)" -ForegroundColor White
+    Write-Host " - RabbitMQ UI:       http://localhost:15672 (đăng nhập theo .env)" -ForegroundColor White
     Write-Host "========================================================" -ForegroundColor Green
 } else {
     Write-Host "[LỖI] Có lỗi xảy ra trong quá trình khởi động container." -ForegroundColor Red

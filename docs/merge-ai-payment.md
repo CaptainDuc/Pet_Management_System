@@ -56,12 +56,9 @@ và chưa ingest. Vì vậy health RAG báo `degraded` đúng trạng thái th�
 
 ## Dữ liệu lịch và thanh toán
 
-Không chạy `seed_full_schedule_8am_5pm.sql` trên dữ liệu đang dùng: script xóa
-toàn bộ lịch/khung giờ, phân lại kỹ năng và đổi mọi dịch vụ thành 30 phút.
-`seed_accounts.sql` chứa tài khoản demo; không chạy để ghi đè tài khoản hiện có.
-`seed_services_and_schedules.sql` dùng ID nhân viên cố định và có thể cập nhật
-giá dịch vụ theo dữ liệu mẫu. Các script này cần điều chỉnh cho dữ liệu thực tế
-trước khi sử dụng. Chúng không được tự chạy trong bước gộp này.
+Các seed SQL cũ có thể xóa lịch, ghi đè mật khẩu hoặc thay giá dịch vụ mẫu đã
+được bỏ khỏi repo. Dùng Flyway và giao diện quản lý cho dữ liệu mới; script
+`setup-booking-demo.ps1` chỉ dành cho tài khoản và lịch kiểm thử local.
 
 Danh mục dịch vụ và lịch nhân viên phải được cấu hình trong database. Luồng đặt
 lịch trên trình duyệt đã được kiểm tra bằng phản hồi dịch vụ/giờ trống có kiểm

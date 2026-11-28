@@ -4898,7 +4898,7 @@ Business rules giống N.8 (reset `status`, `next_attempt_at`, `last_error`, `at
 
 ⚠ **Không có publisher hay consumer nào trong source.** Toàn bộ topology chỉ là khai báo bean.
 
-⚠ `infrastructure/rabbitmq/definitions.json` là file **0 byte** ⇒ RabbitMQ khởi động không có định nghĩa nào được import; queue được tạo bởi Spring `QueueBuilder.durable(...)` khi service khởi động.
+RabbitMQ không import file definitions; queue được khai báo bởi Spring khi service khởi động.
 
 ## Event envelope
 
@@ -5511,7 +5511,7 @@ Chỉ áp dụng cho endpoint **đã hỗ trợ** phân trang/sắp xếp. Endpo
 | Consumer (`@RabbitListener`) | ❌ | ❌ | ❌ |
 | Listener retry config | ✔ (3 attempts) | ❌ | ❌ |
 | DLX | ✔ `petcare.dlx` | ❌ | ❌ |
-| Import definitions | ❌ (`definitions.json` rỗng) | — | — |
+| Import definitions | Không dùng; khai báo bằng Spring | — | — |
 
 **Topology đã khai báo trong `RabbitMQQueues` + `RabbitMQConfig`**
 
