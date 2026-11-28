@@ -8,6 +8,7 @@ import VietQrPaymentModal from '../../components/VietQrPaymentModal';
 import RescheduleDialog from '../../components/RescheduleDialog';
 import CustomerExtras from './CustomerExtras';
 import CustomerRecords from '../../components/CustomerRecords';
+import CustomerPromotions from '../../components/CustomerPromotions';
 import PhotoInput from '../../components/PhotoInput';
 import { canPayBooking, paymentStatusLabel } from './bookingPayment';
 import { canCustomerCancelAppointment, isActiveAppointment } from './appointmentLifecycle';
@@ -227,6 +228,8 @@ export default function CustomerDashboard({ user, token, activeTab, setActiveTab
 
   const mainContent = ['health', 'invoices'].includes(activeTab) ? (
     <CustomerRecords tab={activeTab} pets={pets} token={token} />
+  ) : activeTab === 'promotions' ? (
+    <CustomerPromotions token={token} onBook={promotion => book(null, promotion ? { promotionCode: promotion.code } : null)} />
   ) : ['loyalty', 'ai-chat'].includes(activeTab) ? (
     <CustomerExtras user={user} token={token} activeTab={activeTab} onBookingSuggestion={suggestion => book(suggestion.petId, suggestion)} />
   ) : (

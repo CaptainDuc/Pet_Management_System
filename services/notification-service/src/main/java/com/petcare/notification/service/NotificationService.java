@@ -106,6 +106,8 @@ public class NotificationService {
         String reason = data.get("reason") == null ? "" : data.get("reason").toString();
 
         return switch (eventType) {
+            case "notification.send" -> new String[]{
+                    String.valueOf(data.get("title")), String.valueOf(data.get("body"))};
             case "booking.created" -> new String[]{
                     "Đặt lịch thành công",
                     "Lịch hẹn " + services + " lúc " + time + " đã được ghi nhận và đang chờ xác nhận."};

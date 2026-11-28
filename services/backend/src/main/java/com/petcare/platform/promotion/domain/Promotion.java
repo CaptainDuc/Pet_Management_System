@@ -50,4 +50,7 @@ public class Promotion extends BaseEntity {
 
     @Column(name = "is_active", nullable = false)
     private boolean active = true;
+
+    @Column(name = "gift_all_existing", nullable = false)
+    private boolean giftAllExisting;
 }

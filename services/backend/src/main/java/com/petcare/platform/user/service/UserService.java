@@ -1,5 +1,7 @@
 package com.petcare.platform.user.service;
 
+import com.petcare.platform.audit.service.AuditLogService;
+import com.petcare.platform.common.security.SecurityUtils;
 import com.petcare.platform.common.dto.PageResponse;
 import com.petcare.platform.common.exception.BusinessException;
 import com.petcare.platform.auth.service.RefreshTokenRevocationService;
@@ -22,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -52,6 +55,7 @@ public class UserService {
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
     private final RefreshTokenRevocationService revocationService;
+    private final AuditLogService auditLogService;
 
     @Transactional(readOnly = true)
     public UserResponse getUserProfile(UUID userId) {
@@ -122,8 +126,11 @@ public class UserService {
                 .orElseThrow(() -> new ResourceNotFoundException("User", id));
 
         String status = request.status().trim().toUpperCase();
+        String previousStatus = user.getStatus();
         user.setStatus(status);
         User updated = userRepository.save(user);
+        auditLogService.logChange("USER_STATUS_CHANGED", "User", id, SecurityUtils.getCurrentUserId().orElse(null),
+                Map.of("status", previousStatus), Map.of("status", status));
 
         if (!"ACTIVE".equals(status)) {
             revocationService.revokeAllForUser(updated.getId(), "Revoked because account status became " + status);
@@ -146,9 +153,11 @@ public class UserService {
                 .orElseThrow(() -> new ResourceNotFoundException("User", userId));
 
         Set<Role> roles = roleRepository.findByIdIn(request.roleIds());
-        if (roles.isEmpty()) {
-            throw new BusinessException("No valid roles found for provided IDs");
+        if (roles.size() != request.roleIds().size()) {
+            throw new BusinessException("Một hoặc nhiều vai trò không tồn tại.");
         }
+        Set<String> previousRoles = user.getRoles().stream().map(Role::getName).collect(java.util.stream.Collectors.toSet());
+        String previousPrimaryRole = user.getRole();
 
         // Keep the current primary role when it is still granted, otherwise fall back
         // to the highest-privilege role by a stable name ordering.
@@ -164,7 +173,10 @@ public class UserService {
 
         user.setRoles(roles);
         user.setRole(primaryRole);
-
-        return UserResponse.from(userRepository.save(user));
+        User updated = userRepository.save(user);
+        auditLogService.logChange("USER_ROLES_CHANGED", "User", userId, SecurityUtils.getCurrentUserId().orElse(null),
+                Map.of("role", previousPrimaryRole, "roles", previousRoles),
+                Map.of("role", primaryRole, "roles", roles.stream().map(Role::getName).toList()));
+        return UserResponse.from(updated);
     }
 }

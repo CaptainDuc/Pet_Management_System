@@ -22,6 +22,7 @@ public record PromotionResponse(
         LocalDate startDate,
         LocalDate endDate,
         boolean active,
+        boolean giftAllExisting,
         Instant createdAt,
         Instant updatedAt
 ) {
@@ -38,6 +39,7 @@ public record PromotionResponse(
                 promotion.getStartDate(),
                 promotion.getEndDate(),
                 promotion.isActive(),
+                promotion.isGiftAllExisting(),
                 promotion.getCreatedAt(),
                 promotion.getUpdatedAt()
         );

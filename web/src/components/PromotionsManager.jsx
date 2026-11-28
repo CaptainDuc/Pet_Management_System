@@ -29,7 +29,8 @@ export default function PromotionsManager({ token, onApiLog }) {
     maxUses: '',
     startDate: '',
     endDate: '',
-    active: true
+    active: true,
+    giftAllExisting: false
   });
 
   const fetchPromotions = async () => {
@@ -69,7 +70,8 @@ export default function PromotionsManager({ token, onApiLog }) {
       maxUses: '',
       startDate: new Date().toISOString().split('T')[0],
       endDate: '',
-      active: true
+      active: true,
+      giftAllExisting: false
     });
     setFormError('');
     setIsModalOpen(true);
@@ -86,7 +88,8 @@ export default function PromotionsManager({ token, onApiLog }) {
       maxUses: promo.maxUses || '',
       startDate: promo.startDate || '',
       endDate: promo.endDate || '',
-      active: promo.active
+      active: promo.active,
+      giftAllExisting: Boolean(promo.giftAllExisting)
     });
     setFormError('');
     setIsModalOpen(true);
@@ -155,7 +158,8 @@ export default function PromotionsManager({ token, onApiLog }) {
         maxUses: formData.maxUses ? parseInt(formData.maxUses, 10) : null,
         startDate: formData.startDate || null,
         endDate: formData.endDate || null,
-        active: formData.active
+        active: formData.active,
+        ...(!editingPromo && { giftAllExisting: formData.giftAllExisting })
       };
 
       if (editingPromo) {
@@ -372,6 +376,7 @@ export default function PromotionsManager({ token, onApiLog }) {
                       {/* Name & Min Order */}
                       <td className="py-3.5 px-4 max-w-xs">
                         <div className="font-bold text-slate-900">{promo.name}</div>
+                        {promo.giftAllExisting && <div className="text-[11px] font-semibold text-sky-700 mt-0.5">Đã tặng khách hàng có tài khoản · 1 lần/khách</div>}
                         <div className="text-[11px] text-slate-500 mt-0.5">
                           Đơn tối thiểu:{' '}
                           <span className="font-semibold text-slate-700">
@@ -643,6 +648,11 @@ export default function PromotionsManager({ token, onApiLog }) {
               </div>
 
               {/* Active Toggle */}
+              {!editingPromo && <label className="flex items-start gap-3 rounded-xl border border-sky-200 bg-sky-50 p-3 text-sm text-sky-950">
+                <input type="checkbox" className="mt-1" checked={formData.giftAllExisting}
+                  onChange={event => setFormData(prev => ({ ...prev, giftAllExisting: event.target.checked }))} />
+                <span><strong>Tặng tất cả khách hàng hiện có</strong><span className="block text-xs mt-1">Mỗi khách nhận mã trong tài khoản và dùng tối đa một lần. Khách đăng ký sau khi tạo mã sẽ không được nhận.</span></span>
+              </label>}
               <div className="pt-2 flex items-center justify-between border-t border-slate-100">
                 <div>
                   <span className="text-xs font-semibold text-slate-800 block">Kích hoạt ngay</span>

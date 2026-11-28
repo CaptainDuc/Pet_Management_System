@@ -1,5 +1,6 @@
 package com.petcare.platform.audit.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.petcare.platform.audit.domain.AuditLog;
 import com.petcare.platform.audit.repository.AuditLogRepository;
 import com.petcare.platform.common.repository.SpecificationUtils;
@@ -23,23 +24,18 @@ public class AuditLogService {
     private static final int MAX_PAGE_SIZE = 200;
 
     private final AuditLogRepository auditLogRepository;
+    private final ObjectMapper objectMapper;
 
-    /**
-     * Reads must never fail because an audit insert could not be written, and must
-     * never leak the caller's transaction: REQUIRES_NEW keeps the audit row even if
-     * the surrounding transaction later rolls back.
-     */
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void log(String action, String entityType, UUID entityId, UUID userId,
-                    String oldValue, String newValue, String ipAddress) {
+    @Transactional(propagation = Propagation.REQUIRED)
+    public void logChange(String action, String entityType, UUID entityId, UUID userId,
+                          Object oldValue, Object newValue) {
         auditLogRepository.save(AuditLog.builder()
                 .action(action)
                 .entityType(entityType)
                 .entityId(entityId)
                 .userId(userId)
-                .oldValue(oldValue)
-                .newValue(newValue)
-                .ipAddress(ipAddress)
+                .oldValue(oldValue == null ? null : objectMapper.valueToTree(oldValue))
+                .newValue(newValue == null ? null : objectMapper.valueToTree(newValue))
                 .createdAt(Instant.now())
                 .build());
     }

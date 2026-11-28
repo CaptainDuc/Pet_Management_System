@@ -1,5 +1,7 @@
 package com.petcare.platform.schedule.service;
 
+import com.petcare.platform.audit.service.AuditLogService;
+import com.petcare.platform.common.security.SecurityUtils;
 import com.petcare.platform.common.exception.BusinessException;
 import com.petcare.platform.common.exception.ResourceNotFoundException;
 import com.petcare.platform.schedule.domain.Schedule;
@@ -49,6 +51,7 @@ public class ScheduleService {
     private final TimeSlotRepository timeSlotRepository;
     private final StaffRepository staffRepository;
     private final CareServiceRepository careServiceRepository;
+    private final AuditLogService auditLogService;
 
     public record Attendance(UUID shiftId, Instant start, Instant end, Instant clockIn, Instant clockOut, boolean open) {}
 
@@ -185,8 +188,9 @@ public class ScheduleService {
             cursor = cursor.plusMinutes(duration);
         }
         timeSlotRepository.saveAll(slots);
-
-        return toResponse(schedule);
+        ScheduleResponse created = toResponse(schedule);
+        auditLogService.logChange("SCHEDULE_CREATED", "Schedule", schedule.getId(), SecurityUtils.getCurrentUserId().orElse(null), null, created);
+        return created;
     }
 
     @Transactional(readOnly = true)
@@ -367,17 +371,22 @@ public class ScheduleService {
     public ScheduleResponse setAvailability(UUID id, boolean available) {
         Schedule shift = scheduleRepository.lockForUpdate(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Schedule", id));
+        ScheduleResponse before = toResponse(shift);
         shift.setAvailable(available);
-        return toResponse(shift);
+        ScheduleResponse updated = toResponse(shift);
+        auditLogService.logChange("SCHEDULE_AVAILABILITY_CHANGED", "Schedule", id, SecurityUtils.getCurrentUserId().orElse(null), before, updated);
+        return updated;
     }
 
     @Transactional
     public void delete(UUID id) {
         Schedule shift = scheduleRepository.lockForUpdate(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Schedule", id));
+        ScheduleResponse before = toResponse(shift);
         // Delete associated time slots first
         timeSlotRepository.deleteByScheduleId(id);
         scheduleRepository.delete(shift);
+        auditLogService.logChange("SCHEDULE_DELETED", "Schedule", id, SecurityUtils.getCurrentUserId().orElse(null), before, null);
     }
 
     private ScheduleResponse toResponse(Schedule s) {

@@ -2,6 +2,7 @@ package com.petcare.platform.integration;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 
@@ -14,6 +15,8 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class VisitQueueTest extends IntegrationTestBase {
+    @Autowired
+    private com.petcare.platform.schedule.repository.TimeSlotRepository slots;
     private static final String QUEUE = "/api/v1/bookings/queue";
     private static final ZoneId ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
 
@@ -103,7 +106,18 @@ class VisitQueueTest extends IntegrationTestBase {
                 HttpStatus.OK).at("/0/id").asText()).isEqualTo(s.petId().toString());
         call(HttpMethod.POST, path, front, body, HttpStatus.UNPROCESSABLE_ENTITY);
         assertThat(availableSlotIds(s)).contains(slot);
-        jdbc.update("update time_slots set start_time=now()+interval '1 second',end_time=now()+interval '30 minutes 1 second' where id=?", slot);
+        jdbc.update("update time_slots set start_time=date_trunc('minute',now())+interval '2 minutes',"
+                + "end_time=date_trunc('minute',now())+interval '32 minutes' where id=?", slot);
+        var moved = slots.findById(slot).orElseThrow();
+        jdbc.update("""
+                update schedules set work_date=(select (start_time at time zone 'Asia/Ho_Chi_Minh')::date from time_slots where id=?),
+                start_time=(select (start_time at time zone 'Asia/Ho_Chi_Minh')::time - interval '1 minute' from time_slots where id=?),
+                end_time=(select (end_time at time zone 'Asia/Ho_Chi_Minh')::time + interval '1 minute' from time_slots where id=?)
+                where id=?
+                """, slot, slot, slot, moved.getScheduleId());
+        var ordered = slots.findByScheduleIdInOrderByStartTimeAsc(List.of(moved.getScheduleId()));
+        assertThat(com.petcare.platform.schedule.service.SlotWindow.covering(ordered, moved, 30))
+                .as("walk-in slot %s to %s", moved.getStartTime(), moved.getEndTime()).hasSize(1);
         var booking = call(HttpMethod.POST, path, front, body, HttpStatus.OK);
         assertThat(booking.path("customerId").asText()).isEqualTo(s.customer().id().toString());
         assertThat(booking.path("status").asText()).isEqualTo("CONFIRMED");

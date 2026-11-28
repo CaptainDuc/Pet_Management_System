@@ -101,7 +101,8 @@ export default function ClinicVisitQueue({ token, reception = false, onCashier }
       else await clinicApi.visitAction(visit, action, token);
       setFeedback(action === 'no-show' ? `Đã ghi nhận ${visit.petName} vắng mặt.`
         : ({ 'check-in': 'Đã tiếp đón', start: 'Đã bắt đầu dịch vụ cho', complete: 'Đã hoàn tất dịch vụ cho' })[action] + ' ' + visit.petName + '.');
-    } catch (err) { setActionError(err.message); }
+      return true;
+    } catch (err) { setActionError(err.message); return false; }
     finally { setBusy(false); refresh(); }
   }
 
@@ -185,8 +186,8 @@ export default function ClinicVisitQueue({ token, reception = false, onCashier }
             <button
               className="pc-button pc-button--small"
               disabled={busy || !due}
-              onClick={() => {
-                act(v, 'start').then(() => setExamVisit({ ...v, status: 'IN_PROGRESS' }));
+              onClick={async () => {
+                if (await act(v, 'start')) setExamVisit({ ...v, status: 'IN_PROGRESS' });
               }}
             >
               {due ? 'Bắt đầu khám' : 'Chưa đến giờ hẹn'}
@@ -198,7 +199,7 @@ export default function ClinicVisitQueue({ token, reception = false, onCashier }
               disabled={busy}
               onClick={() => setExamVisit(v)}
             >
-              🩺 Vào khám & Kê đơn
+              Vào khám & ghi bệnh án
             </button>
           )}
           {!reception && done && (

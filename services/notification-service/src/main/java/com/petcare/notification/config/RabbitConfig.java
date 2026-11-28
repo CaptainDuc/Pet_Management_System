@@ -14,6 +14,7 @@ import org.springframework.context.annotation.Configuration;
 public class RabbitConfig {
 
     public static final String BOOKING_EXCHANGE = "petcare.booking";
+    public static final String NOTIFICATION_EXCHANGE = "petcare.notification";
     public static final String BOOKING_QUEUE = "notification.booking-events";
 
     // Phải khai báo giống hệt sàn mà core đã tạo (topic, durable), nếu khác RabbitMQ sẽ từ chối
@@ -30,6 +31,16 @@ public class RabbitConfig {
     @Bean
     public Binding notificationBookingBinding(Queue notificationBookingQueue, TopicExchange bookingExchange) {
         return BindingBuilder.bind(notificationBookingQueue).to(bookingExchange).with("booking.*");
+    }
+
+    @Bean
+    public TopicExchange notificationExchange() {
+        return new TopicExchange(NOTIFICATION_EXCHANGE, true, false);
+    }
+
+    @Bean
+    public Binding promotionGiftBinding(Queue notificationBookingQueue, TopicExchange notificationExchange) {
+        return BindingBuilder.bind(notificationBookingQueue).to(notificationExchange).with("notification.send");
     }
 
     @Bean

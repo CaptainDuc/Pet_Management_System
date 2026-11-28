@@ -193,7 +193,7 @@ public class BookingService {
         // 4. Áp mã giảm giá (nếu có). Server luôn tự tính lại số tiền.
         if (request.promotionCode() != null && !request.promotionCode().isBlank()) {
             AppliedPromotion applied = promotionService.reserve(
-                    request.promotionCode(), subtotal, booking.getId());
+                    request.promotionCode(), subtotal, booking.getId(), customerId);
             booking.setPromotionId(applied.promotionId());
             booking.setDiscountAmount(applied.discountAmount());
             booking.setTotalAmount(applied.finalAmount());

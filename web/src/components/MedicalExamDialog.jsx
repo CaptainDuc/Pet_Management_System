@@ -62,7 +62,10 @@ export default function MedicalExamDialog({ visit, token, onClose, onSaved }) {
   const [historyRecords, setHistoryRecords] = useState([]);
   const [historyVaccines, setHistoryVaccines] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(true);
-  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(visit.status === 'COMPLETED');
+  const [recordsFailed, setRecordsFailed] = useState(false);
+  const [vaccinesFailed, setVaccinesFailed] = useState(false);
+  const [historyRevision, setHistoryRevision] = useState(0);
 
   // Form states
   const [visitDate, setVisitDate] = useState(todayIso);
@@ -84,6 +87,8 @@ export default function MedicalExamDialog({ visit, token, onClose, onSaved }) {
   const [saving, setSaving] = useState(false);
   const [completing, setCompleting] = useState(false);
   const [error, setError] = useState('');
+  const [savedRecordId, setSavedRecordId] = useState(null);
+  const [savedVaccineId, setSavedVaccineId] = useState(null);
 
   useEffect(() => {
     let active = true;
@@ -92,6 +97,8 @@ export default function MedicalExamDialog({ visit, token, onClose, onSaved }) {
       return;
     }
     setHistoryLoading(true);
+    setRecordsFailed(false);
+    setVaccinesFailed(false);
 
     Promise.allSettled([
       clinicApi.getPet(visit.petId, token),
@@ -101,12 +108,14 @@ export default function MedicalExamDialog({ visit, token, onClose, onSaved }) {
       if (!active) return;
       if (petRes.status === 'fulfilled') setPetDetails(petRes.value);
       if (recordsRes.status === 'fulfilled') setHistoryRecords(recordsRes.value || []);
+      else setRecordsFailed(true);
       if (vaccinesRes.status === 'fulfilled') setHistoryVaccines(vaccinesRes.value || []);
+      else setVaccinesFailed(true);
       setHistoryLoading(false);
     });
 
     return () => { active = false; };
-  }, [visit.petId, token]);
+  }, [visit.petId, token, historyRevision]);
 
   async function handleSave(completeAfterSave = false) {
     if (!diagnosis.trim() && !treatment.trim() && !notes.trim()) {
@@ -124,32 +133,36 @@ export default function MedicalExamDialog({ visit, token, onClose, onSaved }) {
 
     try {
       // 1. Ensure the visit is IN_PROGRESS before writing medical record (Backend access control requirement)
-      if (visit.status !== 'IN_PROGRESS' && visit.status !== 'COMPLETED') {
-        try {
-          await clinicApi.visitAction(visit, 'start', token);
-        } catch {
-          // If already started or checked in, proceed
-        }
+      if (visit.status !== 'IN_PROGRESS') {
+        await clinicApi.visitAction(visit, 'start', token);
       }
 
-      // 2. Create Medical Record
-      await medicalApi.createRecord({
+      // 2. Reuse a record after a partial failure instead of creating a duplicate.
+      const recordBody = {
         petId: visit.petId,
         visitDate,
         diagnosis: diagnosis.trim() || undefined,
         treatment: treatment.trim() || undefined,
         notes: notes.trim() || undefined,
-      }, token);
+      };
+      const record = savedRecordId
+        ? await medicalApi.updateRecord(savedRecordId, recordBody, token)
+        : await medicalApi.createRecord(recordBody, token);
+      setSavedRecordId(record.id);
 
       // 3. Create Vaccination if included
       if (includeVaccine && vaccineName.trim()) {
-        await medicalApi.createVaccination({
+        const vaccineBody = {
           petId: visit.petId,
           vaccineName: vaccineName.trim(),
           administeredDate: visitDate,
           nextDueDate: nextDueDate ? nextDueDate : undefined,
           batchNumber: batchNumber.trim() || undefined,
-        }, token);
+        };
+        const vaccine = savedVaccineId
+          ? await medicalApi.updateVaccination(savedVaccineId, vaccineBody, token)
+          : await medicalApi.createVaccination(vaccineBody, token);
+        setSavedVaccineId(vaccine.id);
       }
 
       // 4. Complete visit if requested
@@ -235,7 +248,9 @@ export default function MedicalExamDialog({ visit, token, onClose, onSaved }) {
                     <h4 className="font-bold text-slate-700 flex items-center gap-1">
                       <FileText size={13} className="text-sky-600" /> Các lần khám trước
                     </h4>
-                    {historyRecords.length === 0 ? (
+                    {recordsFailed ? (
+                      <p className="text-rose-700">Không tải được bệnh án. <button type="button" className="underline" onClick={() => setHistoryRevision(n => n + 1)}>Thử lại</button></p>
+                    ) : historyRecords.length === 0 ? (
                       <p className="text-slate-400 italic">Chưa có hồ sơ bệnh án cũ.</p>
                     ) : (
                       <div className="space-y-2 max-h-40 overflow-y-auto">
@@ -258,7 +273,9 @@ export default function MedicalExamDialog({ visit, token, onClose, onSaved }) {
                     <h4 className="font-bold text-slate-700 flex items-center gap-1">
                       <Syringe size={13} className="text-emerald-600" /> Mũi tiêm đã thực hiện
                     </h4>
-                    {historyVaccines.length === 0 ? (
+                    {vaccinesFailed ? (
+                      <p className="text-rose-700">Không tải được sổ tiêm. <button type="button" className="underline" onClick={() => setHistoryRevision(n => n + 1)}>Thử lại</button></p>
+                    ) : historyVaccines.length === 0 ? (
                       <p className="text-slate-400 italic">Chưa có bản ghi tiêm phòng.</p>
                     ) : (
                       <div className="space-y-2 max-h-40 overflow-y-auto">
@@ -281,12 +298,13 @@ export default function MedicalExamDialog({ visit, token, onClose, onSaved }) {
           )}
         </div>
 
+        {visit.status !== 'COMPLETED' && <>
         {/* Form ghi nhận ca khám hiện tại */}
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <h3 className="font-bold text-sm text-slate-900 flex items-center gap-1.5">
               <Stethoscope size={16} className="text-sky-600" />
-              Nội dung khám & Đơn thuốc điều trị
+              Nội dung khám và điều trị
             </h3>
             <label className="text-xs text-slate-500 flex items-center gap-1.5">
               <span>Ngày khám:</span>
@@ -316,7 +334,7 @@ export default function MedicalExamDialog({ visit, token, onClose, onSaved }) {
 
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center justify-between">
-              Phác đồ điều trị & Đơn thuốc dặn dò
+              Hướng điều trị và thuốc (nếu có)
               <div className="flex items-center gap-2">
                 <Select
                   value={selectedTemplate}
@@ -417,6 +435,8 @@ export default function MedicalExamDialog({ visit, token, onClose, onSaved }) {
           )}
         </div>
 
+        </>}
+
         {/* Thông báo lỗi nếu có */}
         {error && (
           <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-lg text-xs text-rose-700 flex items-center gap-2" role="alert">
@@ -431,7 +451,7 @@ export default function MedicalExamDialog({ visit, token, onClose, onSaved }) {
             Đóng
           </Button>
 
-          <div className="flex items-center gap-2">
+          {visit.status !== 'COMPLETED' && <div className="flex items-center gap-2">
             <Button
               variant="outline"
               size="sm"
@@ -450,7 +470,7 @@ export default function MedicalExamDialog({ visit, token, onClose, onSaved }) {
             >
               {completing ? 'Đang hoàn tất…' : 'Lưu & Hoàn tất ca khám'}
             </Button>
-          </div>
+          </div>}
         </div>
       </div>
     </Modal>

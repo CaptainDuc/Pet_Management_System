@@ -1,5 +1,6 @@
 package com.petcare.platform.audit.domain;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import jakarta.persistence.*;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
@@ -48,11 +49,11 @@ public class AuditLog {
 
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "old_value", columnDefinition = "jsonb")
-    private String oldValue;
+    private JsonNode oldValue;
 
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "new_value", columnDefinition = "jsonb")
-    private String newValue;
+    private JsonNode newValue;
 
     @Column(name = "ip_address", length = 50)
     private String ipAddress;

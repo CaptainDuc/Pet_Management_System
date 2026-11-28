@@ -35,7 +35,7 @@ public class MedicalService {
     @Transactional(readOnly = true)
     public List<MedicalRecord> getRecordsByPet(UUID userId, UUID petId) {
         accessService.requireRead(userId, petId);
-        return medicalRecordRepository.findByPetId(petId);
+        return medicalRecordRepository.findByPetIdOrderByVisitDateDescCreatedAtDesc(petId);
     }
 
     @Transactional(readOnly = true)

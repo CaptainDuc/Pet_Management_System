@@ -6,5 +6,5 @@ import java.util.List;
 import java.util.UUID;
 
 public interface MedicalRecordRepository extends JpaRepository<MedicalRecord, UUID> {
-    List<MedicalRecord> findByPetId(UUID petId);
+    List<MedicalRecord> findByPetIdOrderByVisitDateDescCreatedAtDesc(UUID petId);
 }

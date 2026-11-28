@@ -24,6 +24,9 @@ export default function AdminDashboard({
   // Users state
   const [usersList, setUsersList] = useState([]);
   const [usersLoading, setUsersLoading] = useState(false);
+  const [usersError, setUsersError] = useState('');
+  const [userActionId, setUserActionId] = useState(null);
+  const [userNotice, setUserNotice] = useState('');
   const [userSearch, setUserSearch] = useState("");
   const [userRoleFilter, setUserRoleFilter] = useState("ALL");
   const [userStatusFilter, setUserStatusFilter] = useState("ALL");
@@ -31,8 +34,13 @@ export default function AdminDashboard({
   // Roles & Perms state
   const [rolesList, setRolesList] = useState([]);
   const [permissionsList, setPermissionsList] = useState([]);
+  const [permissionsError, setPermissionsError] = useState('');
+  const [roleCreating, setRoleCreating] = useState(false);
+  const [roleNotice, setRoleNotice] = useState('');
   const [selectedUserForRole, setSelectedUserForRole] = useState("");
   const [selectedRolesForUser, setSelectedRolesForUser] = useState([]);
+  const [roleSaving, setRoleSaving] = useState(false);
+  const [rolesError, setRolesError] = useState('');
   const [selectedRoleForPerm, setSelectedRoleForPerm] = useState("");
   const [selectedPermsForRole, setSelectedPermsForRole] = useState([]);
   const [newRole, setNewRole] = useState({ name: "", description: "" });
@@ -40,31 +48,39 @@ export default function AdminDashboard({
   // Audit state
   const [auditLogs, setAuditLogs] = useState([]);
   const [auditLoading, setAuditLoading] = useState(false);
+  const [auditError, setAuditError] = useState('');
 
   const fetchUsers = async () => {
     if (!token) return;
     setUsersLoading(true);
+    setUsersError('');
     try {
-      const res = await fetch(`${API_BASE}/users?page=0&size=50`, {
+      const loadPage = async page => {
+        const res = await fetch(`${API_BASE}/users?page=${page}&size=50`, {
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
       });
-      const data = await res.json();
-      if (onApiLog) onApiLog({ status: res.status, data });
-      if (res.ok && data?.data?.content) {
-        setUsersList(data.data.content);
-      }
+        const data = await res.json();
+        if (onApiLog) onApiLog({ status: res.status, data });
+        if (!res.ok || !data?.data?.content) throw new Error(data?.message || 'Không tải được tài khoản.');
+        return data.data;
+      };
+      const first = await loadPage(0);
+      const rest = await Promise.all(Array.from({ length: Math.max(0, first.totalPages - 1) }, (_, index) => loadPage(index + 1)));
+      setUsersList([first, ...rest].flatMap(page => page.content));
     } catch (err) {
-      console.warn("Fetch users error:", err);
+      setUsersList([]);
+      setUsersError(err.message || 'Không tải được tài khoản.');
     } finally {
       setUsersLoading(false);
     }
   };
 
   const handleUserStatus = async (userId, newStatus) => {
-    if (!token) return;
+    if (!token || userActionId) return;
+    setUserActionId(userId); setUserNotice(''); setUsersError('');
     try {
       const res = await fetch(`${API_BASE}/users/${userId}/status`, {
         method: "PATCH",
@@ -76,14 +92,45 @@ export default function AdminDashboard({
       });
       const data = await res.json();
       if (onApiLog) onApiLog({ status: res.status, data });
-      fetchUsers();
+      if (!res.ok) throw new Error(data?.message || 'Không cập nhật được trạng thái.');
+      setUserNotice(newStatus === 'ACTIVE' ? 'Đã mở khóa tài khoản.' : 'Đã khóa tài khoản.');
+      await fetchUsers();
     } catch (err) {
-      console.warn("Update user status error:", err);
+      setUsersError(err.message || 'Không cập nhật được trạng thái.');
+    } finally {
+      setUserActionId(null);
     }
+  };
+
+  const openRoleEditor = account => {
+    setSelectedUserForRole(account.id);
+    setSelectedRolesForUser(account.roles?.length ? account.roles : [account.role]);
+    setUsersError(''); setUserNotice('');
+  };
+
+  const handleAssignRoles = async event => {
+    event.preventDefault();
+    if (!selectedUserForRole || !selectedRolesForUser.length || roleSaving) return;
+    setRoleSaving(true); setUsersError(''); setUserNotice('');
+    try {
+      const roleIds = selectedRolesForUser.map(name => rolesList.find(role => role.name === name)?.id);
+      if (roleIds.some(id => !id)) throw new Error('Danh sách vai trò chưa tải xong. Hãy thử lại.');
+      const res = await fetch(`${API_BASE}/users/${selectedUserForRole}/roles`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ roleIds }),
+      });
+      const data = await res.json();
+      if (onApiLog) onApiLog({ status: res.status, data });
+      if (!res.ok) throw new Error(data?.message || 'Không lưu được vai trò.');
+      setSelectedUserForRole(''); setUserNotice('Đã cập nhật vai trò tài khoản.');
+      await fetchUsers();
+    } catch (err) { setUsersError(err.message || 'Không lưu được vai trò.'); }
+    finally { setRoleSaving(false); }
   };
 
   const fetchRoles = async () => {
     if (!token) return;
+    setRolesError('');
     try {
       const res = await fetch(`${API_BASE}/rbac/roles`, {
         headers: {
@@ -93,16 +140,17 @@ export default function AdminDashboard({
       });
       const data = await res.json();
       if (onApiLog) onApiLog({ status: res.status, data });
-      if (res.ok && data?.data) {
-        setRolesList(data.data);
-      }
+      if (!res.ok || !Array.isArray(data?.data)) throw new Error(data?.message || 'Không tải được vai trò.');
+      setRolesList(data.data);
     } catch (err) {
-      console.warn("Fetch roles error:", err);
+      setRolesList([]);
+      setRolesError(err.message || 'Không tải được vai trò.');
     }
   };
 
   const fetchPermissions = async () => {
     if (!token) return;
+    setPermissionsError('');
     try {
       const res = await fetch(`${API_BASE}/rbac/permissions`, {
         headers: {
@@ -112,17 +160,18 @@ export default function AdminDashboard({
       });
       const data = await res.json();
       if (onApiLog) onApiLog({ status: res.status, data });
-      if (res.ok && data?.data) {
-        setPermissionsList(data.data);
-      }
+      if (!res.ok || !Array.isArray(data?.data)) throw new Error(data?.message || 'Không tải được quyền hạn.');
+      setPermissionsList(data.data);
     } catch (err) {
-      console.warn("Fetch perms error:", err);
+      setPermissionsList([]);
+      setPermissionsError(err.message || 'Không tải được quyền hạn.');
     }
   };
 
   const handleCreateRole = async (e) => {
     e.preventDefault();
-    if (!token || !newRole.name.trim()) return;
+    if (!token || !newRole.name.trim() || roleCreating) return;
+    setRoleCreating(true); setRolesError(''); setRoleNotice('');
     try {
       const res = await fetch(`${API_BASE}/rbac/roles`, {
         method: "POST",
@@ -134,16 +183,21 @@ export default function AdminDashboard({
       });
       const data = await res.json();
       if (onApiLog) onApiLog({ status: res.status, data });
+      if (!res.ok) throw new Error(data?.message || 'Không tạo được vai trò.');
       setNewRole({ name: "", description: "" });
-      fetchRoles();
+      setRoleNotice('Đã tạo vai trò.');
+      await fetchRoles();
     } catch (err) {
-      console.warn("Create role error:", err);
+      setRolesError(err.message || 'Không tạo được vai trò.');
+    } finally {
+      setRoleCreating(false);
     }
   };
 
   const fetchAudit = async () => {
     if (!token) return;
     setAuditLoading(true);
+    setAuditError('');
     try {
       const res = await fetch(`${API_BASE}/audit?page=0&size=30`, {
         headers: {
@@ -153,11 +207,11 @@ export default function AdminDashboard({
       });
       const data = await res.json();
       if (onApiLog) onApiLog({ status: res.status, data });
-      if (res.ok && data?.data?.content) {
-        setAuditLogs(data.data.content);
-      }
+      if (!res.ok || !data?.data?.content) throw new Error(data?.message || 'Không tải được nhật ký.');
+      setAuditLogs(data.data.content);
     } catch (err) {
-      console.warn("Fetch audit error:", err);
+      setAuditLogs([]);
+      setAuditError(err.message || 'Không tải được nhật ký.');
     } finally {
       setAuditLoading(false);
     }
@@ -267,6 +321,9 @@ export default function AdminDashboard({
             </div>
           </Card>
 
+          {usersError && <p className="pc-notice" role="alert">{usersError} <button className="pc-text-button" onClick={fetchUsers}>Thử lại</button></p>}
+          {userNotice && <p className="pc-notice pc-notice--success" role="status">{userNotice}</p>}
+
           {/* Users Table */}
           <Table
             columns={[
@@ -275,29 +332,38 @@ export default function AdminDashboard({
               { key: 'phone', header: 'Số điện thoại', width: '150px', render: (val) => <span className="text-slate-600">{val || "—"}</span> },
               { key: 'role', header: 'Vai trò (Role)', width: '150px', render: (_, row) => <Badge variant="primary" size="xs" className="font-mono">{row.role || (row.roles && row.roles[0]) || "CUSTOMER"}</Badge> },
               { key: 'status', header: 'Trạng thái', width: '140px', render: (_, row) => <Badge variant={row.status === "ACTIVE" ? "success" : "danger"} size="xs">{row.status === "ACTIVE" ? "Đang hoạt động" : "Đã khóa"}</Badge> },
-              { key: 'actions', header: 'Thao tác', width: '140px', render: (_, row) => (
-                <Button
+              { key: 'actions', header: 'Thao tác', width: '190px', sortable: false, render: (_, row) => (<div className="flex flex-wrap gap-2"><Button variant="outline" size="xs" onClick={() => openRoleEditor(row)} disabled={Boolean(userActionId) || roleSaving}>Vai trò</Button><Button
                   variant={row.status === "ACTIVE" ? "danger" : "success"}
                   size="xs"
+                  disabled={Boolean(userActionId) || roleSaving}
                   onClick={() => handleUserStatus(row.id, row.status === "ACTIVE" ? "INACTIVE" : "ACTIVE")}
                 >
-                  {row.status === "ACTIVE" ? "Khóa tài khoản" : "Mở khóa"}
-                </Button>
-              )},
+                  {userActionId === row.id ? 'Đang lưu...' : row.status === "ACTIVE" ? "Khóa tài khoản" : "Mở khóa"}
+                </Button></div>)},
             ]}
             data={filteredUsers}
             keyField="id"
             striped
             hoverable
-            emptyMessage={usersLoading ? "Đang tải danh sách người dùng..." : "Không tìm thấy người dùng phù hợp với bộ lọc."}
+            loading={usersLoading}
+            emptyMessage={usersLoading ? "Đang tải danh sách người dùng..." : usersError ? "Không tải được danh sách tài khoản." : "Không tìm thấy người dùng phù hợp với bộ lọc."}
             className="table-wrapper"
           />
+          {selectedUserForRole && <form onSubmit={handleAssignRoles} className="pc-light pc-panel space-y-3">
+            <h2 className="font-bold">Gán vai trò cho {usersList.find(account => account.id === selectedUserForRole)?.fullName || 'tài khoản'}</h2>
+            {rolesError && <p role="alert" className="pc-notice">{rolesError}</p>}
+            <div className="flex flex-wrap gap-4">{rolesList.map(role => <label key={role.id} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={selectedRolesForUser.includes(role.name)} onChange={event => setSelectedRolesForUser(current => event.target.checked ? [...current, role.name] : current.filter(name => name !== role.name))} />{role.name}</label>)}</div>
+            <div className="flex gap-2"><Button type="submit" disabled={roleSaving || !selectedRolesForUser.length || !rolesList.length}>{roleSaving ? 'Đang lưu...' : 'Lưu vai trò'}</Button><Button type="button" variant="outline" onClick={() => setSelectedUserForRole('')} disabled={roleSaving}>Hủy</Button></div>
+          </form>}
         </div>
       )}
 
       {/* TAB 2: PHÂN QUYỀN RBAC */}
       {activeTab === "rbac" && (
         <div className="space-y-6">
+          {rolesError && <p role="alert" className="pc-notice">{rolesError}<button className="pc-text-button" onClick={fetchRoles}>Thử lại</button></p>}
+          {roleNotice && <p role="status" className="pc-notice pc-notice--success">{roleNotice}</p>}
+          {permissionsError && <p role="alert" className="pc-notice">{permissionsError}<button className="pc-text-button" onClick={fetchPermissions}>Thử lại</button></p>}
           <Card variant="outlined" padding="md" className="flex items-center justify-between">
             <Card.Header className="flex items-center space-x-2">
               <span className="w-8 h-8 rounded-xl bg-[var(--color-role-admin-bg)] text-[var(--color-role-admin-text)] flex items-center justify-center font-bold">
@@ -376,9 +442,10 @@ export default function AdminDashboard({
                   variant="primary"
                   size="sm"
                   fullWidth
+                  disabled={roleCreating}
                   leftIcon={<Plus className="w-3.5 h-3.5" />}
                 >
-                  Thêm vai trò
+                  {roleCreating ? 'Đang tạo...' : 'Thêm vai trò'}
                 </Button>
               </form>
             </Card>
@@ -441,6 +508,8 @@ export default function AdminDashboard({
             </Button>
           </Card>
 
+          {auditError && <p role="alert" className="pc-notice">{auditError}<button className="pc-text-button" onClick={fetchAudit}>Thử lại</button></p>}
+
           <Table
             columns={[
               { key: 'createdAt', header: 'Thời gian', width: '180px', render: (_, row) => row.createdAt ? new Date(row.createdAt).toLocaleString("vi-VN") : "Vừa xong" },
@@ -453,7 +522,8 @@ export default function AdminDashboard({
             keyField="id"
             striped
             hoverable
-            emptyMessage={auditLoading ? "Đang tải dữ liệu..." : "Chưa có bản ghi mới."}
+            loading={auditLoading}
+            emptyMessage={auditLoading ? "Đang tải dữ liệu..." : auditError ? "Không tải được nhật ký." : "Chưa có bản ghi mới."}
             className="table-wrapper"
           />
         </div>

@@ -1,6 +1,8 @@
 package com.petcare.platform.promotion.service;
 
 import com.petcare.platform.common.exception.BusinessException;
+import com.petcare.platform.common.event.RabbitMQQueues;
+import com.petcare.platform.common.outbox.OutboxService;
 import com.petcare.platform.promotion.domain.DiscountType;
 import com.petcare.platform.promotion.domain.Promotion;
 import com.petcare.platform.promotion.domain.PromotionRedemption;
@@ -13,6 +15,7 @@ import com.petcare.platform.promotion.dto.UpdatePromotionRequest;
 import com.petcare.platform.promotion.repository.PromotionRedemptionRepository;
 import com.petcare.platform.promotion.repository.PromotionRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,6 +26,7 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -33,6 +37,8 @@ public class PromotionService {
 
     private final PromotionRepository promotionRepository;
     private final PromotionRedemptionRepository redemptionRepository;
+    private final JdbcClient jdbc;
+    private final OutboxService outboxService;
 
     @Transactional(readOnly = true)
     public List<PromotionResponse> findAll() {
@@ -47,6 +53,22 @@ public class PromotionService {
         Promotion promotion = promotionRepository.findById(id)
                 .orElseThrow(() -> new BusinessException("Không tìm thấy mã khuyến mãi"));
         return PromotionResponse.from(promotion);
+    }
+
+    @Transactional(readOnly = true)
+    public List<PromotionResponse> mine(UUID userId) {
+        List<UUID> ids = jdbc.sql("""
+                select p.id from promotion_grants g join promotions p on p.id = g.promotion_id
+                where g.user_id = :userId
+                  and (p.end_date is null or p.end_date >= :today)
+                  and not exists (select 1 from promotion_redemptions r join bookings b on b.id=r.booking_id
+                                  where r.promotion_id=p.id and b.customer_id=:userId
+                                    and r.status in ('RESERVED','CONSUMED'))
+                order by p.created_at desc
+                """).param("userId", userId).param("today", LocalDate.now(ZONE))
+                .query(UUID.class).list();
+        return ids.stream().map(promotionRepository::findById).flatMap(java.util.Optional::stream)
+                .map(PromotionResponse::from).toList();
     }
 
     @Transactional
@@ -69,8 +91,31 @@ public class PromotionService {
         promotion.setStartDate(request.startDate());
         promotion.setEndDate(request.endDate());
         promotion.setActive(request.active() == null || request.active());
+        promotion.setGiftAllExisting(Boolean.TRUE.equals(request.giftAllExisting()));
 
-        Promotion saved = promotionRepository.save(promotion);
+        Promotion saved = promotionRepository.saveAndFlush(promotion);
+        if (saved.isGiftAllExisting()) {
+            jdbc.sql("""
+                    insert into promotion_grants(promotion_id,user_id)
+                    select :promotionId,u.id from users u
+                    where u.role='CUSTOMER'
+                      and not exists (select 1 from user_roles ur join roles r on r.id=ur.role_id
+                                      where ur.user_id=u.id and r.name<>'CUSTOMER')
+                      and u.email<>'owner@petcare.vn'
+                    """).param("promotionId", saved.getId()).update();
+            List<UUID> recipients = jdbc.sql("select user_id from promotion_grants where promotion_id=:id")
+                    .param("id", saved.getId()).query(UUID.class).list();
+            if (saved.getMaxUses() != null && saved.getMaxUses() < recipients.size()) {
+                throw new BusinessException("Tổng lượt dùng phải đủ cho toàn bộ khách được tặng (" + recipients.size() + " khách).");
+            }
+            String body = "Bạn được tặng mã " + saved.getCode() + " cho chương trình " + saved.getName()
+                    + ". Áp dụng khi đặt lịch" + (saved.getEndDate() == null ? "." : " trước ngày " + saved.getEndDate() + ".");
+            for (UUID recipient : recipients) {
+                outboxService.append("Promotion", saved.getId(), RabbitMQQueues.NOTIFICATION_EXCHANGE,
+                        RabbitMQQueues.NOTIFICATION_SEND,
+                        Map.of("customerId", recipient, "title", "Bạn có mã ưu đãi mới", "body", body));
+            }
+        }
         return PromotionResponse.from(saved);
     }
 
@@ -86,6 +131,13 @@ public class PromotionService {
         promotion.setDiscountValue(request.discountValue());
         promotion.setMinOrderAmount(request.minOrderAmount() != null ? request.minOrderAmount() : BigDecimal.ZERO);
         promotion.setMaxUses(request.maxUses());
+        if (promotion.isGiftAllExisting() && request.maxUses() != null) {
+            long recipients = jdbc.sql("select count(*) from promotion_grants where promotion_id=:id")
+                    .param("id", id).query(Long.class).single();
+            if (request.maxUses() < recipients) {
+                throw new BusinessException("Tổng lượt dùng phải đủ cho toàn bộ khách được tặng (" + recipients + " khách).");
+            }
+        }
         promotion.setStartDate(request.startDate());
         promotion.setEndDate(request.endDate());
         if (request.active() != null) {
@@ -120,7 +172,7 @@ public class PromotionService {
     }
 
     @Transactional(readOnly = true)
-    public PromotionValidationResponse validate(String rawCode, BigDecimal subtotal) {
+    public PromotionValidationResponse validate(String rawCode, BigDecimal subtotal, UUID customerId) {
         String code = normalize(rawCode);
         BigDecimal total = safe(subtotal);
         Promotion promotion = promotionRepository.findByCodeIgnoreCase(code).orElse(null);
@@ -134,6 +186,8 @@ public class PromotionService {
         if (rejection != null) {
             return invalid(code, total, rejection.reason(), rejection.message());
         }
+        rejection = giftRejection(promotion, customerId);
+        if (rejection != null) return invalid(code, total, rejection.reason(), rejection.message());
 
         BigDecimal discount = calculateDiscount(promotion, total);
         return new PromotionValidationResponse(true, code,
@@ -147,7 +201,7 @@ public class PromotionService {
      * booking is paid (see {@link #consume(UUID)}).
      */
     @Transactional
-    public AppliedPromotion reserve(String rawCode, BigDecimal subtotal, UUID bookingId) {
+    public AppliedPromotion reserve(String rawCode, BigDecimal subtotal, UUID bookingId, UUID customerId) {
         String code = normalize(rawCode);
         BigDecimal total = safe(subtotal);
         Promotion promotion = promotionRepository.findByCodeForUpdate(code)
@@ -159,6 +213,8 @@ public class PromotionService {
         if (rejection != null) {
             throw new BusinessException(rejection.message());
         }
+        rejection = giftRejection(promotion, customerId);
+        if (rejection != null) throw new BusinessException(rejection.message());
 
         BigDecimal discount = calculateDiscount(promotion, total);
         PromotionRedemption redemption = new PromotionRedemption();
@@ -251,6 +307,23 @@ public class PromotionService {
             return new Rejection("INVALID_DISCOUNT_CONFIG", "Mã giảm giá được cấu hình không hợp lệ");
         }
         return null;
+    }
+
+    private Rejection giftRejection(Promotion promotion, UUID customerId) {
+        if (!promotion.isGiftAllExisting()) return null;
+        if (customerId == null || !jdbc.sql("""
+                select exists(select 1 from promotion_grants where promotion_id=:promotionId and user_id=:userId)
+                """).param("promotionId", promotion.getId()).param("userId", customerId)
+                .query(Boolean.class).single()) {
+            return new Rejection("PROMOTION_NOT_GRANTED", "Mã này chỉ dành cho khách đã được tặng.");
+        }
+        boolean used = jdbc.sql("""
+                select exists(select 1 from promotion_redemptions r join bookings b on b.id=r.booking_id
+                              where r.promotion_id=:promotionId and b.customer_id=:userId
+                                and r.status in ('RESERVED','CONSUMED'))
+                """).param("promotionId", promotion.getId()).param("userId", customerId)
+                .query(Boolean.class).single();
+        return used ? new Rejection("PROMOTION_ALREADY_USED", "Bạn đã dùng mã này cho một lịch hẹn khác.") : null;
     }
 
     private BigDecimal calculateDiscount(Promotion promotion, BigDecimal subtotal) {

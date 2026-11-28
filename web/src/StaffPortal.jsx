@@ -37,12 +37,11 @@ const ROLE_CONFIGS = {
     subtitle: 'Hồ sơ bệnh án & Khám bệnh',
     badgeVariant: 'success',
     accentToken: 'var(--color-brand-secondary)',
-    defaultTab: 'medical',
+    defaultTab: 'schedule',
     tabs: [
       { id: 'medical', label: 'Bệnh án' },
       { id: 'schedule', label: 'Lịch khám' },
-      { id: 'prescriptions', label: 'Đơn thuốc' },
-      { id: 'ai-diagnostics', label: 'Tham vấn AI' },
+      { id: 'prescriptions', label: 'Vaccine đến hạn' },
       { id: 'profile', label: 'Hồ sơ Bác sĩ' }
     ]
   },

@@ -31,6 +31,7 @@ public record CreatePromotionRequest(
         Integer maxUses,
         LocalDate startDate,
         LocalDate endDate,
-        Boolean active
+        Boolean active,
+        Boolean giftAllExisting
 ) {
 }

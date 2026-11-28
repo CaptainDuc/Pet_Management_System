@@ -1,5 +1,7 @@
 package com.petcare.platform.servicecatalog.service;
 
+import com.petcare.platform.audit.service.AuditLogService;
+import com.petcare.platform.common.security.SecurityUtils;
 import com.petcare.platform.common.exception.ResourceNotFoundException;
 import com.petcare.platform.servicecatalog.domain.CareService;
 import com.petcare.platform.servicecatalog.domain.ServiceCategory;
@@ -26,6 +28,7 @@ public class CatalogService {
 
     private final CareServiceRepository serviceRepository;
     private final ServiceCategoryRepository categoryRepository;
+    private final AuditLogService auditLogService;
 
     // ─── Dịch vụ ───────────────────────────────────────────────────────────
 
@@ -54,22 +57,29 @@ public class CatalogService {
         requireCategory(request.categoryId());
         CareService service = new CareService();
         apply(service, request);
-        return toResponse(serviceRepository.save(service));
+        ServiceResponse created = toResponse(serviceRepository.save(service));
+        auditLogService.logChange("SERVICE_CREATED", "Service", created.id(), SecurityUtils.getCurrentUserId().orElse(null), null, created);
+        return created;
     }
 
     @Transactional
     public ServiceResponse updateService(UUID id, CreateServiceRequest request) {
         requireCategory(request.categoryId());
         CareService service = findActive(id);
+        ServiceResponse before = toResponse(service);
         apply(service, request);
-        return toResponse(serviceRepository.save(service));
+        ServiceResponse updated = toResponse(serviceRepository.save(service));
+        auditLogService.logChange("SERVICE_UPDATED", "Service", id, SecurityUtils.getCurrentUserId().orElse(null), before, updated);
+        return updated;
     }
 
     @Transactional
     public void deactivateService(UUID id) {
         CareService service = findActive(id);
+        ServiceResponse before = toResponse(service);
         service.setActive(false);
         serviceRepository.save(service);
+        auditLogService.logChange("SERVICE_DEACTIVATED", "Service", id, SecurityUtils.getCurrentUserId().orElse(null), before, toResponse(service));
     }
 
     // ─── Danh mục ──────────────────────────────────────────────────────────

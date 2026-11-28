@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { ArrowLeft, ArrowRight, Check, CalendarDays, AlertCircle, RefreshCw, UserCheck, Stethoscope } from 'lucide-react';
 import { Modal } from '../design-system/components';
-import { clinicApi } from '../api/clinic';
+import { clinicApi, promotionApi } from '../api/clinic';
 
 export const formatMoney = value => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Number(value || 0));
 export const localDate = (date = new Date()) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
@@ -21,9 +21,11 @@ export default function BookingWizard({ pets, services, initialPetId, suggestion
   const [retry, setRetry] = useState(0);
   const [error, setError] = useState('');
   const [notes, setNotes] = useState(suggestion?.note || '');
-  const [code, setCode] = useState('');
+  const [code, setCode] = useState(suggestion?.promotionCode || '');
   const [promotion, setPromotion] = useState(null);
   const [checking, setChecking] = useState(false);
+  const [giftedPromotions, setGiftedPromotions] = useState([]);
+  const [giftedError, setGiftedError] = useState('');
   const [saving, setSaving] = useState(false);
   const [member, setMember] = useState(null);
   const [memberError, setMemberError] = useState('');
@@ -42,6 +44,14 @@ export default function BookingWizard({ pets, services, initialPetId, suggestion
     let alive = true;
     clinicApi.memberDiscount(token, walkInCustomerId).then(data => { if (alive) { setMember(data); setMemberError(''); } })
       .catch(err => { if (alive) setMemberError(err.message || 'Không tải được ưu đãi thành viên.'); });
+    return () => { alive = false; };
+  }, [token, walkInCustomerId]);
+
+  useEffect(() => {
+    if (walkInCustomerId) return;
+    let alive = true;
+    promotionApi.mine(token).then(rows => { if (alive) setGiftedPromotions((rows || []).filter(item => item.active && (!item.startDate || item.startDate <= localDate()) && (item.maxUses == null || item.usedCount < item.maxUses))); })
+      .catch(err => { if (alive) setGiftedError(err.message || 'Không tải được ưu đãi của bạn.'); });
     return () => { alive = false; };
   }, [token, walkInCustomerId]);
 
@@ -80,13 +90,14 @@ export default function BookingWizard({ pets, services, initialPetId, suggestion
     return () => { alive = false; };
   }, [slot?.startTime, slot?.endTime, slot?.branchId, serviceId, date, token]);
 
-  async function applyPromotion() {
-    if (!code.trim() || checking) return;
-    const checkedCode = code.trim();
+  async function applyPromotion(selectedCode = code) {
+    if (!selectedCode.trim() || checking) return;
+    const checkedCode = selectedCode.trim();
+    setCode(checkedCode);
     setChecking(true);
     setError('');
     try {
-      const result = await clinicApi.validatePromotion(checkedCode, Number(service.basePrice), token);
+      const result = await clinicApi.validatePromotion(checkedCode, Number(service.basePrice), token, walkInCustomerId);
       setPromotion({ ...result, checkedCode, checkedServiceId: serviceId });
     } catch (err) { setError(err.message); }
     finally { setChecking(false); }
@@ -202,7 +213,9 @@ export default function BookingWizard({ pets, services, initialPetId, suggestion
           <div className="pc-summary-total"><dt>Tổng tạm tính</dt><dd>{member ? formatMoney(estimate) : 'Đang tải...'}</dd></div>
         </dl>
         {memberError && <p className="pc-notice" role="alert">{memberError}<button type="button" className="pc-text-button" onClick={() => clinicApi.memberDiscount(token, walkInCustomerId).then(data => { setMember(data); setMemberError(''); }).catch(err => setMemberError(err.message))}>Thử lại</button></p>}
-        <div className="pc-promo"><label className="pc-field">Mã ưu đãi (nếu có)<input name="promotionCode" placeholder="Nhập mã của bạn" value={code} onChange={event => { setCode(event.target.value); setPromotion(null); }} /></label><button type="button" className="pc-button pc-button--soft" disabled={checking || !code.trim()} onClick={applyPromotion}>{checking ? 'Đang kiểm tra...' : 'Áp dụng'}</button></div>
+        {!walkInCustomerId && giftedPromotions.length > 0 && <div className="space-y-2"><strong className="text-sm">Ưu đãi của bạn</strong><div className="flex flex-wrap gap-2">{giftedPromotions.map(item => <button key={item.id} type="button" className="pc-button pc-button--soft pc-button--small" disabled={checking} onClick={() => applyPromotion(item.code)}>{item.name} · {item.code}</button>)}</div></div>}
+        {giftedError && <p className="pc-notice" role="alert">{giftedError}</p>}
+        <div className="pc-promo"><label className="pc-field">Mã ưu đãi (nếu có)<input name="promotionCode" placeholder="Nhập mã của bạn" value={code} onChange={event => { setCode(event.target.value); setPromotion(null); }} /></label><button type="button" className="pc-button pc-button--soft" disabled={checking || !code.trim()} onClick={() => applyPromotion()}>{checking ? 'Đang kiểm tra...' : 'Áp dụng'}</button></div>
         {promotion?.checkedCode === code.trim() && promotion.checkedServiceId === serviceId && <p className="pc-muted" role="status">{promotion.valid ? 'Mã ưu đãi đã được áp dụng.' : promotion.message || promotion.reason || 'Mã ưu đãi không khả dụng.'}</p>}
         {code.trim() && !checking && !discount && <p className="pc-muted">Hãy áp dụng mã ưu đãi trước khi xác nhận, hoặc xóa mã để tiếp tục.</p>}
         <label className="pc-field">Điều gì bạn muốn phòng khám lưu ý?<textarea name="bookingNotes" maxLength={2000} value={notes} onChange={event => setNotes(event.target.value)} placeholder="Thói quen, dị ứng hoặc yêu cầu chăm sóc của bé..." /></label>

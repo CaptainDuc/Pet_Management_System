@@ -39,6 +39,8 @@ export default function StaffDashboard({ user, token, activeTab, setActiveTab })
   const [invoicesError, setInvoicesError] = useState('');
   const [completedBookings, setCompletedBookings] = useState([]);
   const [completedError, setCompletedError] = useState('');
+  const [completedLoading, setCompletedLoading] = useState(false);
+  const [staffNotice, setStaffNotice] = useState('');
 
   const [showAddInvoiceModal, setShowAddInvoiceModal] = useState(false);
   const [newInvoice, setNewInvoice] = useState({ bookingId: '' });
@@ -79,11 +81,12 @@ export default function StaffDashboard({ user, token, activeTab, setActiveTab })
     setInvoicesLoading(true);
     setInvoicesError('');
     try {
-      const first = await invoiceApi.listInvoices(token);
+      const first = await invoiceApi.listInvoices(token, { page: 0, size: 50 });
       const rest = await Promise.all(Array.from({ length: Math.max(0, first.totalPages - 1) }, (_, page) =>
         invoiceApi.listInvoices(token, { page: page + 1, size: 50 })));
       setInvoices([first, ...rest].flatMap(page => page.content || []).map(mapInvoice));
     } catch (err) {
+      setInvoices([]);
       setInvoicesError(err.message || 'Không tải được danh sách hóa đơn.');
     } finally {
       setInvoicesLoading(false);
@@ -124,6 +127,7 @@ export default function StaffDashboard({ user, token, activeTab, setActiveTab })
         clinicApi.listBookings(token, { page: page + 1, size: 50 })));
       setBookings([first, ...remaining].flatMap(page => page.content || []).map(mapStaffBooking));
     } catch (err) {
+      setBookings([]);
       setBookingsError(err.message || 'Không tải được danh sách lịch hẹn.');
     } finally {
       setBookingsLoading(false);
@@ -136,6 +140,7 @@ export default function StaffDashboard({ user, token, activeTab, setActiveTab })
     setBookingActionId(booking.id);
     try {
       await clinicApi.markBookingPaid(booking.id, token);
+      setStaffNotice('Đã ghi nhận thanh toán tiền mặt.');
       await fetchBookings();
       if (activeTab === 'invoices') await fetchInvoices();
     } catch (err) {
@@ -152,6 +157,7 @@ export default function StaffDashboard({ user, token, activeTab, setActiveTab })
     setBookingActionId(booking.id);
     try {
       await clinicApi.visitAction({ bookingId: booking.id, itemId: item.id, slotId: item.timeSlotId }, 'check-in', token);
+      setStaffNotice('Đã xác nhận khách đến.');
       await fetchBookings();
     } catch (err) { alert(err.message || 'Không thể xác nhận khách đã đến.'); }
     finally { setBookingActionId(null); }
@@ -160,14 +166,17 @@ export default function StaffDashboard({ user, token, activeTab, setActiveTab })
   const fetchCompletedBookings = async () => {
     if (!token) return;
     setCompletedError('');
+    setCompletedLoading(true);
     try {
-      const first = await clinicApi.listBookings(token, { status: 'COMPLETED' });
+      const first = await clinicApi.listBookings(token, { status: 'COMPLETED', page: 0, size: 50 });
       const rest = await Promise.all(Array.from({ length: Math.max(0, first.totalPages - 1) }, (_, page) =>
         clinicApi.listBookings(token, { status: 'COMPLETED', page: page + 1, size: 50 })));
       setCompletedBookings([first, ...rest].flatMap(page => page.content || []));
     } catch (err) {
       setCompletedBookings([]);
       setCompletedError(err.message || 'Không tải được lịch hoàn tất.');
+    } finally {
+      setCompletedLoading(false);
     }
   };
 
@@ -202,6 +211,7 @@ export default function StaffDashboard({ user, token, activeTab, setActiveTab })
     setInvoiceSubmitting(true);
     try {
       await invoiceApi.issueInvoice(newInvoice.bookingId, token);
+      setStaffNotice('Đã phát hành hóa đơn.');
       setShowAddInvoiceModal(false);
       setNewInvoice({ bookingId: '' });
       await fetchInvoices();
@@ -217,7 +227,7 @@ export default function StaffDashboard({ user, token, activeTab, setActiveTab })
     `${b.customerName} ${b.petName}`.toLocaleLowerCase('vi').includes(bookingSearch.trim().toLocaleLowerCase('vi')));
   const focusedBooking = bookings.find(booking => booking.id === cashierBookingId);
   const focusedInvoice = invoices.find(invoice => invoice.bookingId === cashierBookingId);
-  const missingInvoices = invoicesError || invoicesLoading || completedError ? [] : completedBookings.filter(booking => !invoices.some(invoice => invoice.bookingId === booking.id));
+  const missingInvoices = invoicesError || invoicesLoading || completedError || completedLoading ? [] : completedBookings.filter(booking => !invoices.some(invoice => invoice.bookingId === booking.id));
   const cashierInvoices = cashierBookingId ? invoices.filter(invoice => invoice.bookingId === cashierBookingId) : invoices;
   const goCashier = bookingId => { setCashierBookingId(bookingId); setActiveTab('invoices'); };
 
@@ -225,6 +235,7 @@ export default function StaffDashboard({ user, token, activeTab, setActiveTab })
     <div className="space-y-6">
       {activeTab === 'reception' && <ClinicVisitQueue token={token} reception onCashier={goCashier} />}
       {activeTab === 'my-shifts' && <MyShifts user={user} token={token} />}
+      {staffNotice && <p className="pc-notice pc-notice--success" role="status">{staffNotice}</p>}
 
       {/* TAB: LỊCH HẸN */}
       {activeTab === 'bookings' && (
@@ -254,6 +265,8 @@ export default function StaffDashboard({ user, token, activeTab, setActiveTab })
               </Button>
             </div>
           </Card>
+
+          {bookingsError && <p className="pc-notice" role="alert">{bookingsError}<button className="pc-text-button" onClick={fetchBookings}>Thử lại</button></p>}
 
           <Table
             columns={[
@@ -318,12 +331,13 @@ export default function StaffDashboard({ user, token, activeTab, setActiveTab })
           </Card>
           {invoicesError && <p className="pc-notice" role="alert">{invoicesError}<button className="pc-text-button" onClick={fetchInvoices}>Thử lại</button></p>}
           {completedError && <p className="pc-notice" role="alert">{completedError}<button className="pc-text-button" onClick={fetchCompletedBookings}>Thử lại</button></p>}
+          {(invoicesLoading || completedLoading) && <p role="status">Đang cập nhật tình trạng thu ngân…</p>}
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3" aria-label="Tình trạng thu ngân">
+          {!invoicesLoading && !completedLoading && !invoicesError && !completedError && <div className="grid grid-cols-1 sm:grid-cols-3 gap-3" aria-label="Tình trạng thu ngân">
             <div className="pc-light pc-panel"><strong>{missingInvoices.length}</strong><p>Đã khám · Chưa có hóa đơn</p></div>
             <div className="pc-light pc-panel"><strong>{invoices.filter(invoice => !['PAID', 'CANCELLED', 'REFUNDED'].includes(invoice.status)).length}</strong><p>Hóa đơn chờ thanh toán</p></div>
             <div className="pc-light pc-panel"><strong>{invoices.filter(invoice => invoice.status === 'PAID').length}</strong><p>Hóa đơn đã thanh toán</p></div>
-          </div>
+          </div>}
           {cashierBookingId && <div className="pc-light pc-panel space-y-2">
             <div className="flex flex-wrap justify-between gap-2"><strong>Đang xử lý: {focusedBooking ? `${focusedBooking.customerName} · ${focusedBooking.petName}` : `Lịch ${cashierBookingId.slice(0, 8)}`}</strong><button className="pc-text-button" onClick={() => setCashierBookingId('')}>Xem tất cả</button></div>
             {focusedBooking && <p>Giá lịch: {focusedBooking.amount.toLocaleString('vi-VN')} đ · {focusedBooking.paymentStatus === 'PAID' ? 'Đã thanh toán' : 'Chưa thanh toán'} · {BOOKING_STATUS[focusedBooking.status]?.label || focusedBooking.status}</p>}
@@ -342,59 +356,23 @@ export default function StaffDashboard({ user, token, activeTab, setActiveTab })
               { key: 'total', header: 'Số tiền', width: '160px' },
               { key: 'issuedAt', header: 'Ngày phát hành', width: '160px' },
               { key: 'status', header: 'Trạng thái', width: '140px' },
+              { key: 'actions', header: 'Thao tác', sortable: false, render: (_, inv) =>
+                !['PAID', 'CANCELLED', 'REFUNDED'].includes(inv.status) && <Button variant="info" size="xs"
+                  leftIcon={<QrCode className="w-3.5 h-3.5" />} onClick={() => setPayingInvoice(inv)}>VietQR</Button> },
             ]}
             data={cashierInvoices.map(inv => ({
               ...inv,
               bookingId: `#${String(inv.bookingId).slice(0, 8)}`,
+              totalAmount: inv.total,
               total: `${inv.total.toLocaleString('vi-VN')} ${inv.currency}`,
               issuedAt: formatDateTime(inv.issuedAt),
             }))}
             keyField="id"
             loading={invoicesLoading}
-            emptyMessage="Chưa có hóa đơn nào."
+            emptyMessage={invoicesError ? 'Không tải được hóa đơn.' : 'Chưa có hóa đơn nào.'}
             striped
             hoverable
             className="table-wrapper"
-            renderRow={(inv) => {
-              const statusConfig = {
-                ISSUED: { label: 'Chờ thanh toán', variant: 'info' },
-                PENDING_PAYMENT: { label: 'Chờ thanh toán', variant: 'warning' },
-                PAID: { label: 'Đã thanh toán', variant: 'success' },
-                PARTIALLY_PAID: { label: 'Thanh toán một phần', variant: 'warning' },
-                CANCELLED: { label: 'Đã hủy', variant: 'ghost' },
-                REFUNDED: { label: 'Đã hoàn tiền', variant: 'ghost' },
-              };
-              const statusMeta = statusConfig[inv.status] || { label: inv.status, variant: 'ghost' };
-
-              return (
-                <tr className="hover:bg-slate-50/80 transition-colors">
-                  <td className="py-3.5 px-4 font-mono font-bold text-slate-900">{inv.number}</td>
-                  <td className="py-3.5 px-4 font-mono text-[11px] text-slate-500">{inv.bookingId}</td>
-                  <td className="py-3.5 px-4 text-slate-600 max-w-xs">{inv.items}</td>
-                  <td className="py-3.5 px-4 font-bold text-slate-900">{inv.total}</td>
-                  <td className="py-3.5 px-4 text-slate-600">{inv.issuedAt}</td>
-                  <td className="py-3.5 px-4">
-                    <Badge variant={statusMeta.variant} size="xs">
-                      {statusMeta.label}
-                    </Badge>
-                  </td>
-                  <td className="py-3.5 px-4">
-                    <div className="flex items-center space-x-3">
-                      {inv.status !== 'PAID' && inv.status !== 'CANCELLED' && inv.status !== 'REFUNDED' && (
-                        <Button
-                          variant="info"
-                          size="xs"
-                          leftIcon={<QrCode className="w-3.5 h-3.5" />}
-                          onClick={() => setPayingInvoice({ ...inv, amount: inv.total })}
-                        >
-                          VietQR
-                        </Button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              );
-            }}
           />
 
           <VietQrPaymentModal

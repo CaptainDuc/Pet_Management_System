@@ -98,7 +98,7 @@ class BookingTest extends IntegrationTestBase {
 
     @Test
     void customerCanBookAndSlotIsHeld() {
-        Scenario s = newScenario("STAFF");
+        Scenario s = newScenario("VETERINARIAN");
 
         ResponseEntity<String> response = book(s.customer().token(), s.petId(), s.serviceId(), s.slotIds().get(0));
 
@@ -146,7 +146,7 @@ class BookingTest extends IntegrationTestBase {
 
     @Test
     void promotionAndPaymentKeepServerTotalAndConsumeOnlyOnce() {
-        Scenario s = newScenario("STAFF");
+        Scenario s = newScenario("VETERINARIAN");
         String code = "MERGE-" + UUID.randomUUID();
         Map<String, Object> coupon = Map.of("code", code, "name", "Merge payment check",
                 "discountType", "FIXED_AMOUNT", "discountValue", 20000, "maxUses", 1);

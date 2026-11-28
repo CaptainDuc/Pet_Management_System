@@ -233,11 +233,11 @@ export const clinicApi = {
     return request(`/schedules/${id}`, { method: 'DELETE', token });
   },
 
-  validatePromotion(code, bookingTotal, token) {
+  validatePromotion(code, bookingTotal, token, customerId) {
     return request("/promotions/validate", {
       method: "POST",
       token,
-      body: { code, bookingTotal },
+      body: { code, bookingTotal, ...(customerId && { customerId }) },
     });
   },
 
@@ -283,6 +283,9 @@ export const invoiceApi = {
 };
 
 export const promotionApi = {
+  mine(token) {
+    return request('/promotions/mine', { token });
+  },
   list(token) {
     return request('/promotions', { token });
   },

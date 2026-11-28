@@ -36,6 +36,7 @@ export default function VetDashboard({
   // ─── Danh sách thú cưng & Bệnh án thực tế ──────────────────────────────────
   const [pets, setPets] = useState([]);
   const [petsLoading, setPetsLoading] = useState(false);
+  const [petsError, setPetsError] = useState("");
   const [selectedPetId, setSelectedPetId] = useState("");
   const [petSearch, setPetSearch] = useState("");
 
@@ -72,6 +73,7 @@ export default function VetDashboard({
   const fetchPets = async () => {
     if (!token) return;
     setPetsLoading(true);
+    setPetsError("");
     try {
       const res = await clinicApi.listPets(token);
       const list = res?.content || res || [];
@@ -80,7 +82,9 @@ export default function VetDashboard({
         setSelectedPetId(list[0].id);
       }
     } catch (err) {
-      console.warn("Error fetching pets:", err);
+      setPetsError(err.message || "Không thể tải danh sách thú cưng.");
+      setPets([]);
+      setSelectedPetId("");
     } finally {
       setPetsLoading(false);
     }
@@ -231,7 +235,7 @@ export default function VetDashboard({
                   Phòng khám lâm sàng đang hoạt động
                 </h3>
                 <p className="text-xs text-slate-600 mt-0.5">
-                  Để lập bệnh án cho ca hẹn hôm nay, hãy bấm vào hàng đợi khám và chọn <strong>"Vào khám & Kê đơn"</strong>.
+                  Để lập bệnh án cho ca hẹn hôm nay, hãy mở hàng đợi khám và chọn <strong>"Vào khám & ghi bệnh án"</strong>.
                 </p>
               </div>
             </div>
@@ -281,6 +285,8 @@ export default function VetDashboard({
               <span className="text-slate-400 font-medium flex-shrink-0">Thú cưng:</span>
               {petsLoading ? (
                 <span className="text-slate-400">Đang tải danh sách thú cưng…</span>
+              ) : petsError ? (
+                <span className="text-rose-700" role="alert">{petsError} <button type="button" className="underline" onClick={fetchPets}>Thử lại</button></span>
               ) : filteredPets.length === 0 ? (
                 <span className="text-slate-400 italic">Không tìm thấy thú cưng phù hợp</span>
               ) : (
@@ -330,12 +336,14 @@ export default function VetDashboard({
             <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800">
               {recordsError}
             </div>
+          ) : !selectedPetId ? (
+            <p className="text-slate-500 text-center py-8 text-sm">Chọn thú cưng để xem bệnh án.</p>
           ) : records.length === 0 ? (
             <div className="p-12 text-center bg-slate-50 border border-slate-200 rounded-2xl space-y-2">
               <FileText className="w-10 h-10 text-slate-300 mx-auto" />
               <h4 className="font-bold text-slate-700 text-sm">Chưa có hồ sơ bệnh án nào cho bé</h4>
               <p className="text-xs text-slate-500 max-w-md mx-auto">
-                Bé chưa có lịch sử điều trị trước đây. Khi ca khám trong ngày bắt đầu, bác sĩ hãy bấm "Vào khám & Kê đơn" trong hàng đợi để tạo bệnh án đầu tiên.
+                Bé chưa có lịch sử điều trị trước đây. Khi ca khám trong ngày bắt đầu, bác sĩ hãy bấm "Vào khám & ghi bệnh án" trong hàng đợi để tạo bệnh án đầu tiên.
               </p>
             </div>
           ) : (

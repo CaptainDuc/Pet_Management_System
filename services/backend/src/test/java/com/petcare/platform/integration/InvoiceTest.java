@@ -25,7 +25,7 @@ class InvoiceTest extends IntegrationTestBase {
 
     @Test
     void invoiceIsIssuedForCompletedBookingWithServerComputedAmount() {
-        Scenario s = newScenario("STAFF");
+        Scenario s = newScenario("VETERINARIAN");
         UUID bookingId = completedBooking(s);
 
         ResponseEntity<String> response = issue(s.admin().token(), bookingId);
@@ -41,7 +41,7 @@ class InvoiceTest extends IntegrationTestBase {
 
     @Test
     void secondInvoiceForSameBookingIsRejected() {
-        Scenario s = newScenario("STAFF");
+        Scenario s = newScenario("VETERINARIAN");
         UUID bookingId = completedBooking(s);
         issue(s.admin().token(), bookingId);
 
@@ -53,7 +53,7 @@ class InvoiceTest extends IntegrationTestBase {
 
     @Test
     void invoiceCannotBeIssuedForUnfinishedBooking() {
-        Scenario s = newScenario("STAFF");
+        Scenario s = newScenario("VETERINARIAN");
         UUID bookingId = idOf(send(HttpMethod.POST, "/api/v1/bookings", s.customer().token(),
                 bookingBody(s.petId(), s.serviceId(), s.slotIds().get(0))));
 
@@ -64,7 +64,7 @@ class InvoiceTest extends IntegrationTestBase {
 
     @Test
     void customerCannotIssueInvoice() {
-        Scenario s = newScenario("STAFF");
+        Scenario s = newScenario("VETERINARIAN");
         UUID bookingId = completedBooking(s);
 
         assertThat(issue(s.customer().token(), bookingId).getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
@@ -72,7 +72,7 @@ class InvoiceTest extends IntegrationTestBase {
 
     @Test
     void customerReadsOwnInvoiceButStrangerDoesNot() {
-        Scenario s = newScenario("STAFF");
+        Scenario s = newScenario("VETERINARIAN");
         TestUser stranger = newUser("CUSTOMER");
         UUID bookingId = completedBooking(s);
         issue(s.admin().token(), bookingId);
@@ -88,7 +88,7 @@ class InvoiceTest extends IntegrationTestBase {
 
     @Test
     void issuingWritesInvoiceIssuedEventToOutbox() {
-        Scenario s = newScenario("STAFF");
+        Scenario s = newScenario("VETERINARIAN");
         UUID bookingId = completedBooking(s);
         UUID invoiceId = idOf(issue(s.admin().token(), bookingId));
 
@@ -107,7 +107,7 @@ class InvoiceTest extends IntegrationTestBase {
 
     @Test
     void concurrentIssuingCreatesExactlyOneInvoice() throws Exception {
-        Scenario s = newScenario("STAFF");
+        Scenario s = newScenario("VETERINARIAN");
         UUID bookingId = completedBooking(s);
 
         int attempts = 5;

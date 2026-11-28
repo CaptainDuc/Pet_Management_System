@@ -1,6 +1,8 @@
 package com.petcare.platform.promotion.controller;
 
 import com.petcare.platform.common.dto.ApiResponse;
+import com.petcare.platform.common.security.SecurityUtils;
+import com.petcare.platform.common.security.UserPrincipal;
 import com.petcare.platform.promotion.dto.CreatePromotionRequest;
 import com.petcare.platform.promotion.dto.PromotionResponse;
 import com.petcare.platform.promotion.dto.PromotionValidationRequest;
@@ -14,6 +16,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -41,6 +44,12 @@ public class PromotionController {
     @Operation(summary = "Lấy danh sách tất cả mã khuyến mãi")
     public ResponseEntity<ApiResponse<List<PromotionResponse>>> getAllPromotions() {
         return ResponseEntity.ok(ApiResponse.ok(promotionService.findAll()));
+    }
+
+    @GetMapping("/mine")
+    @PreAuthorize("hasRole('CUSTOMER')")
+    public ResponseEntity<ApiResponse<List<PromotionResponse>>> mine(@AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.ok(promotionService.mine(principal.getId())));
     }
 
     @GetMapping("/{id}")
@@ -89,8 +98,17 @@ public class PromotionController {
     @PostMapping("/validate")
     @Operation(summary = "Kiểm tra tính hợp lệ của mã khuyến mãi khi đặt lịch")
     public ResponseEntity<ApiResponse<PromotionValidationResponse>> validate(
+            @AuthenticationPrincipal UserPrincipal principal,
             @Valid @RequestBody PromotionValidationRequest request) {
+        UUID customerId = principal == null ? null : principal.getId();
+        if (request.customerId() != null) {
+            if (principal == null || (!request.customerId().equals(customerId)
+                    && !SecurityUtils.hasAnyRole("STAFF", "OWNER", "ADMIN"))) {
+                throw new org.springframework.security.access.AccessDeniedException("Cannot validate another customer's promotion");
+            }
+            customerId = request.customerId();
+        }
         return ResponseEntity.ok(ApiResponse.ok(
-                promotionService.validate(request.code(), request.bookingTotal())));
+                promotionService.validate(request.code(), request.bookingTotal(), customerId)));
     }
 }
